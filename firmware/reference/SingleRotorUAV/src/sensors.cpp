@@ -84,7 +84,7 @@ void Sensors::run_estimator(){
     // Fill input vector with acceleration
     H.Fill(0);
     Z.Fill(0);
-    U << a[0], a[1], a[2];
+    U = {a[0], a[1], a[2]};
 
     // Fill measurement vector with data
     if( data.status.pos == 1 ){

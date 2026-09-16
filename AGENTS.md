@@ -1,8 +1,8 @@
 # COSMOS — TVC 착륙 호퍼 + 강화학습 프로젝트
 
-국제학교(청도대원학교) 항공우주공학 동아리 COSMOS의 26-27학년도 1학기 프로젝트. 이 파일은 Cowork/Claude Code 세션이 이어받기 위한 컨텍스트 문서다. 새 세션을 열 때 이 파일을 먼저 읽을 것.
+국제학교(청도대원학교) 항공우주공학 동아리 COSMOS의 26-27학년도 1학기 프로젝트. 이 파일은 Cowork/Codex 세션이 이어받기 위한 컨텍스트 문서다. 새 세션을 열 때 이 파일을 먼저 읽을 것.
 
-**이 파일은 claude.ai "COSMOS" 프로젝트와 로컬 저장소(`C:\Users\mimin\Desktop\cosmos-tvc-hopper\CLAUDE.md`) 양쪽에 동일한 내용으로 유지한다 — 둘이 따로 놀지 않도록 앞으로 한쪽만 고치지 말고 항상 같이 갱신할 것.**
+**이 파일은 Codex.ai "COSMOS" 프로젝트와 로컬 저장소(`C:\Users\mimin\Desktop\cosmos-tvc-hopper\AGENTS.md`) 양쪽에 동일한 내용으로 유지한다 — 둘이 따로 놀지 않도록 앞으로 한쪽만 고치지 말고 항상 같이 갱신할 것.**
 
 **마지막 갱신: 2026-09-14.**
 
@@ -132,9 +132,9 @@ EDF(전기 덕티드팬)를 고정하고 배기 기류에 제어핀 4개(서보 
 
 ## 참고 아티팩트 (Cowork에서 게시, 계정 전체에서 접근 가능)
 
-- 전체 후보 비교 문서: `https://claude.ai/code/artifact/3444852b-6efa-4dd1-ba05-c541be3c20a6`
-- PRJ-01 심화 착수 가이드(정의·BOM·안전·로드맵·저예산 오픈소스 레퍼런스 전부 포함): `https://claude.ai/code/artifact/514a57d1-e1b7-4f8f-b024-3048e0416c44`
-- COSMOS 학습 트랙(TVC·PID·RL·ArduPilot을 단계별로 익히기 위한 한국어/영어 영상·자료 로드맵): `https://claude.ai/code/artifact/8f97f0db-40d6-4ecf-9f23-c923c19c1848`
+- 전체 후보 비교 문서: `https://Codex.ai/code/artifact/3444852b-6efa-4dd1-ba05-c541be3c20a6`
+- PRJ-01 심화 착수 가이드(정의·BOM·안전·로드맵·저예산 오픈소스 레퍼런스 전부 포함): `https://Codex.ai/code/artifact/514a57d1-e1b7-4f8f-b024-3048e0416c44`
+- COSMOS 학습 트랙(TVC·PID·RL·ArduPilot을 단계별로 익히기 위한 한국어/영어 영상·자료 로드맵): `https://Codex.ai/code/artifact/8f97f0db-40d6-4ecf-9f23-c923c19c1848`
 
 ## 완료된 관련 작업
 

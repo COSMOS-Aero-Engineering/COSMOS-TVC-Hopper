@@ -175,7 +175,7 @@ void Control::control_hover( float roll, float pitch, float yaw, float gx, float
     }
 
     // Load states into state-vector (int_z = integral term)
-    X << roll, pitch, yaw, gx, gy, gz, z, vz, 0;
+    X = {roll, pitch, yaw, gx, gy, gz, z, vz, 0};
 
     error = ref - X;
     error(8) = error_integral_z; // Insert integral term into the state-error vector
@@ -244,7 +244,7 @@ void Control::control_position( float x, float y, float vx, float vy, float yaw 
     Matrix<6,1> error;
 
     // Load state vector
-    X_pos << x, y, vx, vy, 0, 0;
+    X_pos = {x, y, vx, vy, 0, 0};
 
     // Calculate state error
     error = SP_pos - X_pos;
