@@ -7,10 +7,13 @@
 | [`general-arrangement.svg`](general-arrangement.svg) | 개략 배치도 (측면도 + 저면도, 치수) | rev B 형상 기준(기구 불변) |
 | [`BOM-revC-teensy.md`](BOM-revC-teensy.md) | **구매 리스트(현행).** Teensy/BNO085/양방향DShot ESC 기준 | rev C |
 | [`BOM.md`](BOM.md) | 구매 리스트(rev B) — 추진·베인·구조·구속·안전 항목은 **여전히 유효**, 비행컴퓨터 섹션만 rev C 문서로 대체됨 | 부분 supersede |
-| `references/` | 원문 PDF(SolidGeek 논문 등) | — |
+| [`modelling-notes-ch3.md`](modelling-notes-ch3.md) | 논문 3장(Modelling) 정리 — 운동방정식·베인 공력식, `sim/sim_stage1/hopper_aviary.py`와의 코드 대응표 | 2026-09-17 (재)작성 |
+| `references/` | 원문 PDF(SolidGeek/Jacobsen 논문) | — |
 | `../../firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 vendor-copy(원본 그대로, 출처·라이선스는 `ORIGIN.md`) | — |
+| `../../firmware/cosmos/` | 우리 팀이 실제로 고쳐 쓰는 펌웨어(위 vendor-copy 기반) | 착수 전 |
 | `../../firmware/singlecopter.param.md` | ArduPilot SingleCopter 파라미터 — **rev C의 대안 경로**(§8.4) | 보존 |
-| `../../cad/` | 자체 파라메트릭 CAD(`params.scad` 등) — SolidGeek Onshape 포크의 대안 | 보존 |
+| `../../cad/hopper_params.scad` | **CAD 정본.** EDF 실측(클램프 마운트) 반영, 구조버그 수정 완료. 자세한 워크플로는 `cad/README.md` | rev C, 2026-09-13 |
+| `../../data/` | 실험 로그(CSV) | 착수 전 |
 
 ## 리비전
 

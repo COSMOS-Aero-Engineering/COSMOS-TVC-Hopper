@@ -7,9 +7,11 @@
 
 ## 시작점
 
-- **[`CLAUDE.md`](CLAUDE.md)** — 현재 진행 상태 · 확정 방향 · 문서 맵 · 다음 액션. 새 세션은 이거 먼저.
+- **[`AGENTS.md`](AGENTS.md)** — 정본 컨텍스트 문서: 설계 의도·확정 방향·현재 상태·문서 맵·다음 액션·안전 원칙. AI 세션이든 사람이든 기술적인 걸 파악하려면 이거 먼저. (`CLAUDE.md`는 이 파일로 가는 한 줄짜리 안내판)
 - **[`docs/design/00-hopper-master-design.md`](docs/design/00-hopper-master-design.md)** — 마스터 설계도 (rev C)
 - **[`docs/execution/week-01-kickoff.md`](docs/execution/week-01-kickoff.md)** — 1–2주차 실행 계획
+
+지금 당장 개발환경만 세팅하고 싶다면 바로 아래 "부원 퀵스타트"로.
 
 ---
 

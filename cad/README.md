@@ -1,34 +1,47 @@
-# cad/ — 파라메트릭 CAD (rev B)
+# cad/ — 파라메트릭 CAD
 
-CLAUDE.md 원칙: **프리핸드 CAD 금지.** 기존 STL 재사용 > 코드 파라메트릭 > 기성 브라켓.
-rev B = 64 mm/4S 오픈 스탠드오프 프레임 (동체 튜브 없음). 설계도: `docs/design/00-hopper-master-design.md`.
+CLAUDE.md/AGENTS.md 원칙: **프리핸드 CAD 금지.** 코드 기반 파라메트릭 설계 우선.
 
-## 파일
+## 현재 정본
 
-| 파일 | 내용 | 상태 |
-|---|---|---|
-| `params.scad` | **모든 치수의 유일 정의.** 실물 확보 후 `MEASURED` 블록만 갱신 | 형상 확정, 실측 대기 |
-| `top_plate.scad` | 상판 (EDF 마운트 + 기둥 4소켓 + 베일 + 흡기 개방) | 스케치 — fit 링 먼저 |
-| `vane_ring.scad` | 베인 링 (베인4 + 서보4 + 다리4 + 중앙 구속 소켓), `vane()`, `vane_sweep_check()` | 스케치 — 스윕 검증 |
-| `tray.scad` | *(미작성)* 중앙 아비오닉스 트레이 슬리브 (CG 트림 슬롯) | TODO |
-| `leg_foot.scad` | *(미작성)* 다리 발 + 범퍼 | TODO |
+**[`hopper_params.scad`](hopper_params.scad)** — rev C 오픈 스탠드오프 프레임 전체를 담은 단일 파일.
+EDF 실측(2026-09-13, 하우징 외경 72mm·볼트 플랜지 없음 확인) 반영해서 **분할 클램프(collar clamp)
+마운트**로 설계됨(원래 볼트 마운트 가정이었던 게 실물과 안 맞아서 변경). 기둥-베인링 반경 불일치, 다리
+스태거 미적용 등 구조 버그 2건도 수정된 상태.
+
+- 맨 위 **"MEASURED"** 블록만 실측값. 나머지는 `docs/design/00-hopper-master-design.md` §4 값 그대로.
+- 파일 맨 아래 `echo()`들이 조립 정합성을 콘솔에 출력 — 값 바꾼 뒤 OpenSCAD 콘솔에서 반드시 확인.
+- `render_mode = "preview"` (조립 미리보기, 구매품인 탄소관·서보·배터리는 색블록으로만 표시) /
+  `"print"` (실제 프린트 대상 파츠만) 두 모드. **`"print"`로 렌더해도 파츠 7개가 합쳐진 채로 나오니,
+  외주용 STL은 모듈 하나씩 남기고 개별 export 필요** — 순서는 [`print_parts/README.md`](print_parts/README.md).
+
+## 폴더
+
+| 경로 | 내용 |
+|---|---|
+| `hopper_params.scad` | 정본 (위 설명) |
+| `print_parts/` | 외주용 STL 7종을 여기다 export (아직 비어 있음 — OpenSCAD 로컬 미설치, `print_parts/README.md` 참고) |
+| `print-orders/` | 실제로 외주에 발주 넣은 STL의 스냅샷(그때그때 폴더 만들어서). `.gitignore` 예외로 커밋됨 — 나머지 STL은 재생성 가능이라 커밋 안 함 |
+| `legacy/` | rev B 단계에서 쓰던 3분할 스크립트(`params.scad`/`top_plate.scad`/`vane_ring.scad`) — **`hopper_params.scad`로 대체돼 더 이상 안 씀.** 과거 계산 참고용으로만 보존 |
 
 ## 워크플로
 
-1. OpenSCAD(무료) 설치 → `top_plate.scad` 열고 F5.
-2. 실물(EDF·서보·로드) 버니어 실측 → `params.scad` `MEASURED` 갱신.
-3. `top_plate` / `vane_ring`의 EDF·기둥 접촉부만 **20 mm 높이로 잘라** 시험 출력 → 끼움 확인.
-4. 맞으면 F6 → STL → 슬라이서(PETG, 벽 4, 인필 40%).
-5. `vane_ring.scad`의 `vane_sweep_check()` 주석 해제 → ±15° 베인이 다리·서보와 안 부딪히는지 확인 (리스크 R1).
+1. [OpenSCAD](https://openscad.org/downloads.html) 설치(무료). `hopper_params.scad` 열고 F5.
+2. 부품 실측값이 바뀌면 파일 맨 위 `MEASURED` 블록만 수정 — 나머지는 자동 갱신.
+3. 콘솔 `echo()` 출력으로 조립 정합성(클램프가 EDF 몸통 범위 안에 있는지, 트레이가 안 겹치는지 등) 확인.
+4. 개별 모듈만 남기고 `F6`(Render) → STL export → `print_parts/`에 저장 (순서: [`print_parts/README.md`](print_parts/README.md)).
+5. 슬라이서에서 확인(PETG, 인필 40%, 벽 4라인 — PLA 금지, 모터 폐열).
+6. 실제 외주 발주 시 그 STL을 `print-orders/<날짜>/`로 복사해서 커밋.
 
-## 재사용 검토
+## 재사용 검토한 기존 STL (참고 기록, rev C에선 안 씀)
 
-- **cjhagemeyer, 3-axis TVC for 64mm EDF** (printables.com/model/803977) — 64 mm EDF용 베인 유닛 STL. 서보 2개·~23° 스로우. **`vane_ring`의 실물 출발점** — 우리 4베인/±15°로 개조하거나, 그대로 쓰고 SingleCopter 대신 2축만 제어하는 것도 검토 가능.
-- **Bresc, Ducted fan TVC drone** (printables.com/model/722967) — 90 mm, 4 제트베인 배치 참고.
-- **K-9 TVC Hopper** (printables.com/model/164897) — 4다리 배치 기하만.
+- SolidGeek/SingleRotorUAV의 Onshape CAD — `firmware/reference/SingleRotorUAV/ORIGIN.md`·
+  `docs/design/research-open-source-references.md` 참고. 펌웨어는 그쪽을 vendor-copy해서 쓰지만,
+  CAD는 결국 이 저장소의 `hopper_params.scad`로 직접 구현하는 쪽으로 감(실측 기반 클램프 마운트가
+  SolidGeek 원본 형상과 안 맞아서).
+- K-9 TVC Hopper Test Vehicle(printables.com/model/164897) — 다리 배치 기하만 참고, 동체 재사용 안 함.
 
 ## 좌표 관례
 
-- Z+ = 위(흡기). 배기 = −Z.
-- `top_plate`: 원점 = 상판 아랫면. `vane_ring`: 원점 = 링 아랫면, EDF 배기면은 `vane_gap_below_exit + vane_ring_h` 위.
-- 베인 0°(중립) = 시위가 Z축과 평행. 부호는 TC-1에서 `SERVOx_REVERSED`로 실기 정합.
+- Z = 0: EDF 배기면(§4 기준면). +Z 위(흡기), −Z 아래(배기).
+- 베인 0°(중립) = 시위가 Z축과 평행. 부호는 실기 TC-1에서 정합.
