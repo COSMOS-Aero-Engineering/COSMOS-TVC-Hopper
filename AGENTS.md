@@ -44,7 +44,8 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 | `firmware/singlecopter.param.md` | ArduPilot SingleCopter 파라미터 — **대안 경로**(rev C가 막힐 때) | 보존 |
 | `cad/hopper_params.scad` | **CAD 정본.** EDF 실측(하우징 외경 72mm, 볼트 플랜지 없음 → 클램프 마운트) 반영, 구조버그 2건 수정 완료 | 2026-09-13 |
 | `cad/measurements.md` | 실측값 기록 표 | 빈 템플릿 |
-| `cad/print_parts/` | 외주 프린트용 STL — **아직 실제 파일 없음**, export 방법은 `cad/print_parts/README.md` | TODO |
+| `cad/print_parts/` | 외주 프린트용 STL 9종 — **실제로 export 완료(2026-09-18)** | 완료 |
+| `cad/renders/` | 조립 렌더 PNG(전체·베인링 클로즈업) | 2026-09-18 |
 | `cad/legacy/` | rev B 단계 3분할 스크립트 — `hopper_params.scad`로 대체됨, 더 이상 안 씀 | 보존만 |
 | `sim/sim_stage1/hopper_aviary.py` | RL Stage 1 환경(자세 안정화, 위치 구속) — 관측 6·행동 5차원, 도메인 랜덤화 포함 | 구현·검증 완료 |
 | `sim/sim_stage1/params.yaml` | 물리 상수 — **거의 전부 PLACEHOLDER**, `vane_arm_l/r`만 실측 기반 | 실측 대기 |
@@ -71,10 +72,11 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 
 ## 현재 상태 (최신 항목: 2026-09-18)
 
-- **CAD**: EDF 실측 완료(9/13) — 볼트 플랜지 없는 제품이라 클램프 마운트로 설계 변경. 구조 버그 2건
-  (기둥-베인링 반경 불일치, 다리 스태거 미적용) 발견·수정. `cad/hopper_params.scad`가 정본.
-  **STL은 아직 export 안 됨**(OpenSCAD 로컬 미설치, `cad/print_parts/README.md`에 재현 순서 있음) —
-  이전 상태 로그에 "print-ready 7종 완성"이라 적혀 있었던 건 부정확한 기록이었다.
+- **CAD**: EDF 실측 완료(9/13) — 볼트 플랜지 없는 제품이라 클램프 마운트로 설계 변경. rev C.1에서
+  장비 선반·서보 보스·스파 커플러·다리 방위 등 구조 대폭 보강(`01-avionics-integration-final.md` §12
+  참고). `cad/hopper_params.scad`가 정본. **STL 9종 실제로 export 완료(2026-09-18)** — 이 PC 바탕화면의
+  `openscad.exe`(2021.01)가 정상 동작함을 확인(`Program Files\OpenSCAD\`는 깨진 설치였을 뿐). 검증
+  `echo()` 12개 전부 통과. 조립 렌더는 `cad/renders/`, STL은 `cad/print_parts/`.
 - **펌웨어**: Arduino IDE+Teensyduino 설치, `firmware/reference/SingleRotorUAV/` 컴파일 성공
   (BasicLinearAlgebra/SerialTransfer 라이브러리 이슈 해결). `firmware/cosmos/`에 단위 테스트 스케치
   2개 작성 완료(`imu_test/`, `throttle_serial/` — 원본 드라이버 재사용, 안전장치 포함). 통합 펌웨어는
@@ -112,7 +114,8 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 2. 실험 A 진행 → `sim/sim_stage1/params.yaml`의 PLACEHOLDER(Kf 등) 실측값으로 교체
    (`docs/design/modelling-notes-ch3.md` §2·§6 대응표 보고 반영).
 3. Teensy 4.0 핀헤더 납땜 → 실물 업로드 → Experiment B(IMU 브링업) 재개.
-4. `cad/print_parts/`의 STL 실제로 export(`cad/print_parts/README.md` 순서대로) → 3D프린트 외주 발주.
+4. ~~`cad/print_parts/`의 STL 실제로 export~~ — **완료(2026-09-18)**. 다음: 슬라이서에서 치수·인필
+   확인(PETG, 인필 40%) → 3D프린트 외주 발주.
 5. 안전 계획서 지도교사 서명 — 완료 여부 미확인, **9/18 전에 확인/완료 우선**.
 6. 안전스테이션 재고 확인: 밸런스충전기·삼각대·소화기.
 7. FS-i6X 송신기 배터리 방식 결정 (AA 알칼라인 vs 충전식).
