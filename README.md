@@ -29,14 +29,15 @@ git config user.email "본인 이메일"
 ### 소프트웨어팀
 
 ```bash
-cd sim/sim_stage1
-python -m venv venv
-venv\Scripts\activate            # Mac/Linux: source venv/bin/activate
-pip install gymnasium stable-baselines3[extra] pyyaml numpy
-python sanity_check.py
+python tasks.py setup      # sim/venv 생성 + 고정 버전 의존성 설치 (torch 포함, 3~5분)
+python tasks.py sanity     # 환경이 살아 있는지 확인
 ```
 
 `환경 정상 동작 확인 완료`가 뜨면 끝. 안 뜨면 아래 [트러블슈팅](#트러블슈팅)부터 본다.
+
+버전은 `sim/requirements.txt`에 고정돼 있다 — 손으로 `pip install` 하지 말 것. 부원마다 다른 버전이
+깔리면 학습 결과가 서로 재현되지 않아, 문제가 생겼을 때 코드 탓인지 환경 탓인지 구분할 수 없다.
+쓸 수 있는 명령 전체는 인자 없이 `python tasks.py`로 확인.
 
 환경을 다 갖췄으면 `hopper_aviary.py`를 열어보고, AI에게 이렇게 물어본다 — 그냥 읽고 넘어가지 말고 답을 **자기 말로 3문장**으로 줄여 팀 채팅방에 올릴 것. 서로 다르게 요약된 지점이 팀이 헷갈리는 지점이다.
 
@@ -69,9 +70,14 @@ python sanity_check.py
 
 ## 협업 규칙
 
-- **브랜치 없이 `main`에 직접 커밋**한다. 팀별로 작업 폴더가 나뉘어 있어 충돌이 거의 안 난다.
+- **`main`에 직접 커밋하지 않는다.** 작업은 항상 브랜치에서 하고 PR로 올린다.
+  (정본 규칙은 [`AGENTS.md`](AGENTS.md)의 "작업 규칙 — 브랜치·PR")
+- **PR 리뷰어는 부장(`junwonkim07`)으로 지정하고, 승인 전에는 머지하지 않는다.**
+  **머지할 수 있는 사람은 김준원(`junwonkim07`)·김민찬(`MINBBBB1201`) 둘뿐** — 본인이 올린 PR이라도
+  직접 머지하지 않는다.
+- **PR 올리기 전에 `python tasks.py check`.** CI가 볼 걸 로컬에서 미리 보는 것 — 2분이면 끝난다.
 - **남의 폴더는 건드리지 않는다.** 소프트웨어팀은 `sim/`·`firmware/cosmos/`, 엔지니어링팀은 `cad/`·`data/`.
-- **매 작업 전에 `git pull`부터.**
+- **매 작업 전에 `git switch main && git pull`부터.**
 - **충돌(conflict)이 뜨면 혼자 풀지 말고 부장 호출.** 처음 겪으면 대부분 잘못 뭉갠다.
 - PLACEHOLDER 값(예: `sim/params.yaml`의 추력 상수)을 실측값으로 바꿀 땐 커밋 메시지에 출처를 남긴다.
 
@@ -88,11 +94,18 @@ python sanity_check.py
 | `[docs]` | 문서 | README 트러블슈팅 추가 |
 
 ```bash
-git pull
+git switch main && git pull              # 항상 최신 main에서 시작
+git switch -c sim/thrust-const-실측반영    # 브랜치부터 만든다
+# ... 작업 ...
+python tasks.py check                    # CI가 볼 걸 미리 확인
 git add -A
 git commit -m "[sim] params.yaml 추력 상수 실측값 반영"
-git push
+git push -u origin HEAD
+gh pr create --base main --reviewer junwonkim07
+# gh가 없으면: push 후 터미널에 뜨는 링크를 열어 웹에서 PR 생성 → 우측 Reviewers에 junwonkim07
 ```
+
+브랜치 이름은 `<커밋 태그>/<짧은 설명>` 형태로. 머지된 브랜치는 지운다(`gh pr merge --delete-branch`).
 
 ---
 
@@ -108,6 +121,8 @@ git push
 | `git push` 시 로그인 창이 반복됨 | Git Credential Manager 인증 만료 | 뜨는 브라우저 창에서 GitHub 로그인 재시도. 안 뜨면 Settings → Developer settings → Personal access tokens에서 토큰 생성 후 비밀번호 칸에 붙여넣기 |
 | Teensy 업로드 시 보드가 안 잡힘 | USB 드라이버 미인식 또는 프로그램 버튼 타이밍 | Teensyduino 재설치, 업로드 시작 직후 보드의 프로그램 버튼 눌러주기 |
 | BNO085 값이 안 뜸 | I2C 배선 순서 또는 주소 문제 | I2C 스캔 스케치로 장치 인식 여부 확인(보통 `0x4A`/`0x4B`), SDA/SCL 순서 재확인 |
+| `pip install` 중 `OSError: [Errno 2] No such file or directory: ...torch\include\...` | Windows 경로 길이 260자 제한 (torch는 경로가 아주 깊다) | 저장소를 더 짧은 경로로 옮기거나(예: `C:\dev\COSMOS-TVC-Hopper`), [긴 경로 지원 활성화](https://pip.pypa.io/warnings/enable-long-paths) |
+| 설치 후 OneDrive가 몇 GB를 동기화하기 시작함 | `sim/venv`(torch 포함 ~1GB)가 OneDrive 폴더 안에 생겨서 | OneDrive 설정 → 백업/폴더 선택에서 `sim/venv` 제외. 지워도 `python tasks.py setup`으로 언제든 다시 만든다 |
 
 ## 구조
 
@@ -120,6 +135,8 @@ git push
 | `cad/` | 자체 파라메트릭 CAD (대안 — 주 경로는 SolidGeek Onshape 포크) |
 | `sim/` | 시뮬레이션 · RL — Stage 1 환경 + PPO 학습 1회 성공 완료 |
 | `data/` | 실험 로그 (CSV) |
+| `tasks.py` | 자주 쓰는 명령 모음 — 인자 없이 실행하면 목록 |
+| `.github/workflows/` | CI — PR마다 sim 환경 로딩 + SB3 연결 자동 확인 |
 
 ## 라이선스 / 출처
 

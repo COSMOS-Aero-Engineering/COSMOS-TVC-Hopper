@@ -9,6 +9,9 @@ venv/
 node_modules/
 package-lock.json
 
+# AI 에이전트 도구가 만드는 로컬 상태 (커밋 대상 아님)
+.omc/
+
 # OS
 .DS_Store
 Thumbs.db
