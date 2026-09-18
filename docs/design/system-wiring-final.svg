@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 900">
+<style>
+  .bg{fill:#ffffff}
+  .t{font-family:Helvetica,Arial,sans-serif;fill:#152029}
+  .title{font-size:17px;font-weight:bold}
+  .sub{font-size:11.5px;fill:#5b6b75}
+  .h{font-size:13px;font-weight:bold}
+  .lbl{font-size:10.5px}
+  .lblb{font-size:11px;font-weight:bold}
+  .tiny{font-size:9px;fill:#5b6b75}
+  .warn{font-size:10.5px;font-weight:bold;fill:#b4551f}
+  .prt{fill:#e7edf2;stroke:#41525c;stroke-width:1.4}
+  .prt2{fill:#dbe7f5;stroke:#1f6feb;stroke-width:1.4}
+  .buy{fill:#f6efdc;stroke:#a8842c;stroke-width:1.4}
+  .elec{fill:#e8f1ec;stroke:#2f7d5d;stroke-width:1.4}
+  .hot{fill:#fbeadd;stroke:#b4551f;stroke-width:1.4}
+  .flow{fill:#eaf2fb;stroke:none;opacity:0.75}
+  .jet{fill:#fdeee2;stroke:none;opacity:0.85}
+  .dim{stroke:#7d8ea0;stroke-width:0.8;fill:none}
+  .axis{stroke:#b9c4cb;stroke-width:1;stroke-dasharray:6 4;fill:none}
+  .pwr{fill:none;stroke:#c0392b;stroke-width:3.2}
+  .pwr2{fill:none;stroke:#e08a3c;stroke-width:2.4}
+  .sig{fill:none;stroke:#1f6feb;stroke-width:2}
+  .gnd{fill:none;stroke:#6b7a83;stroke-width:1.8;stroke-dasharray:3 3}
+  .note{fill:#fff8f2;stroke:#e6c9b0}
+  .box{fill:#eef2f6;stroke:#2b3a42;stroke-width:1.6}
+</style>
+<rect class="bg" x="0.0" y="0.0" width="1240.0" height="900.0" rx="0"/>
+<text class="t title" x="28.0" y="34.0" text-anchor="start">COSMOS 호퍼 — 전체 결선도 (비행 형상, rev C.1)</text>
+<text class="t sub" x="28.0" y="54.0" text-anchor="start">01-avionics-integration-final.md §2(핀맵)·§3(전원)·§6(하네스)와 1:1. 굵은 빨강 = 배터리 메인(최대 50A) / 주황 = 5V / 파랑 = 신호 / 점선 = 공통 GND</text>
+<rect class="hot" x="40.0" y="96.0" width="250.0" height="58.0" rx="5"/>
+<text class="t lblb" x="165.0" y="118.0" text-anchor="middle">4S LiPo 1300mAh 75C</text>
+<text class="t tiny" x="165.0" y="136.0" text-anchor="middle">14.8~16.8V · XT60 · 배터리 선반(+Y)</text>
+<rect class="box" x="40.0" y="186.0" width="250.0" height="52.0" rx="5"/>
+<text class="t lblb" x="165.0" y="206.0" text-anchor="middle">물리 킬스위치 (≥80A, 인라인)</text>
+<text class="t tiny" x="165.0" y="223.0" text-anchor="middle">배터리 (+) 경로 · 상시 손 닿는 위치</text>
+<path class="pwr" d="M165,154 L165,186"/>
+<rect class="box" x="40.0" y="272.0" width="250.0" height="40.0" rx="4"/>
+<text class="t tiny" x="165.0" y="297.0" text-anchor="middle">470µF/35V 저ESR 캡 (ESC 입력단 20mm 내)</text>
+<path class="pwr" d="M165,238 L165,272"/>
+<rect class="hot" x="40.0" y="344.0" width="250.0" height="70.0" rx="5"/>
+<text class="t lblb" x="165.0" y="366.0" text-anchor="middle">ESC 60A · DShot600</text>
+<text class="t tiny" x="165.0" y="383.0" text-anchor="middle">BEC 는 쓰지 않음(잘라내거나 절연)</text>
+<text class="t tiny" x="165.0" y="399.0" text-anchor="middle">270° 브래킷 · 흡기 통과 공기로 냉각</text>
+<path class="pwr" d="M165,312 L165,344"/>
+<text class="t tiny" x="178.0" y="332.0" text-anchor="start">H1 · 14AWG</text>
+<circle cx="165" cy="470" r="34" class="buy"/>
+<text class="t lblb" x="165.0" y="466.0" text-anchor="middle">64mm</text>
+<text class="t lblb" x="165.0" y="481.0" text-anchor="middle">EDF</text>
+<path class="pwr" d="M150,414 L150,436 M165,414 L165,436 M180,414 L180,436"/>
+<text class="t tiny" x="196.0" y="430.0" text-anchor="start">H2 · 3상(꼬아서)</text>
+<rect class="elec" x="40.0" y="560.0" width="250.0" height="58.0" rx="5"/>
+<text class="t lblb" x="165.0" y="582.0" text-anchor="middle">UBEC 5.5V / 3A↑ (5A 권장)</text>
+<text class="t tiny" x="165.0" y="599.0" text-anchor="middle">서보·수신기 전원 단일 소스</text>
+<path class="pwr" d="M75,212 L75,589 L40,589"/>
+<text class="t tiny" x="80.0" y="540.0" text-anchor="start">H4 · 20AWG 배터리 탭</text>
+<rect class="prt2" x="420.0" y="150.0" width="300.0" height="300.0" rx="8"/>
+<text class="t h" x="570.0" y="178.0" text-anchor="middle">Teensy 4.0  (만능기판 위, 아비오닉스 선반 −Y)</text>
+<text class="t tiny" x="570.0" y="196.0" text-anchor="middle">3.3V 로직 · USB 급전(STAGE 1) · USB 시리얼 로깅</text>
+<circle cx="420" cy="240" r="5" fill="#b4551f"/>
+<text class="t lblb" x="432.0" y="234.0" text-anchor="start" fill="#b4551f">핀 8</text>
+<text class="t tiny" x="432.0" y="248.0" text-anchor="start">DShot → ESC</text>
+<circle cx="420" cy="280" r="5" fill="#1f6feb"/>
+<text class="t lblb" x="432.0" y="274.0" text-anchor="start" fill="#1f6feb">핀 2~5</text>
+<text class="t tiny" x="432.0" y="288.0" text-anchor="start">서보 1~4 PWM</text>
+<circle cx="420" cy="330" r="5" fill="#7a3fa8"/>
+<text class="t lblb" x="432.0" y="324.0" text-anchor="start" fill="#7a3fa8">핀 18·19·23·1·9</text>
+<text class="t tiny" x="432.0" y="338.0" text-anchor="start">RC CH1~CH5</text>
+<circle cx="420" cy="380" r="5" fill="#2f7d5d"/>
+<text class="t lblb" x="432.0" y="374.0" text-anchor="start" fill="#2f7d5d">핀 10~13·20·21·22</text>
+<text class="t tiny" x="432.0" y="388.0" text-anchor="start">BNO085 SPI</text>
+<circle cx="420" cy="424" r="5" fill="#6b7a83"/>
+<text class="t lblb" x="432.0" y="418.0" text-anchor="start" fill="#6b7a83">GND</text>
+<text class="t tiny" x="432.0" y="432.0" text-anchor="start">공통 접지</text>
+<text class="t tiny" x="570.0" y="444.0" text-anchor="middle">핀 7·6·14~17 = 예약(SD·광류·ESP32·ToF)</text>
+<path class="sig" d="M420,240 C350,240 320,378 290,378"/>
+<text class="t tiny" x="300.0" y="262.0" text-anchor="start">H3 신호</text>
+<path class="gnd" d="M420,424 C350,424 330,400 290,400"/>
+<text class="t warn" x="300.0" y="418.0" text-anchor="start">GND 공통 — 없으면 DShot 안 나감</text>
+<rect class="elec" x="830.0" y="150.0" width="330.0" height="120.0" rx="6"/>
+<text class="t h" x="995.0" y="174.0" text-anchor="middle">BNO085 IMU (SPI)</text>
+<text class="t tiny" x="995.0" y="194.0" text-anchor="middle">만능기판 위, 수평으로 눕힘 → 축 = 기체축</text>
+<text class="t tiny" x="995.0" y="211.0" text-anchor="middle">PS1→3V3, PS0→핀22 로 SPI 모드 고정</text>
+<text class="t tiny" x="995.0" y="228.0" text-anchor="middle">밑에 1mm 폼테이프(진동 절연)</text>
+<text class="t tiny" x="995.0" y="252.0" text-anchor="middle">중심축에서 약 65mm 오프셋 — 자세엔 무영향</text>
+<path class="sig" d="M720,380 C780,380 780,210 830,210"/>
+<rect class="prt2" x="830.0" y="300.0" width="330.0" height="150.0" rx="6"/>
+<text class="t h" x="995.0" y="324.0" text-anchor="middle">베인 서보 MG90S ×4 (직결 구동)</text>
+<rect class="box" x="852.0" y="340.0" width="145.0" height="38.0" rx="4"/>
+<text class="t lbl" x="924.0" y="364.0" text-anchor="middle">S1  FWD  0°</text>
+<rect class="box" x="1012.0" y="340.0" width="145.0" height="38.0" rx="4"/>
+<text class="t lbl" x="1084.0" y="364.0" text-anchor="middle">S2  LEFT  90°</text>
+<rect class="box" x="852.0" y="386.0" width="145.0" height="38.0" rx="4"/>
+<text class="t lbl" x="924.0" y="410.0" text-anchor="middle">S3  AFT  180°</text>
+<rect class="box" x="1012.0" y="386.0" width="145.0" height="38.0" rx="4"/>
+<text class="t lbl" x="1084.0" y="410.0" text-anchor="middle">S4  RIGHT 270°</text>
+<path class="sig" d="M720,280 C780,280 790,330 830,330"/>
+<text class="t tiny" x="742.0" y="300.0" text-anchor="start">H6~H9 · 26AWG 300mm</text>
+<path class="pwr2" d="M290,589 C600,589 700,420 830,420"/>
+<text class="t tiny" x="560.0" y="560.0" text-anchor="start">H5 · 서보 전원은 UBEC 에서 직접 (Teensy 3V3 금지)</text>
+<rect class="elec" x="830.0" y="500.0" width="330.0" height="110.0" rx="6"/>
+<text class="t h" x="995.0" y="524.0" text-anchor="middle">FS-iA6B 수신기 (PWM 5채널)</text>
+<text class="t tiny" x="995.0" y="543.0" text-anchor="middle">CH1 스로틀 · CH2 롤 · CH3 피치 · CH4 요 · CH5 킬</text>
+<text class="t tiny" x="995.0" y="560.0" text-anchor="middle">전원 5V(UBEC) · 안테나 2개 서로 90°</text>
+<text class="t tiny" x="995.0" y="580.0" text-anchor="middle">iBUS 아님 — 스톡 펌웨어가 PWM 을 읽는다</text>
+<text class="t tiny" x="995.0" y="598.0" text-anchor="middle">안테나는 전원선에서 30mm 이상 이격</text>
+<rect class="hot" x="560.0" y="660.0" width="300.0" height="70.0" rx="6"/>
+<text class="t lblb" x="710.0" y="683.0" text-anchor="middle">레벨시프터 4ch ×2 (BSS138)</text>
+<text class="t tiny" x="710.0" y="700.0" text-anchor="middle">수신기 5V 신호 → Teensy 3.3V</text>
+<text class="t warn" x="710.0" y="718.0" text-anchor="middle">직결 금지 — Teensy 4.0 은 5V 비관용</text>
+<path class="sig" d="M830,545 C900,600 800,660 860,690"/>
+<path class="sig" d="M560,690 C480,690 470,360 420,330"/>
+<path class="gnd" d="M165,618 L165,790 L1100,790 L1100,610"/>
+<path class="gnd" d="M570,450 L570,790"/>
+<path class="gnd" d="M165,506 L165,560"/>
+<text class="t lbl" x="600.0" y="806.0" text-anchor="start">공통 GND (별 접지) — 배터리(−)=ESC(−)=UBEC(−)=만능기판 GND 버스=Teensy GND=수신기 GND</text>
+<rect class="note" x="28.0" y="828.0" width="1184.0" height="56.0" rx="6"/>
+<text class="t lblb" x="44.0" y="848.0" text-anchor="start">전원 인가 순서 · 필독</text>
+<text class="t lbl" x="44.0" y="866.0" text-anchor="start">① USB 로 Teensy 만 → ② UBEC·수신기(킬 스위치 동작 확인) → ③ 마지막에 배터리 메인. 끌 때는 역순.  |  Teensy VIN 에 UBEC 5V 를 넣으려면 먼저 뒷면 VUSB 패드를 잘라야 한다(§3.4).</text>
+</svg>
