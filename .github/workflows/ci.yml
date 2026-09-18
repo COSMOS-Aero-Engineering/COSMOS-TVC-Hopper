@@ -2,7 +2,12 @@
 #
 # 여기서 잡으려는 사고는 딱 하나: 누가 sim 코드를 고쳤는데 그게 깨진 채로 main에 들어가서,
 # 다음 사람이 git pull 받은 뒤에야 "내가 뭘 잘못했나?" 하고 헤매는 것.
-# 그래서 오래 걸리는 학습은 돌리지 않고, 환경 로딩 + SB3 연결만 빠르게 본다(2~3분).
+# 그래서 오래 걸리는 학습은 돌리지 않고, 환경 로딩 + SB3 연결만 빠르게 본다.
+#
+# 검사 내용 자체는 tasks.py가 갖고 있고 CI는 그걸 호출만 한다. 예전엔 PPO 스모크 코드가
+# tasks.py와 이 파일 양쪽에 복사돼 있어서 "한쪽만 고치지 말 것"이라는 주석으로 버텼는데,
+# 그건 언젠가 어긋난다. 이제 정본은 tasks.py 하나다 — 로컬에서 `python tasks.py check`를
+# 통과하면 CI도 같은 것을 돌린다.
 name: CI
 
 on:
@@ -19,43 +24,32 @@ concurrency:
 
 jobs:
   sim:
+    # ⚠ 이 name 문자열은 main 브랜치 룰셋의 required status check 이름과 바이트 단위로
+    # 같아야 한다. 여기를 고치면 룰셋이 영영 오지 않는 체크를 기다리게 되어 main 대상
+    # 모든 PR이 머지 불가가 된다. 바꿔야 한다면 순서가 있다 —
+    #   ① 룰셋에 새 이름을 '추가'해 둘을 병행 → ② 이 파일 변경을 머지 → ③ 옛 이름 제거.
+    # (Settings → Rules → Rulesets → "main 보호 — PR·승인·CI 필수")
     name: sim — 환경 로딩 + PPO 스모크
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      # uv가 파이썬 자체도 받아온다(pyproject.toml의 requires-python = ">=3.12").
+      # 캐시 키는 uv.lock — 의존성이 안 바뀌면 다음 실행부터 설치가 거의 0초다.
+      - name: uv 설치
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: sim/requirements.txt
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
-      # 의존성 설치 전에 먼저 — 오타/문법 오류는 몇 초 만에 잡힌다
-      - name: 파이썬 문법 체크
-        run: python -m compileall -q sim test_cartpole.py test_pendulum.py
+      # --frozen: uv.lock을 그대로 쓰고, lock이 pyproject.toml과 어긋나 있으면 실패한다.
+      # 즉 이 단계 자체가 "lock을 갱신하지 않고 의존성만 고친" PR을 잡아내는 게이트다.
+      # 리눅스 torch는 pyproject의 CPU 인덱스 설정 덕분에 CUDA 2GB 없이 받아온다.
+      - name: 의존성 설치 (uv.lock 고정 버전 그대로)
+        run: uv sync --frozen
 
-      # PyPI 기본 torch 휠은 리눅스에서 CUDA 라이브러리까지 끌고 와 2GB가 넘는다.
-      # CI엔 GPU가 없으니 CPU 전용 휠을 먼저 깔아두면 설치가 몇 분 빨라진다.
-      - name: torch (CPU 전용 휠) 설치
-        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-      - name: 의존성 설치 (sim/requirements.txt 고정 버전)
-        run: pip install -r sim/requirements.txt
-
-      - name: sanity_check — 환경이 정상 동작하는가
-        working-directory: sim/sim_stage1
-        run: python sanity_check.py
-
-      # 학습이 아니라 "배선 점검". SB3/gymnasium 버전이 올라가면서 API가 바뀌었거나
-      # observation/action space 정의가 깨지면 여기서 걸린다. 256스텝, 30초 내외.
-      - name: PPO 스모크 — SB3와 환경 연결 확인 (학습 아님)
-        working-directory: sim/sim_stage1
-        run: |
-          python - <<'PY'
-          from hopper_aviary import HopperAttitudeEnv
-          from stable_baselines3 import PPO
-
-          env = HopperAttitudeEnv()
-          PPO("MlpPolicy", env, n_steps=64, batch_size=64, verbose=0).learn(total_timesteps=256)
-          print("PPO 스모크 통과 — 환경과 SB3 연결 정상")
-          PY
+      # compile(문법) → sanity(환경 20스텝) → smoke(SB3 연결 256스텝). 학습이 아니다.
+      # tasks.py의 입력 해시 캐시는 러너가 매번 새로 뜨므로 CI에선 항상 콜드로 돈다 —
+      # 일부러 캐시를 실어 나르지 않는다. CI는 "정말로 돌려본 결과"여야 하기 때문이다.
+      - name: 검사 — python tasks.py check
+        run: python3 tasks.py check

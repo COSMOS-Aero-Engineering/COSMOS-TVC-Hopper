@@ -6,6 +6,9 @@
 /.github/            @junwonkim07
 /tasks.py            @junwonkim07
 /sim/requirements.txt @junwonkim07
+/pyproject.toml      @junwonkim07
+/uv.lock             @junwonkim07
+/sim/pyproject.toml  @junwonkim07
 /.gitignore          @junwonkim07
 /AGENTS.md           @junwonkim07
 /CLAUDE.md           @junwonkim07

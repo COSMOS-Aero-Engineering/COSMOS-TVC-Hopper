@@ -71,8 +71,9 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 | `sim/sim_stage1/params.yaml` | 물리 상수 — **거의 전부 PLACEHOLDER**, `vane_arm_l/r`만 실측 기반 | 실측 대기 |
 | `test_cartpole.py`, `test_pendulum.py` | SB3 워크플로 익히기용 | 완료 |
 | `data/` | 실험 로그(CSV) | 착수 전 |
-| `sim/requirements.txt` | 파이썬 의존성 **버전 고정본** — 부원마다 다른 버전이 깔려 결과가 재현 안 되는 걸 막는 용도 | 2026-09-18 추가 |
-| `tasks.py` | 작업 실행기(`setup`/`sanity`/`smoke`/`check`/`train`/`deck`) — Windows에 `make`가 없어서 파이썬 stdlib로 구현 | 2026-09-18 추가 |
+| `pyproject.toml` · `sim/pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 **버전 고정본**(uv) — 부원마다 다른 버전이 깔려 결과가 재현 안 되는 걸 막는 용도. `sim/pyproject.toml`이 sim 의존성 정본, `uv.lock`이 실제 고정본 | 2026-09-18 추가 |
+| `sim/requirements.txt` | 위 lock에서 생성되는 **사본**(`python tasks.py lock`) — uv 없이 pip만 쓸 때용. 손으로 고치지 않는다 | 2026-09-18 생성물로 전환 |
+| `tasks.py` | 작업 실행기(`setup`/`lock`/`compile`/`sanity`/`smoke`/`check`/`train`/`deck`/`graph`/`clean`) — 작업 간 순서와 입력 해시 캐시를 갖는다. Windows에 `make`가 없어서 파이썬 stdlib로 구현. CI도 `python tasks.py check`를 그대로 호출한다 | 2026-09-18 추가 |
 | `.github/workflows/ci.yml` | CI — PR마다 문법 체크 + `sanity_check` + PPO 스모크(256스텝). 학습은 돌리지 않는다 | 2026-09-18 추가 |
 | `docs/presentation/` | 동아리 설명회 발표자료(.pptx) + 대본 | 발표 완료(9/5) |
 | `club promoting material/` | 홍보용 PDF/PPTX | — |
