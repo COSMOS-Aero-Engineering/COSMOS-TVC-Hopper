@@ -83,9 +83,11 @@ def format_table(results: dict) -> str:
             f"{'오버슈트':>10}{'정상오차(deg)':>14}{'추락률':>8}")
     lines = [head, "-" * len(head)]
     for name, m in results.items():
+        # 시드 평균을 거치면 정수 항목도 float이 되므로 표시 형식을 하나로 맞춘다
+        # (PD는 30, RL은 30.0 으로 찍혀서 서로 다른 값처럼 보였다).
         lines.append(
             f"{name:<22}{m['mean_reward']:>10.1f}{m['settle_s']:>10.2f}"
-            f"{m['settle_censored']:>8}{m['overshoot']:>10.2f}"
+            f"{m['settle_censored']:>8.0f}{m['overshoot']:>10.2f}"
             f"{m['steady_err_deg']:>14.2f}{m['crash_rate']:>8.0%}"
         )
     lines.append("")

@@ -52,10 +52,12 @@ class EvalCurve(BaseCallback):
     '샘플 효율'이다. 최종 점수만 찍으면 그 주장을 확인할 수도 반박할 수도 없다.
     """
 
-    def __init__(self, every: int, episodes: int = 10):
+    EPISODES = 10  # 학습 중에 여러 번 부르므로 최종 평가(30)보다 적게 쓴다
+
+    def __init__(self, every: int, episodes: int | None = None):
         super().__init__()
         self.every = every
-        self.episodes = episodes
+        self.episodes = self.EPISODES if episodes is None else episodes
         self.curve: list[tuple[int, float]] = []
         self._next = every
 
@@ -135,7 +137,11 @@ def main() -> int:
     print("\n" + "=" * 82)
     print(format_table(results))
     print("=" * 82)
-    print("\n[학습곡선 — 시드 0]")
+    # 곡선은 학습 중에 찍느라 10 에피소드만 쓴다. 위 표는 30 에피소드다 —
+    # 에피소드 집합이 달라서 두 숫자를 직접 비교하면 안 된다(곡선은 같은 비교군 안에서
+    # 시간에 따른 변화를 보는 용도). 헷갈리기 쉬워서 개수를 같이 찍는다.
+    print(f"\n[학습곡선 — 시드 0, {EvalCurve.EPISODES} 에피소드 기준 "
+          f"(위 표는 30 에피소드라 값이 직접 비교되지 않는다)]")
     for name, m in results.items():
         if m["curve"]:
             pts = " ".join(f"{s // 1000}k:{r:.0f}" for s, r in m["curve"])
