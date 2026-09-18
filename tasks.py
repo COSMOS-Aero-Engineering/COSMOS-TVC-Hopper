@@ -31,10 +31,31 @@ import sys
 import time
 from pathlib import Path
 
+def _survive_console_encoding():
+    """출력이 콘솔 인코딩에 걸려 죽지 않게 한다.
+
+    한국어 Windows의 기본 콘솔 인코딩은 cp949인데, 여기엔 em dash(—) 같은 문자가 없다.
+    파이썬은 진짜 콘솔에 붙어 있을 때는 UTF-8로 쓰지만, 출력을 파이프로 넘기거나 파일로
+    리다이렉트하면 locale 인코딩(cp949)으로 떨어져서 UnicodeEncodeError로 죽는다.
+    즉 `python tasks.py check > log.txt` 나 CI 로그 수집에서만 터진다 — 제일 나쁜 종류다.
+
+    인코딩을 UTF-8로 바꾸지는 않는다. cp949 콘솔에 UTF-8 바이트를 쓰면 한글이 전부
+    깨져 보이기 때문이다. 인코딩은 그대로 두고 '못 쓰는 문자만 대체'로 바꾼다.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass  # 리다이렉트된 특수 스트림 등 — 여기서 실패해도 작업 실행엔 지장 없다
+
+
+_survive_console_encoding()
+
 ROOT = Path(__file__).resolve().parent
 SIM = ROOT / "sim"
 STAGE1 = SIM / "sim_stage1"
 DECK = ROOT / "docs" / "presentation"
+VENV = ROOT / ".venv"
 CACHE_DIR = ROOT / ".cosmos-cache"
 
 # 캐시 형식이 바뀌면 이 값을 올린다 — 옛 캐시가 조용히 재사용되는 걸 막는다.
@@ -81,10 +102,23 @@ def uv():
     )
 
 
+def child_env():
+    """자식 프로세스도 같은 이유(cp949)로 죽지 않게 한다.
+
+    sanity_check.py·train.py 출력에도 em dash가 들어 있어서, 위 _survive_console_encoding()은
+    이 파일의 출력만 지켜준다. 자식에게는 PYTHONIOENCODING으로 같은 정책을 물려준다 —
+    인코딩은 부모와 같게 두고 오류 처리만 replace로. 이미 설정돼 있으면 건드리지 않는다.
+    """
+    env = os.environ.copy()
+    if "PYTHONIOENCODING" not in env:
+        env["PYTHONIOENCODING"] = f"{getattr(sys.stdout, 'encoding', None) or 'utf-8'}:replace"
+    return env
+
+
 def run(cmd, cwd=None):
     where = f" (cwd: {Path(cwd).relative_to(ROOT)})" if cwd else ""
     print(f"\n$ {' '.join(str(c) for c in cmd)}{where}", flush=True)
-    result = subprocess.run([str(c) for c in cmd], cwd=cwd)
+    result = subprocess.run([str(c) for c in cmd], cwd=cwd, env=child_env())
     if result.returncode != 0:
         die(f"위 명령이 실패했다 (exit {result.returncode}).")
 
@@ -128,6 +162,29 @@ def collect_inputs(patterns):
     return sorted((rel, _digest(ROOT / rel)) for rel in found)
 
 
+def env_fingerprint():
+    """.venv의 상태 요약. 캐시가 "환경이 멀쩡하다"를 함께 기억하게 하려는 것.
+
+    입력 파일만 해싱하면 이런 구멍이 생긴다: check를 통과한 뒤 .venv를 지워도 sanity와
+    smoke가 캐시 히트로 건너뛰어서, 환경이 없는데 check가 성공한다. 검사의 목적이
+    "환경이 살아 있는가"인데 그걸 확인하지 않고 통과시키는 셈이다.
+
+    설치된 패키지 목록(dist-info 이름)까지 넣으므로, 손으로 pip install해서 버전을
+    어긋나게 만든 경우에도 캐시가 무효가 된다.
+    """
+    cfg = VENV / "pyvenv.cfg"
+    if not cfg.exists():
+        return "no-venv"
+    h = hashlib.sha256()
+    h.update(_digest(cfg).encode())
+    site_dirs = [VENV / "Lib" / "site-packages", *(VENV / "lib").glob("python*/site-packages")]
+    for site in site_dirs:
+        if site.is_dir():
+            for name in sorted(p.name for p in site.iterdir() if p.name.endswith(".dist-info")):
+                h.update(name.encode())
+    return h.hexdigest()
+
+
 def cache_key(task, dep_keys):
     h = hashlib.sha256()
     h.update(CACHE_VERSION.encode())
@@ -137,6 +194,8 @@ def cache_key(task, dep_keys):
     for rel, digest in collect_inputs(task.inputs):
         h.update(rel.encode())
         h.update(digest.encode())
+    if task.uses_env:
+        h.update(env_fingerprint().encode())
     return h.hexdigest()
 
 
@@ -158,7 +217,11 @@ CACHE_KEEP = 16
 
 
 def cache_hit(name, key):
-    return (CACHE_DIR / name / key).exists()
+    if not (CACHE_DIR / name / key).exists():
+        return False
+    # 결과물을 만드는 작업은 그 결과물이 실제로 있어야 "이미 했다"고 말할 수 있다.
+    # (예: deck의 pptx를 지운 뒤 다시 돌리면 입력은 그대로라 캐시가 맞지만, 파일은 없다.)
+    return all((ROOT / out).exists() for out in TASKS[name].outputs)
 
 
 def cache_write(name, key):
@@ -183,13 +246,16 @@ def cache_write(name, key):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class Task:
-    def __init__(self, name, doc, run=None, deps=(), inputs=(), cacheable=True):
+    def __init__(self, name, doc, run=None, deps=(), inputs=(), outputs=(),
+                 cacheable=True, uses_env=False):
         self.name = name
         self.doc = doc
         self.run = run or (lambda: None)
         self.deps = tuple(deps)
-        self.inputs = tuple(inputs)
+        self.inputs = tuple(inputs)       # 이 파일들의 내용이 그대로면 건너뛴다
+        self.outputs = tuple(outputs)     # 이 파일들이 없으면 캐시가 맞아도 다시 만든다
         self.cacheable = cacheable
+        self.uses_env = uses_env          # .venv 상태를 캐시 키에 포함할지
 
 
 def task_setup():
@@ -216,13 +282,17 @@ def task_lock():
         "# uv.lock 과 이 파일이 함께 갱신된다. 여기만 고치면 uv.lock 과 어긋나는데, CI는\n"
         "# uv.lock 기준으로 돌기 때문에 로컬과 CI가 서로 다른 버전을 쓰게 된다.\n"
         "#\n"
-        "# uv 없이 pip만으로 환경을 맞춰야 할 때 쓰라고 남겨둔 사본이다:\n"
-        "#   pip install -r sim/requirements.txt\n"
+        "# uv 없이 pip만으로 환경을 맞춰야 할 때 쓰라고 남겨둔 사본이다.\n"
         "#\n"
-        "# 아래 --extra-index-url 은 리눅스용 torch(2.14.0+cpu)가 PyPI엔 없고 PyTorch\n"
-        "# 인덱스에만 있어서 필요하다. 이 줄이 없으면 리눅스에서 pip 설치가 실패한다.\n"
-        "\n"
-        "--extra-index-url https://download.pytorch.org/whl/cpu\n"
+        "#   Windows / macOS:  pip install -r sim/requirements.txt\n"
+        "#   Linux:            pip install -r sim/requirements.txt \\\n"
+        "#                       --extra-index-url https://download.pytorch.org/whl/cpu\n"
+        "#\n"
+        "# 리눅스만 인덱스를 더 주는 이유: 아래 torch 줄이 리눅스에서는 2.14.0+cpu인데\n"
+        "# 그 휠은 PyPI에 없고 PyTorch 인덱스에만 있다. 반대로 이 인덱스를 파일 안에\n"
+        "# --extra-index-url 로 박아버리면 Windows에서도 그 인덱스를 뒤지게 되고,\n"
+        "# pip는 로컬 버전이 붙은 2.14.0+cpu 를 2.14.0 보다 높다고 보기 때문에\n"
+        "# uv.lock이 지정한 PyPI 휠 대신 CPU 휠을 깔아버린다 — lock과 어긋난다.\n"
         "\n"
     )
     out.write_text(banner + out.read_text(encoding="utf-8"), encoding="utf-8")
@@ -230,8 +300,19 @@ def task_lock():
 
 
 def task_compile():
-    uv_run(["python", "-m", "compileall", "-q", "sim", "test_cartpole.py", "test_pendulum.py"],
-           cwd=ROOT)
+    """검사 대상을 inputs 선언에서 그대로 뽑는다 — 둘이 어긋날 수 없게.
+
+    예전엔 `compileall sim`처럼 디렉터리를 넘겼는데 두 방향으로 틀렸다.
+    (1) 남아 있는 sim/venv 안의 파일 수천 개까지 컴파일했다. 그것들은 inputs에서는
+        제외돼 있어서, 거기서 나는 실패는 캐시 키와 아무 관계가 없었다.
+    (2) 반대로 새로 만든 test_foo.py는 inputs 패턴에는 걸려 캐시를 무효화하면서도
+        실제 컴파일 대상에는 없었다 — 문법 오류가 그대로 통과했다.
+    """
+    files = [rel for rel, _ in collect_inputs(TASKS["compile"].inputs) if rel.endswith(".py")]
+    if not files:
+        # 인자가 비면 compileall이 sys.path 전체를 컴파일한다. 조용히 엉뚱한 일을 하느니 멈춘다.
+        die("컴파일할 파이썬 파일을 찾지 못했다. compile 작업의 inputs 패턴을 확인할 것.")
+    uv_run(["python", "-m", "compileall", "-q", *files], cwd=ROOT)
 
 
 def task_sanity():
@@ -273,16 +354,18 @@ SIM_IN = ["sim/sim_stage1/*.py", "sim/sim_stage1/*.yaml", *DEPS_IN]
 
 TASKS = {t.name: t for t in [
     Task("setup", "uv.lock 그대로 .venv 구성", task_setup, inputs=DEPS_IN, cacheable=False),
-    Task("lock", "의존성 재해석 — uv.lock + sim/requirements.txt 갱신", task_lock, cacheable=False),
+    Task("lock", "의존성 재해석 - uv.lock + sim/requirements.txt 갱신", task_lock, cacheable=False),
     Task("compile", "파이썬 문법 체크", task_compile,
-         inputs=["sim/**/*.py", "test_*.py", *DEPS_IN]),
-    Task("sanity", "환경이 살아 있는지 20스텝 확인", task_sanity, inputs=SIM_IN),
-    Task("smoke", "SB3-환경 연결 확인 (256스텝, 학습 아님)", task_smoke, inputs=SIM_IN),
-    Task("check", "CI와 같은 검사 — compile + sanity + smoke", task_check,
+         inputs=["sim/**/*.py", "test_*.py", *DEPS_IN], uses_env=True),
+    Task("sanity", "환경이 살아 있는지 20스텝 확인", task_sanity, inputs=SIM_IN, uses_env=True),
+    Task("smoke", "SB3-환경 연결 확인 (256스텝, 학습 아님)", task_smoke, inputs=SIM_IN,
+         uses_env=True),
+    Task("check", "CI와 같은 검사 - compile + sanity + smoke", task_check,
          deps=["compile", "sanity", "smoke"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
-         inputs=["docs/presentation/build_deck.js", "docs/presentation/speaker-notes.md"]),
+         inputs=["docs/presentation/build_deck.js", "docs/presentation/speaker-notes.md"],
+         outputs=["docs/presentation/cosmos-info-session.pptx"]),
     Task("clean", "작업 캐시 비우기", task_clean, cacheable=False),
 ]}
 
@@ -290,6 +373,45 @@ TASKS = {t.name: t for t in [
 # ─────────────────────────────────────────────────────────────────────────────
 # 그래프 실행
 # ─────────────────────────────────────────────────────────────────────────────
+
+def needed_tasks(name, seen=None):
+    """name과 그 의존 작업 전체."""
+    seen = seen if seen is not None else set()
+    if name in seen:
+        return seen
+    seen.add(name)
+    for dep in TASKS[name].deps:
+        needed_tasks(dep, seen)
+    return seen
+
+
+def ensure_env(name):
+    """캐시를 판정하기 전에 .venv를 먼저 확정한다.
+
+    안 그러면 캐시 판정이 작업 순서에 딸려 간다: .venv를 지운 상태에서 check를 돌리면
+    먼저 실행된 compile이 .venv를 복구해버리고, 그 뒤에 키가 계산되는 sanity·smoke는
+    캐시 히트가 된다. 결과 자체는 옳지만(환경이 lock 기준으로 복구됐으니) 판정 근거가
+    "그 순간 .venv가 있었느냐"라는 우연에 걸린다.
+
+    먼저 환경을 만들어 두면 이 실행 내내 env_fingerprint()가 고정되고, 캐시는
+    "이 환경 + 이 입력으로 이미 통과했는가"라는 한 가지 질문에만 답하게 된다.
+    """
+    if not any(TASKS[n].uses_env for n in needed_tasks(name)):
+        return
+    fresh = not (VENV / "pyvenv.cfg").exists()
+    if fresh:
+        print("[준비] .venv 가 없다 - uv.lock 기준으로 먼저 만든다.")
+    # 이미 맞는 환경이면 0.1초로 끝난다. 그래서 조건을 걸지 않고 늘 부른다 —
+    # "환경이 lock과 같다"를 실행 시작 시점에 무조건 참으로 만들어 두는 게,
+    # 어떤 작업이 먼저 도느냐에 따라 판정이 달라지는 것보다 낫다.
+    result = subprocess.run([str(uv()), "sync", "--frozen"], cwd=ROOT, env=child_env(),
+                            capture_output=not fresh, text=True, encoding="utf-8",
+                            errors="replace")
+    if result.returncode != 0:
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        die("uv sync 가 실패했다. `python tasks.py setup` 으로 환경부터 확인할 것.")
+
 
 def execute(name, opts, memo, done):
     if name in done:
@@ -300,14 +422,17 @@ def execute(name, opts, memo, done):
 
     key = resolve_key(name, memo)
     if task.cacheable and not opts.force and cache_hit(name, key):
-        print(f"[캐시] {name} — 입력이 그대로다, 건너뛴다.")
+        print(f"[캐시] {name} - 입력이 그대로다, 건너뛴다.")
         done.add(name)
         return
 
-    print(f"[실행] {name} — {task.doc}")
+    print(f"[실행] {name} - {task.doc}")
     task.run()
     if task.cacheable:
-        cache_write(name, key)
+        # 실행 전 키가 아니라 '실행 후' 키를 저장한다. uses_env 작업은 실행 과정에서
+        # .venv가 만들어지거나 갱신될 수 있어서, 실행 전 키를 저장하면 다음 번에 절대
+        # 맞지 않아 매번 다시 돌게 된다. 다음 실행 시점의 상태와 같은 키를 남긴다.
+        cache_write(name, resolve_key(name, {}))
     done.add(name)
 
 
@@ -316,9 +441,9 @@ def show_graph():
     print("작업 그래프:\n")
     for name, task in TASKS.items():
         if not task.cacheable:
-            status = "캐시 안 함 — 항상 실행"
+            status = "캐시 안 함 - 항상 실행"
         elif cache_hit(name, resolve_key(name, memo)):
-            status = "캐시됨 — 건너뜀"
+            status = "캐시됨 - 건너뜀"
         else:
             status = "다시 실행 필요"
         dep = f"  ← 먼저: {', '.join(task.deps)}" if task.deps else ""
@@ -351,6 +476,7 @@ def main():
     if opts.task not in TASKS:
         die(f"그런 작업은 없다: {opts.task}\n     가능한 작업: {', '.join(TASKS)}, graph")
 
+    ensure_env(opts.task)
     execute(opts.task, opts, {}, set())
     return 0
 

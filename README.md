@@ -40,7 +40,8 @@ irm https://astral.sh/uv/install.ps1 | iex
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-그다음은 어느 OS든 같다.
+그다음은 어느 OS든 같다. (Mac은 **Apple Silicon만** 된다 — 고정된 torch 2.14.0에 Intel Mac용
+휠이 없다. Intel Mac이면 Windows/Linux PC를 쓰거나, 부장에게 말해서 torch 버전을 조정한다.)
 
 ```bash
 python tasks.py setup      # .venv 생성 + 고정 버전 의존성 설치 (torch 포함, 3~5분)

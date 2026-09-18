@@ -42,11 +42,12 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      # --frozen: uv.lock을 그대로 쓰고, lock이 pyproject.toml과 어긋나 있으면 실패한다.
-      # 즉 이 단계 자체가 "lock을 갱신하지 않고 의존성만 고친" PR을 잡아내는 게이트다.
+      # --locked: uv.lock을 그대로 쓰되, lock이 pyproject.toml과 어긋나 있으면 실패한다.
+      # 즉 이 단계가 "pyproject만 고치고 lock을 갱신하지 않은" PR을 잡아내는 게이트다.
+      # (--frozen은 lock을 갱신하지 않을 뿐 최신 여부를 검사하지 않는다 — 게이트가 안 된다.)
       # 리눅스 torch는 pyproject의 CPU 인덱스 설정 덕분에 CUDA 2GB 없이 받아온다.
-      - name: 의존성 설치 (uv.lock 고정 버전 그대로)
-        run: uv sync --frozen
+      - name: 의존성 설치 (uv.lock 고정 버전 그대로 + lock 최신 여부 검사)
+        run: uv sync --locked
 
       # compile(문법) → sanity(환경 20스텝) → smoke(SB3 연결 256스텝). 학습이 아니다.
       # tasks.py의 입력 해시 캐시는 러너가 매번 새로 뜨므로 CI에선 항상 콜드로 돈다 —
