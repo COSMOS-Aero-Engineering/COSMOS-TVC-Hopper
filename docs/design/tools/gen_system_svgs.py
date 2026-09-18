@@ -25,8 +25,10 @@ GEO = dict(
     foot_below_exit=140, foot_circle=360,
     ring_od=96, ring_id=76, col_r=48,
     shelf_top_z=150, shelf_t=3, shelf_r_inner=42,
-    batt_shelf_l=112, batt_shelf_w=46, avio_shelf_l=84, avio_shelf_w=60,
-    batt_l=105, batt_w=34, batt_h=25,
+    # batt_shelf_l = 접선(tangential) 방향, batt_shelf_w = 반경(radial) 방향 — cad/hopper_params.scad
+    # equip_shelf_battery() 실측정: 접선 2*y_half=80, 반경 x_out-(shelf_r_inner-20)=70
+    batt_shelf_l=80, batt_shelf_w=70, avio_shelf_l=84, avio_shelf_w=60,
+    batt_l=74, batt_w=34, batt_h=25,  # 2026-09-18 실측: 74x34mm (cad/measurements.md)
     servo_boss_t=4, servo_body_h=22.5,
     vane_inner_r=4, vane_chord=25,
 )
