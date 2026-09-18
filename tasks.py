@@ -24,8 +24,12 @@
                `uv sync --locked`로 맞추고, 그 지문을 캐시 키에 넣는다).
   보장 안 함 - .venv 안 파일의 '내용'까지 멀쩡한지는 보지 않는다. 손으로 site-packages를
                고쳤거나 동기화 도구가 파일을 망가뜨린 경우, 캐시 히트로 통과할 수 있다.
-               확인하려면 `--force`. 18,000개 파일을 매번 해싱하면 2.6초가 들어서(측정값)
-               캐시 이득이 사라지기에 일부러 여기까지만 본다.
+               deck의 산출물도 존재만 보고 내용은 보지 않는다. 확인하려면 `--force`.
+  왜 여기까지만 - 측정값(이 저장소, OneDrive 폴더): 캐시 히트 check 0.9초, 전부 실행 10.9초.
+               여기에 site-packages 18,005개 파일 해싱을 더하면 +2.6초(≈3.5초),
+               import 프로브를 더하면 +3.7초(≈4.6초)다. 못 쓸 정도는 아니지만,
+               막으려는 게 "사람이 venv를 손으로 헤집는" 드문 경우라 값이 비싸다.
+               흔한 쪽(환경 삭제·패키지 변경)은 이미 지문으로 잡고 있다.
   그래서     - 최종 판정은 CI다. CI는 러너를 새로 띄우므로 항상 캐시 없이 전부 돈다.
 
 의존성 관리는 여기가 아니라 uv가 한다(pyproject.toml + uv.lock). 이 파일은 "무엇을 어떤
@@ -118,14 +122,12 @@ def child_env():
     인코딩은 부모(또는 사용자가 이미 정한 값)와 같게 두고, 오류 처리만 replace로 맞춘다.
     """
     env = os.environ.copy()
-    existing = env.get("PYTHONIOENCODING")
-    if existing:
-        # 이미 설정돼 있어도 오류 처리 정책은 replace로 덮는다. cp949:strict 처럼
-        # 잡혀 있으면 자식이 그대로 죽어서, 여기서 하려던 보호가 성립하지 않는다.
-        # 인코딩 자체는 사용자가 정한 값을 그대로 존중한다.
-        encoding = existing.split(":", 1)[0] or "utf-8"
-    else:
-        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    parent = getattr(sys.stdout, "encoding", None) or "utf-8"
+    # 이미 설정돼 있어도 오류 처리 정책은 replace로 덮는다. cp949:strict 처럼 잡혀
+    # 있으면 자식이 그대로 죽어서, 여기서 하려던 보호가 성립하지 않는다. 인코딩
+    # 자체는 사용자가 정한 값을 존중한다. 단 ":replace" 처럼 콜론 앞이 비어 있으면
+    # 그건 "인코딩은 기본값 그대로"라는 뜻이므로 부모 인코딩을 쓴다.
+    encoding = (env.get("PYTHONIOENCODING") or "").split(":", 1)[0] or parent
     env["PYTHONIOENCODING"] = f"{encoding}:replace"
     return env
 
@@ -136,6 +138,30 @@ def run(cmd, cwd=None):
     result = subprocess.run([str(c) for c in cmd], cwd=cwd, env=child_env())
     if result.returncode != 0:
         die(f"위 명령이 실패했다 (exit {result.returncode}).")
+
+
+def sync_to_lock(verbose=False):
+    """.venv를 uv.lock에 맞춘다. 환경을 건드리는 경로는 전부 여기를 지나간다.
+
+    --locked 인 이유: CI가 쓰는 판정과 같게 하려는 것이다. --frozen 은 lock이
+    pyproject.toml보다 낡아도 그냥 통과시키므로, 로컬은 초록불인데 CI만 빨간불인
+    상황이 만들어진다. 로컬에서 먼저 걸리는 편이 낫다.
+
+    이미 맞는 환경이면 0.1초로 끝나므로 조건을 걸지 않고 늘 부른다 — "환경이 lock과
+    같다"를 실행 시작 시점에 참으로 만들어 두는 게, 어떤 작업이 먼저 도느냐에 따라
+    캐시 판정이 달라지는 것보다 낫다.
+    """
+    if verbose:
+        print("[준비] .venv 를 uv.lock 기준으로 맞춘다.")
+    result = subprocess.run([str(uv()), "sync", "--locked"], cwd=ROOT, env=child_env(),
+                            capture_output=not verbose, text=True, encoding="utf-8",
+                            errors="replace")
+    if result.returncode != 0:
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        die("환경을 uv.lock 에 맞추지 못했다.\n"
+            "     pyproject.toml 을 고쳤다면 `python tasks.py lock` 으로 lock을 갱신할 것.\n"
+            "     네트워크 문제라면 연결을 확인하고 다시 시도.")
 
 
 def uv_run(args, cwd=None):
@@ -274,7 +300,9 @@ class Task:
 
 
 def task_setup():
-    run([uv(), "sync", "--frozen"], cwd=ROOT)
+    # ensure_env와 같은 판정(--locked)을 쓴다. setup만 --frozen이면 낡은 lock으로
+    # 환경이 만들어지고, 정작 check와 CI는 그 lock을 거부하는 엇갈림이 생긴다.
+    sync_to_lock(verbose=True)
     activate = r".venv\Scripts\activate" if os.name == "nt" else "source .venv/bin/activate"
     print(
         "\n설치 완료. 확인하려면:  python tasks.py check"
@@ -377,7 +405,8 @@ TASKS = {t.name: t for t in [
          uses_env=True),
     Task("check", "CI와 같은 검사 - compile + sanity + smoke", task_check,
          deps=["compile", "sanity", "smoke"]),
-    Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False),
+    Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
+         uses_env=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
          inputs=["docs/presentation/build_deck.js", "docs/presentation/speaker-notes.md"],
          outputs=["docs/presentation/cosmos-info-session.pptx"]),
@@ -413,24 +442,7 @@ def ensure_env(name):
     """
     if not any(TASKS[n].uses_env for n in needed_tasks(name)):
         return
-    fresh = not (VENV / "pyvenv.cfg").exists()
-    if fresh:
-        print("[준비] .venv 가 없다 - uv.lock 기준으로 먼저 만든다.")
-    # 이미 맞는 환경이면 0.1초로 끝난다. 그래서 조건을 걸지 않고 늘 부른다 —
-    # "환경이 lock과 같다"를 실행 시작 시점에 무조건 참으로 만들어 두는 게,
-    # 어떤 작업이 먼저 도느냐에 따라 판정이 달라지는 것보다 낫다.
-    # --locked 인 이유: CI가 쓰는 판정과 같게 하려는 것이다. --frozen 은 lock이
-    # pyproject.toml보다 낡아도 그냥 통과시키므로, 로컬 check는 초록불인데 CI만
-    # 빨간불인 상황이 만들어진다. 로컬에서 먼저 걸리는 편이 낫다.
-    result = subprocess.run([str(uv()), "sync", "--locked"], cwd=ROOT, env=child_env(),
-                            capture_output=not fresh, text=True, encoding="utf-8",
-                            errors="replace")
-    if result.returncode != 0:
-        if result.stderr:
-            print(result.stderr, file=sys.stderr)
-        die("환경을 uv.lock 에 맞추지 못했다.\n"
-            "     pyproject.toml 을 고쳤다면 `python tasks.py lock` 으로 lock을 갱신할 것.\n"
-            "     그 밖의 경우엔 `python tasks.py setup` 으로 환경부터 확인.")
+    sync_to_lock(verbose=not (VENV / "pyvenv.cfg").exists())
 
 
 def execute(name, opts, memo, done):
