@@ -42,7 +42,7 @@
 <text class="t lblb" x="375.0" y="331.0" text-anchor="middle">64mm EDF</text>
 <rect class="hot" x="315.0" y="286.0" width="120.0" height="18.0" rx="2"/>
 <rect class="prt2" x="438.0" y="175.0" width="105.0" height="4.5" rx="2"/>
-<rect class="hot" x="447.0" y="137.5" width="51.0" height="37.5" rx="2"/>
+<rect class="hot" x="447.0" y="152.5" width="48.8" height="22.5" rx="2"/>
 <rect class="prt2" x="222.0" y="175.0" width="90.0" height="4.5" rx="2"/>
 <rect class="elec" x="226.5" y="155.5" width="75.0" height="3.0" rx="2"/>
 <rect class="prt2" x="237.0" y="143.5" width="54.0" height="9.0" rx="2"/>
