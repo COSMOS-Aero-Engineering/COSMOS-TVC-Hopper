@@ -12,15 +12,8 @@ EDF 실측(2026-09-13, 하우징 외경 72mm·볼트 플랜지 없음 확인) �
 - 맨 위 **"MEASURED"** 블록만 실측값. 나머지는 `docs/design/00-hopper-master-design.md` §4 값 그대로.
 - 파일 맨 아래 `echo()`들이 조립 정합성을 콘솔에 출력 — 값 바꾼 뒤 OpenSCAD 콘솔에서 반드시 확인.
 - `render_mode = "preview"` (조립 미리보기, 구매품인 탄소관·서보·배터리는 색블록으로만 표시) /
-  `"print"` (실제 프린트 대상 파츠만) 두 모드. **`"print"`로 렌더해도 파츠 9개가 합쳐진 채로 나오니,
+  `"print"` (실제 프린트 대상 파츠만) 두 모드. **`"print"`로 렌더해도 파츠 7개가 합쳐진 채로 나오니,
   외주용 STL은 모듈 하나씩 남기고 개별 export 필요** — 순서는 [`print_parts/README.md`](print_parts/README.md).
-
-**2026-09-18: 실제로 렌더·export 완료.** 이 PC 바탕화면의 `openscad.exe`(2021.01, 정상 동작 — `Program
-Files\OpenSCAD\`엔 껍데기만 남아있었던 게 원인이었음)로 렌더 확인. 검증 `echo()` 12개 전부 "정상" —
-흡기 통로 안 막음, 베인이 제트 단면을 가로지름, 커플러가 캐비티 안에 들어감 등. 조립 미리보기 이미지는
-[`renders/preview_colored.png`](renders/preview_colored.png)·[`renders/vane_ring_closeup.png`](renders/vane_ring_closeup.png).
-9개 파츠 STL은 `print_parts/`에 실제로 있음(아래 "재사용 검토한 기존 STL" 밑 문단은 옛 상태 — 지금은
-export 완료됨, `print_parts/README.md` 참고).
 
 ## 폴더
 
