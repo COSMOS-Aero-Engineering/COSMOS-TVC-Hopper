@@ -18,6 +18,16 @@
 파일을 하나라도 고치면 그 작업과, 그 작업에 의존하는 작업이 전부 다시 돈다. 캐시가 의심스러우면
 `--force`로 무시하거나 `python tasks.py clean`으로 비운다.
 
+캐시가 보장하는 것과 보장하지 않는 것 (알고 쓰라고 적어둔다):
+  보장한다  - 선언된 입력 파일의 내용이 지난번 통과 때와 같다.
+             - .venv에 설치된 패키지 목록과 파이썬 버전이 uv.lock과 같다(실행 시작 시
+               `uv sync --locked`로 맞추고, 그 지문을 캐시 키에 넣는다).
+  보장 안 함 - .venv 안 파일의 '내용'까지 멀쩡한지는 보지 않는다. 손으로 site-packages를
+               고쳤거나 동기화 도구가 파일을 망가뜨린 경우, 캐시 히트로 통과할 수 있다.
+               확인하려면 `--force`. 18,000개 파일을 매번 해싱하면 2.6초가 들어서(측정값)
+               캐시 이득이 사라지기에 일부러 여기까지만 본다.
+  그래서     - 최종 판정은 CI다. CI는 러너를 새로 띄우므로 항상 캐시 없이 전부 돈다.
+
 의존성 관리는 여기가 아니라 uv가 한다(pyproject.toml + uv.lock). 이 파일은 "무엇을 어떤
 순서로 실행할지"만 안다 — 둘을 섞지 않는다.
 """
@@ -48,8 +58,6 @@ def _survive_console_encoding():
         except (AttributeError, ValueError, OSError):
             pass  # 리다이렉트된 특수 스트림 등 — 여기서 실패해도 작업 실행엔 지장 없다
 
-
-_survive_console_encoding()
 
 ROOT = Path(__file__).resolve().parent
 SIM = ROOT / "sim"
@@ -107,11 +115,18 @@ def child_env():
 
     sanity_check.py·train.py 출력에도 em dash가 들어 있어서, 위 _survive_console_encoding()은
     이 파일의 출력만 지켜준다. 자식에게는 PYTHONIOENCODING으로 같은 정책을 물려준다 —
-    인코딩은 부모와 같게 두고 오류 처리만 replace로. 이미 설정돼 있으면 건드리지 않는다.
+    인코딩은 부모(또는 사용자가 이미 정한 값)와 같게 두고, 오류 처리만 replace로 맞춘다.
     """
     env = os.environ.copy()
-    if "PYTHONIOENCODING" not in env:
-        env["PYTHONIOENCODING"] = f"{getattr(sys.stdout, 'encoding', None) or 'utf-8'}:replace"
+    existing = env.get("PYTHONIOENCODING")
+    if existing:
+        # 이미 설정돼 있어도 오류 처리 정책은 replace로 덮는다. cp949:strict 처럼
+        # 잡혀 있으면 자식이 그대로 죽어서, 여기서 하려던 보호가 성립하지 않는다.
+        # 인코딩 자체는 사용자가 정한 값을 그대로 존중한다.
+        encoding = existing.split(":", 1)[0] or "utf-8"
+    else:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    env["PYTHONIOENCODING"] = f"{encoding}:replace"
     return env
 
 
@@ -404,13 +419,18 @@ def ensure_env(name):
     # 이미 맞는 환경이면 0.1초로 끝난다. 그래서 조건을 걸지 않고 늘 부른다 —
     # "환경이 lock과 같다"를 실행 시작 시점에 무조건 참으로 만들어 두는 게,
     # 어떤 작업이 먼저 도느냐에 따라 판정이 달라지는 것보다 낫다.
-    result = subprocess.run([str(uv()), "sync", "--frozen"], cwd=ROOT, env=child_env(),
+    # --locked 인 이유: CI가 쓰는 판정과 같게 하려는 것이다. --frozen 은 lock이
+    # pyproject.toml보다 낡아도 그냥 통과시키므로, 로컬 check는 초록불인데 CI만
+    # 빨간불인 상황이 만들어진다. 로컬에서 먼저 걸리는 편이 낫다.
+    result = subprocess.run([str(uv()), "sync", "--locked"], cwd=ROOT, env=child_env(),
                             capture_output=not fresh, text=True, encoding="utf-8",
                             errors="replace")
     if result.returncode != 0:
         if result.stderr:
             print(result.stderr, file=sys.stderr)
-        die("uv sync 가 실패했다. `python tasks.py setup` 으로 환경부터 확인할 것.")
+        die("환경을 uv.lock 에 맞추지 못했다.\n"
+            "     pyproject.toml 을 고쳤다면 `python tasks.py lock` 으로 lock을 갱신할 것.\n"
+            "     그 밖의 경우엔 `python tasks.py setup` 으로 환경부터 확인.")
 
 
 def execute(name, opts, memo, done):
@@ -460,6 +480,10 @@ def main():
     parser.add_argument("-f", "--force", action="store_true", help="캐시를 무시하고 다시 실행")
     parser.add_argument("-h", "--help", action="store_true")
     opts = parser.parse_args()
+
+    # CLI로 실행될 때만 스트림을 건드린다. import 시점에 하면 이 파일을 모듈로
+    # 불러다 쓰는 쪽(테스트 등)의 sys.stdout 정책까지 조용히 바꿔놓게 된다.
+    _survive_console_encoding()
 
     if opts.help or not opts.task or opts.task == "help":
         print("사용법: python tasks.py <작업> [--force]\n")
