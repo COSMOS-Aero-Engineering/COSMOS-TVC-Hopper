@@ -13,6 +13,15 @@
 | `../../firmware/cosmos/` | 우리 팀이 실제로 고쳐 쓰는 펌웨어(위 vendor-copy 기반) | 착수 전 |
 | `../../firmware/singlecopter.param.md` | ArduPilot SingleCopter 파라미터 — **rev C의 대안 경로**(§8.4) | 보존 |
 | `../../cad/hopper_params.scad` | **CAD 정본.** EDF 실측(클램프 마운트) 반영, 구조버그 수정 완료. 자세한 워크플로는 `cad/README.md` | rev C, 2026-09-13 |
+| [`01-avionics-integration-final.md`](01-avionics-integration-final.md) | **아비오닉스·배선·기계통합 확정판 (rev C.1).** Teensy 핀맵·전원계통·빵판/만능기판 배치·기계 통합·CG 재계산·조립순서·브링업절차 | rev C.1, 2026-09-17 |
+| [`02-web-dashboard-design.md`](02-web-dashboard-design.md) | **웹 대시보드·3D 인터페이스 설계도(신규).** 소프트웨어팀 웹 산출물의 목표·아키텍처·CSV 데이터 계약·기술스택 | 신규, 2026-09-18 |
+| [`03-control-pipeline-design.md`](03-control-pipeline-design.md) | **제어 파이프라인 심화 설계(신규).** PID/RL 아키텍처(직접비교 vs Residual RL)·3D 물리엔진 전환 로드맵(Stage 1 PoC→Stage 2)·State/Action Space·Domain Randomization 갭 분석·온보드 배포(ONNX/TFLite Micro)·참고 오픈소스 검증 | 신규, 2026-09-18 |
+| [`avionics-breadboard.svg`](avionics-breadboard.svg) | **빵판 배치도** (Week 1 벤치 브링업용) — 홀 좌표·점퍼선까지 | rev C.1 |
+| [`avionics-perfboard.svg`](avionics-perfboard.svg) | **만능기판 배치도 · 납땜 도면** (비행용) — 홀 좌표·장착홀 53.34×38.10 | rev C.1 |
+| [`system-wiring-final.svg`](system-wiring-final.svg) | **전체 결선도**(비행 형상) — 전원 트리·핀맵·하네스 ID | rev C.1 |
+| [`mechanical-integration.svg`](mechanical-integration.svg) | **기계 통합도** — 입면(z좌표)·평면(방위), 전자부품이 프린트 구조 어디에 붙는지 | rev C.1 |
+| `tools/gen_board_svgs.py` · `tools/gen_system_svgs.py` | 위 도면 4장의 **생성기**. 치수가 바뀌면 스크립트만 고치고 재실행 (`python docs/design/tools/gen_*.py`) | — |
+| `../../kicad/` | 아비오닉스 배선 스키매틱 캡처(신규 — 아직 비어있음, `kicad/README.md` 참고) | 착수 전, `semester-roadmap.md` Week 4 |
 | `../../data/` | 실험 로그(CSV) | 착수 전 |
 
 ## 리비전
