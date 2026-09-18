@@ -62,6 +62,7 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 | `docs/design/references/Jacobsen2021_*.pdf` | SolidGeek/Jacobsen 논문 전문 — 제작·제어 이론의 1차 자료 | — |
 | `docs/execution/week-01-kickoff.md` | 1–2주차 마스터 실행계획 — 타임라인·부장 준비·부품 전체·세션 진행 | 9/18–19 세션용 |
 | `docs/execution/semester-roadmap.md` | **3–10주차 세션별 실행계획(신규)** — week-01-kickoff.md를 이어받아 팀 3개를 매주 세션 단위로 배치. KiCad 착수(Week 4)·baseline 확정(Week 7)·RL 비교(Week 8)·발표(Week 10). §0.1에 원래 매크로 로드맵과의 일정 차이 분석 포함 | 신규, 2026-09-18 |
+| `docs/execution/member-weekly-tasks.md` | **부원 7명 개인별 주간 태스크(신규)** — 팀 단위 계획을 Week 1 잔여~Week 10까지 이름별로 배정(엔지니어링: 김민찬·박지훈·이민우·김시우 / 소프트웨어: 김준원·김민지·권재후) | 신규, 2026-09-18 |
 | `docs/execution/procurement-review.md` | 구글시트 행별 검토 | — |
 | `docs/execution/bench-wiring.svg` | 벤치 배선도(구버전 — `01-avionics-integration-final.md` §4로 대체됨) | — |
 | `kicad/` | 아비오닉스 배선 스키매틱 캡처(신규 — 아직 비어있음, Week 4 착수 예정) | 착수 전 |
@@ -96,7 +97,8 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 | "PID vs RL, 정확히 어떤 구조로 비교하나?" | `03-control-pipeline-design.md` §3 (여기만 — `AGENTS.md` 본문엔 원칙 한 줄만 남겨둠) |
 | "RL 상태/행동 벡터가 몇 차원이지?" | `03-control-pipeline-design.md` §4 (`00-hopper-master-design.md` §9는 폐기됨) |
 | "시뮬레이션 3D랑 웹 3D 뷰어랑 뭐가 다르지?" | 둘 다 — `03-control-pipeline-design.md` §1.1 과 `02-web-dashboard-design.md` §1.1에 **같은 표**가 있음(어느 쪽을 먼저 읽어도 됨) |
-| "이번 주 동아리 시간에 뭘 하나?" | `docs/execution/semester-roadmap.md` (1–2주차는 `week-01-kickoff.md`) |
+| "이번 주 동아리 시간에 뭘 하나?" | `docs/execution/semester-roadmap.md` (1–2주차는 `week-01-kickoff.md`) — **팀 단위** |
+| "이번 주에 (내 이름)이 뭘 해야 하나?" | `docs/execution/member-weekly-tasks.md` — **개인별** |
 | "전자 배선·핀맵이 정확히 어떻게 되나?" | `01-avionics-integration-final.md` (마스터 설계도 §6.5·§7보다 이 문서가 최신) |
 | "기구 형상·치수·질량예산은?" | `00-hopper-master-design.md` §3~§7 |
 
