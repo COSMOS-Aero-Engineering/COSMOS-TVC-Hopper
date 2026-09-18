@@ -41,7 +41,7 @@
 <rect class="buy" x="321.0" y="262.0" width="108.0" height="138.0" rx="2"/>
 <text class="t lblb" x="375.0" y="331.0" text-anchor="middle">64mm EDF</text>
 <rect class="hot" x="315.0" y="286.0" width="120.0" height="18.0" rx="2"/>
-<rect class="prt2" x="438.0" y="175.0" width="69.0" height="4.5" rx="2"/>
+<rect class="prt2" x="438.0" y="175.0" width="105.0" height="4.5" rx="2"/>
 <rect class="hot" x="447.0" y="137.5" width="51.0" height="37.5" rx="2"/>
 <rect class="prt2" x="222.0" y="175.0" width="90.0" height="4.5" rx="2"/>
 <rect class="elec" x="226.5" y="155.5" width="75.0" height="3.0" rx="2"/>
@@ -139,8 +139,8 @@
 <circle cx="967.3" cy="467.3" r="5" class="buy"/>
 <circle cx="1070.0" cy="570.0" r="7" class="hot"/>
 <text class="t tiny" x="1095.0" y="265.0" text-anchor="middle">기둥·다리 45° 계열</text>
-<rect class="prt2" x="868.4" y="333.2" width="123.2" height="50.6" rx="2"/>
-<text class="t tiny" x="930.0" y="361.2" text-anchor="middle">배터리 선반 (112×46)</text>
+<rect class="prt2" x="886.0" y="306.8" width="88.0" height="77.0" rx="2"/>
+<text class="t tiny" x="930.0" y="334.8" text-anchor="middle">배터리 선반 (80×70, 접선x반경)</text>
 <rect class="prt2" x="883.8" y="476.2" width="92.4" height="66.0" rx="2"/>
 <text class="t tiny" x="930.0" y="502.2" text-anchor="middle">아비오닉스 선반 (84×60)</text>
 <text class="t tiny" x="930.0" y="516.2" text-anchor="middle">만능기판 70×50</text>

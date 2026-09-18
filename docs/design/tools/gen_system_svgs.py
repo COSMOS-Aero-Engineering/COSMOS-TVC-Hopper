@@ -350,7 +350,8 @@ def mechanical():
 
     bx, by = px(-G["batt_shelf_l"] / 2, G["shelf_r_inner"] + G["batt_shelf_w"])
     o.append(rect(bx, by, G["batt_shelf_l"] * S2, G["batt_shelf_w"] * S2, "prt2"))
-    o.append(txt(PX, by + 28, "배터리 선반 (112×46)", "tiny", "middle"))
+    o.append(txt(PX, by + 28, "배터리 선반 (%g×%g, 접선x반경)" % (G["batt_shelf_l"], G["batt_shelf_w"]),
+                 "tiny", "middle"))
     ax, ay = px(-G["avio_shelf_l"] / 2, -G["shelf_r_inner"])
     o.append(rect(ax, ay, G["avio_shelf_l"] * S2, G["avio_shelf_w"] * S2, "prt2"))
     o.append(txt(PX, ay + 26, "아비오닉스 선반 (84×60)", "tiny", "middle"))
