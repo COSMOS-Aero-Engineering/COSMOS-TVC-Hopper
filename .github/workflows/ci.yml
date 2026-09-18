@@ -1,0 +1,61 @@
+# COSMOS CI — PR이 main에 들어가기 전에 "시뮬이 아직 살아 있는가"만 자동으로 확인한다.
+#
+# 여기서 잡으려는 사고는 딱 하나: 누가 sim 코드를 고쳤는데 그게 깨진 채로 main에 들어가서,
+# 다음 사람이 git pull 받은 뒤에야 "내가 뭘 잘못했나?" 하고 헤매는 것.
+# 그래서 오래 걸리는 학습은 돌리지 않고, 환경 로딩 + SB3 연결만 빠르게 본다(2~3분).
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 같은 PR에 연달아 푸시하면 이전 실행은 취소 — 무료 러너 시간 아끼기
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sim:
+    name: sim — 환경 로딩 + PPO 스모크
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: sim/requirements.txt
+
+      # 의존성 설치 전에 먼저 — 오타/문법 오류는 몇 초 만에 잡힌다
+      - name: 파이썬 문법 체크
+        run: python -m compileall -q sim test_cartpole.py test_pendulum.py
+
+      # PyPI 기본 torch 휠은 리눅스에서 CUDA 라이브러리까지 끌고 와 2GB가 넘는다.
+      # CI엔 GPU가 없으니 CPU 전용 휠을 먼저 깔아두면 설치가 몇 분 빨라진다.
+      - name: torch (CPU 전용 휠) 설치
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: 의존성 설치 (sim/requirements.txt 고정 버전)
+        run: pip install -r sim/requirements.txt
+
+      - name: sanity_check — 환경이 정상 동작하는가
+        working-directory: sim/sim_stage1
+        run: python sanity_check.py
+
+      # 학습이 아니라 "배선 점검". SB3/gymnasium 버전이 올라가면서 API가 바뀌었거나
+      # observation/action space 정의가 깨지면 여기서 걸린다. 256스텝, 30초 내외.
+      - name: PPO 스모크 — SB3와 환경 연결 확인 (학습 아님)
+        working-directory: sim/sim_stage1
+        run: |
+          python - <<'PY'
+          from hopper_aviary import HopperAttitudeEnv
+          from stable_baselines3 import PPO
+
+          env = HopperAttitudeEnv()
+          PPO("MlpPolicy", env, n_steps=64, batch_size=64, verbose=0).learn(total_timesteps=256)
+          print("PPO 스모크 통과 — 환경과 SB3 연결 정상")
+          PY
