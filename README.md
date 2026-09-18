@@ -50,7 +50,7 @@ python tasks.py sanity     # 환경이 살아 있는지 확인
 전문용어는 처음 나올 때 풀어서 써줘.
 ```
 
-작업 폴더: `sim/`(RL 환경·학습 스크립트), `firmware/cosmos/`(Teensy 스케치 — Arduino IDE + Teensyduino 필요, 펌웨어 담당만 설치하면 됨).
+작업 폴더: `sim/`(RL 환경·학습 스크립트), `firmware/cosmos/`(Teensy 펌웨어 — **VSCode + PlatformIO 익스텐션** 필요, 펌웨어 담당만 설치하면 됨. 2026-09-19부터 Arduino IDE 대신 이걸 씀, `firmware/cosmos/README.md` 참고). 폴더마다 `platformio.ini`가 있는 독립 프로젝트라 `cd firmware/cosmos/imu_test && pio run -t upload`로 바로 업로드.
 
 ### 엔지니어링팀
 
@@ -119,7 +119,7 @@ gh pr create --base main --reviewer junwonkim07
 | `venv\Scripts\activate` 실행 시 오류(실행 정책) | Windows 기본 PowerShell 스크립트 실행 제한 | PowerShell을 관리자로 열고 `Set-ExecutionPolicy RemoteSigned` 후 재시도, 또는 명령 프롬프트(cmd)에서 `venv\Scripts\activate.bat` 사용 |
 | `sanity_check.py` 실행 시 `ModuleNotFoundError` | 가상환경 활성화 전에 `pip install` 했거나, 활성화가 안 된 상태로 실행 | 터미널 프롬프트 앞에 `(venv)`가 보이는지 확인 후 `pip install` 다시 |
 | `git push` 시 로그인 창이 반복됨 | Git Credential Manager 인증 만료 | 뜨는 브라우저 창에서 GitHub 로그인 재시도. 안 뜨면 Settings → Developer settings → Personal access tokens에서 토큰 생성 후 비밀번호 칸에 붙여넣기 |
-| Teensy 업로드 시 보드가 안 잡힘 | USB 드라이버 미인식 또는 프로그램 버튼 타이밍 | Teensyduino 재설치, 업로드 시작 직후 보드의 프로그램 버튼 눌러주기 |
+| Teensy 업로드 시 보드가 안 잡힘 | USB 드라이버 미인식 또는 프로그램 버튼 타이밍 | PlatformIO가 필요한 툴체인은 자동 설치하지만 Windows에서 드라이버가 안 잡히면 [PJRC Teensy Loader](https://www.pjrc.com/teensy/loader_win10.html) 드라이버만 별도 설치, 업로드 시작 직후 보드의 프로그램 버튼 눌러주기(버튼 손상 시 접점 순간 단락으로 대체 가능) |
 | BNO085 값이 안 뜸 | I2C 배선 순서 또는 주소 문제 | I2C 스캔 스케치로 장치 인식 여부 확인(보통 `0x4A`/`0x4B`), SDA/SCL 순서 재확인 |
 | `pip install` 중 `OSError: [Errno 2] No such file or directory: ...torch\include\...` | Windows 경로 길이 260자 제한 (torch는 경로가 아주 깊다) | 저장소를 더 짧은 경로로 옮기거나(예: `C:\dev\COSMOS-TVC-Hopper`), [긴 경로 지원 활성화](https://pip.pypa.io/warnings/enable-long-paths) |
 | 설치 후 OneDrive가 몇 GB를 동기화하기 시작함 | `sim/venv`(torch 포함 ~1GB)가 OneDrive 폴더 안에 생겨서 | OneDrive 설정 → 백업/폴더 선택에서 `sim/venv` 제외. 지워도 `python tasks.py setup`으로 언제든 다시 만든다 |

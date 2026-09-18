@@ -23,6 +23,11 @@ Thumbs.db
 /sim/logs/
 *.pdf.tmp
 
+# PlatformIO 빌드 캐시 (firmware/cosmos/*/platformio.ini 프로젝트마다 생김)
+.pio/
+.pioenvs/
+.piolibdeps/
+
 # 예외: 외주 업체에 실제로 보낸 STL은 기록으로 남긴다
 # (출력물이 이상할 때 "우리가 보낸 파일이 이거였나"를 확인할 유일한 근거)
 !/cad/print-orders/**/*.stl

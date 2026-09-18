@@ -85,10 +85,13 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
   (기둥-베인링 반경 불일치, 다리 스태거 미적용) 발견·수정. `cad/hopper_params.scad`가 정본.
   **STL은 아직 export 안 됨**(OpenSCAD 로컬 미설치, `cad/print_parts/README.md`에 재현 순서 있음) —
   이전 상태 로그에 "print-ready 7종 완성"이라 적혀 있었던 건 부정확한 기록이었다.
-- **펌웨어**: Arduino IDE+Teensyduino 설치, `firmware/reference/SingleRotorUAV/` 컴파일 성공
-  (BasicLinearAlgebra/SerialTransfer 라이브러리 이슈 해결). `firmware/cosmos/`에 단위 테스트 스케치
-  2개 작성 완료(`imu_test/`, `throttle_serial/` — 원본 드라이버 재사용, 안전장치 포함). 통합 펌웨어는
-  아직. Teensy 4.0 실물 USB 업로드도 아직 — 핀헤더 미납땜.
+- **펌웨어**: `firmware/reference/SingleRotorUAV/` 컴파일 성공(BasicLinearAlgebra/SerialTransfer
+  라이브러리 이슈 해결). `firmware/cosmos/`에 단위 테스트 스케치 2개 작성 완료(`imu_test/`,
+  `throttle_serial/` — 원본 드라이버 재사용, 안전장치 포함). **2026-09-19: 개발환경 Arduino IDE →
+  PlatformIO(VSCode)로 전환** — `firmware/cosmos/*/platformio.ini` 추가, 각 스케치를 `pio run`으로
+  실제 빌드 검증(전에 아무도 실제로 컴파일해본 적이 없었음). 그 과정에서 `imu_test.ino`의 진짜 컴파일
+  버그 발견·수정(`BNO080` 기본 생성자 없음 — `firmware/cosmos/README.md` 참고). 통합 펌웨어는 아직.
+  Teensy 4.0 핀헤더 납땜·USB 연결 완료(2026-09-18~19), 실물 업로드는 아직(컴파일까지만 검증됨).
 - **소프트웨어(RL)**: SB3 CartPole-v1/Pendulum-v1 완료. `sim/sim_stage1/hopper_aviary.py` — 논문
   3장 운동방정식을 numpy로 직접 적분하는 순수 `gymnasium.Env`(gym-pybullet-drones 포기 이유는
   아래 §소프트웨어 스택). 도메인 랜덤화 포함, PPO 1회 학습 성공(파이프라인 검증 목적, 물리값이
