@@ -72,6 +72,23 @@ python tasks.py sanity     # 환경이 살아 있는지 확인
 
 작업 폴더: `sim/`(RL 환경·학습 스크립트), `firmware/cosmos/`(Teensy 스케치 — Arduino IDE + Teensyduino 필요, 펌웨어 담당만 설치하면 됨).
 
+#### 확장 트랙 — 커넥톰 제약 정책망 (`sim/connectome/`)
+
+초파리 커넥톰(실제 뇌 배선도)을 PPO 정책망의 **연결 구조**로 쓰는 비교군. 메인 트랙을
+대체하지 않고 비교군을 하나 더 얹는 것이다. 설계 의도는
+[`docs/design/connectome-control.md`](docs/design/connectome-control.md),
+실행법은 [`sim/connectome/README.md`](sim/connectome/README.md).
+
+```bash
+python tasks.py connectome   # 그래프 생성 (합성 CX 링 어트랙터 + 셔플 대조군)
+python tasks.py conncheck    # 제대로 도는지 확인
+```
+
+⚠ **지금 비교 결과를 읽으면 안 된다.** `params.yaml`의 `Kf`가 실제값보다 약 37배 작아서
+베인이 5초 동안 자세를 5.8°밖에 못 바꾸는데 초기 교란은 최대 17°다 — 어떤 제어기도
+Stage 1을 못 푸는 상태다. 실험 A로 `Kf`를 채우는 게 먼저다.
+진단: `python sim/connectome/authority.py`
+
 ### 엔지니어링팀
 
 캘리퍼스로 잰 부품 실측값은 `cad/measurements.md`에 기록하고(없으면 새로 만들 것), CAD 파라미터(`cad/hopper_params.scad`)에 반영한 뒤 커밋한다. 배선 참고는 `docs/execution/bench-wiring.svg`.
@@ -155,7 +172,8 @@ gh pr create --base main --reviewer junwonkim07
 | `docs/presentation/` | 동아리 설명회 발표자료 |
 | `firmware/` | 펌웨어 — `reference/SingleRotorUAV/`는 [SolidGeek/SingleRotorUAV](https://github.com/SolidGeek/SingleRotorUAV) (MIT) vendor-copy, `cosmos/`는 우리 코드 |
 | `cad/` | 자체 파라메트릭 CAD (대안 — 주 경로는 SolidGeek Onshape 포크) |
-| `sim/` | 시뮬레이션 · RL — Stage 1 환경 + PPO 학습 1회 성공 완료 |
+| `sim/sim_stage1/` | 시뮬레이션 · RL — Stage 1 환경 + PPO 학습 1회 성공 완료 |
+| `sim/connectome/` | 커넥톰 제약 정책망 (확장 트랙) — 초파리 배선을 정책망 구조로 |
 | `data/` | 실험 로그 (CSV) |
 | `tasks.py` | 작업 실행기 — 작업 순서와 입력 해시 캐시. 인자 없이 실행하면 목록 |
 | `pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 고정본 (`sim/pyproject.toml`이 sim 의존성 정본) |

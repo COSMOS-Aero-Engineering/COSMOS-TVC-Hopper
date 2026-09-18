@@ -3,7 +3,7 @@
 
     python tasks.py                 작업 목록
     python tasks.py setup           uv.lock 그대로 .venv 구성
-    python tasks.py check           CI와 같은 검사 (compile → sanity → smoke)
+    python tasks.py check           CI와 같은 검사 (compile → sanity → smoke → conncheck)
     python tasks.py check --force   캐시 무시하고 전부 다시 실행
     python tasks.py graph           작업 그래프와 캐시 상태 보기
     python tasks.py lock            의존성 다시 풀고 uv.lock/requirements.txt 갱신
@@ -66,6 +66,7 @@ def _survive_console_encoding():
 ROOT = Path(__file__).resolve().parent
 SIM = ROOT / "sim"
 STAGE1 = SIM / "sim_stage1"
+CONNECTOME = SIM / "connectome"
 DECK = ROOT / "docs" / "presentation"
 VENV = ROOT / ".venv"
 CACHE_DIR = ROOT / ".cosmos-cache"
@@ -366,6 +367,23 @@ def task_smoke():
     uv_run(["python", "-c", SMOKE], cwd=STAGE1)
 
 
+def task_connectome():
+    """커넥톰 그래프(합성 + 셔플 대조군)를 만든다.
+
+    결과물을 커밋하지 않는 이유: build_subgraph.py가 고정된 규칙으로 결정론적으로
+    만들어내므로 저장소에 둘 이유가 없고, 생성기와 npz가 따로 놀다가 어긋나는 사고를
+    아예 없앤다. FlyWire 실측 그래프는 애초에 수백 MB 원본이 필요해 여기 못 들어온다.
+    """
+    uv_run(["python", "build_subgraph.py", "--source", "synthetic"], cwd=CONNECTOME)
+    uv_run(["python", "shuffle.py",
+            "--in", "graphs/synthetic.npz",
+            "--out", "graphs/synthetic_shuffled.npz"], cwd=CONNECTOME)
+
+
+def task_conncheck():
+    uv_run(["python", "check.py"], cwd=CONNECTOME)
+
+
 def task_check():
     print("\n전부 통과. PR 올려도 된다.")
 
@@ -394,6 +412,8 @@ def task_clean():
 # 의존성 입력 — 이게 바뀌면 sim을 쓰는 작업은 전부 다시 돌아야 한다.
 DEPS_IN = ["uv.lock", "pyproject.toml", "sim/pyproject.toml"]
 SIM_IN = ["sim/sim_stage1/*.py", "sim/sim_stage1/*.yaml", *DEPS_IN]
+# 커넥톰 점검은 환경(Stage 1)까지 같이 쓰므로 양쪽을 다 입력으로 잡는다.
+CONN_IN = ["sim/connectome/*.py", *SIM_IN]
 
 TASKS = {t.name: t for t in [
     Task("setup", "uv.lock 그대로 .venv 구성", task_setup, inputs=DEPS_IN, cacheable=False),
@@ -403,8 +423,15 @@ TASKS = {t.name: t for t in [
     Task("sanity", "환경이 살아 있는지 20스텝 확인", task_sanity, inputs=SIM_IN, uses_env=True),
     Task("smoke", "SB3-환경 연결 확인 (256스텝, 학습 아님)", task_smoke, inputs=SIM_IN,
          uses_env=True),
-    Task("check", "CI와 같은 검사 - compile + sanity + smoke", task_check,
-         deps=["compile", "sanity", "smoke"]),
+    Task("connectome", "커넥톰 그래프 생성 (합성 + 셔플 대조군)", task_connectome,
+         inputs=CONN_IN,
+         outputs=["sim/connectome/graphs/synthetic.npz",
+                  "sim/connectome/graphs/synthetic_shuffled.npz"],
+         uses_env=True),
+    Task("conncheck", "커넥톰 정책망 점검 (그래프/셔플/수치/SB3연결)", task_conncheck,
+         inputs=CONN_IN, uses_env=True),
+    Task("check", "CI와 같은 검사 - compile + sanity + smoke + conncheck", task_check,
+         deps=["compile", "sanity", "smoke", "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
