@@ -24,6 +24,9 @@ Thumbs.db
 *.gcode
 /sim/runs/
 /sim/logs/
+# 커넥톰 그래프는 build_subgraph.py가 결정론적으로 다시 만든다 (python tasks.py connectome)
+/sim/connectome/graphs/
+/sim/connectome/results/
 *.pdf.tmp
 
 # 예외: 외주 업체에 실제로 보낸 STL은 기록으로 남긴다
