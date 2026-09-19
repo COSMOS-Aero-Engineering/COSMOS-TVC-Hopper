@@ -51,21 +51,29 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 | 경로 | 내용 | 상태 |
 |---|---|---|
 | `docs/design/00-hopper-master-design.md` | **마스터 설계도 rev C** — 아키텍처·치수·질량·전자·펌웨어·시험카드·리스크. 이 밑의 요약이 아니라 **이 파일이 기구 설계의 단일 진실 소스** | 현행 |
+| `docs/design/01-avionics-integration-final.md` | **아비오닉스·배선·기계통합 확정판 rev C.1** — Teensy 핀맵·전원계통·빵판/만능기판 배치(홀 좌표까지)·기계 통합(장비선반 등)·CG 재계산·조립순서·브링업절차. 마스터 §6.5·§7과 충돌 시 이 문서가 최신(§12에 충돌지점 명시) | 현행, 2026-09-17 |
+| `docs/design/02-web-dashboard-design.md` | **웹 대시보드·3D 인터페이스 설계도(신규)** — 소프트웨어팀 "웹으로 구현"의 정확한 스펙: 목표·산출물 3종(비교대시보드/3D뷰어/sim뷰어)·아키텍처·**CSV 데이터 계약**(펌웨어↔웹 연결점)·기술스택 추천 | 신규, 2026-09-18 |
+| `docs/design/03-control-pipeline-design.md` | **제어 파이프라인 심화 설계(신규)** — PID/RL 아키텍처(직접비교 vs Residual RL)·3D 물리엔진 전환(Stage 1 PoC→Stage 2 후보 검증)·Stage별 State/Action Space·Domain Randomization 갭·온보드 배포(ONNX/TFLite Micro)·참고 오픈소스 검증상태. **PID vs RL 관련 내용의 단일 진실 소스 — 아래 §확정된 방향의 관련 서술은 이 문서로 이동함** | 신규, 2026-09-18 |
 | `docs/design/research-open-source-references.md` | rev C 근거 리서치 (SolidGeek·Bresciani/PX4·기타 비교) | 완료 |
 | `docs/design/BOM-revC-teensy.md` | 구매 리스트 (현행, ₩310–530k) | 현행 |
 | `docs/design/modelling-notes-ch3.md` | 논문 3장 정리 + `hopper_aviary.py` 코드 대응표(어디가 논문과 다른지 포함) | 2026-09-17 재작성 |
-| `docs/design/general-arrangement.svg` | 기체 개략 배치도 | — |
+| `docs/design/general-arrangement.svg`, `avionics-breadboard.svg`, `avionics-perfboard.svg` | 배치도·빵판/만능기판 배선도(01번 문서 §4·§5 대응 도면) | — |
+| `docs/design/tools/gen_board_svgs.py` | 위 보드 SVG 생성 스크립트 | — |
 | `docs/design/references/Jacobsen2021_*.pdf` | SolidGeek/Jacobsen 논문 전문 — 제작·제어 이론의 1차 자료 | — |
 | `docs/execution/week-01-kickoff.md` | 1–2주차 마스터 실행계획 — 타임라인·부장 준비·부품 전체·세션 진행 | 9/18–19 세션용 |
+| `docs/execution/semester-roadmap.md` | **3–10주차 세션별 실행계획(신규)** — week-01-kickoff.md를 이어받아 팀 3개를 매주 세션 단위로 배치. KiCad 착수(Week 4)·baseline 확정(Week 7)·RL 비교(Week 8)·발표(Week 10). §0.1에 원래 매크로 로드맵과의 일정 차이 분석 포함 | 신규, 2026-09-18 |
+| `docs/execution/member-weekly-tasks.md` | **부원 7명 개인별 주간 태스크(신규)** — 팀 단위 계획을 Week 1 잔여~Week 10까지 이름별로 배정(엔지니어링: 김민찬·박지훈·이민우·김시우 / 소프트웨어: 김준원·김민지·권재후) | 신규, 2026-09-18 |
 | `docs/execution/procurement-review.md` | 구글시트 행별 검토 | — |
-| `docs/execution/bench-wiring.svg` | 벤치 배선도 | — |
+| `docs/execution/bench-wiring.svg` | 벤치 배선도(구버전 — `01-avionics-integration-final.md` §4로 대체됨) | — |
+| `kicad/` | 아비오닉스 배선 스키매틱 캡처(신규 — 아직 비어있음, Week 4 착수 예정) | 착수 전 |
 | `firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 원본 vendor-copy(MIT, `ORIGIN.md`에 수정 계획) — **컴파일 성공 확인**(2026-09-13) | 원본, 손대지 않음 |
 | `firmware/cosmos/imu_test/` | BNO085 브링업 스케치(실험 B용) — 원본 드라이버 복사, 실물 업로드는 아직 | 작성 완료 |
 | `firmware/cosmos/throttle_serial/` | DShot 스로틀 시리얼 테스트 스케치(실험 A·C용, 2초 무입력 자동0% 페일세이프 포함) | 작성 완료 |
 | `firmware/singlecopter.param.md` | ArduPilot SingleCopter 파라미터 — **대안 경로**(rev C가 막힐 때) | 보존 |
 | `cad/hopper_params.scad` | **CAD 정본.** EDF 실측(하우징 외경 72mm, 볼트 플랜지 없음 → 클램프 마운트) 반영, 구조버그 2건 수정 완료 | 2026-09-13 |
 | `cad/measurements.md` | 실측값 기록 표 | 빈 템플릿 |
-| `cad/print_parts/` | 외주 프린트용 STL — **아직 실제 파일 없음**, export 방법은 `cad/print_parts/README.md` | TODO |
+| `cad/print_parts/` | 외주 프린트용 STL 9종 — **실제로 export 완료(2026-09-18)** | 완료 |
+| `cad/renders/` | 조립 렌더 PNG(전체·베인링 클로즈업) | 2026-09-18 |
 | `cad/legacy/` | rev B 단계 3분할 스크립트 — `hopper_params.scad`로 대체됨, 더 이상 안 씀 | 보존만 |
 | `sim/sim_stage1/hopper_aviary.py` | RL Stage 1 환경(자세 안정화, 위치 구속) — 관측 6·행동 5차원, 도메인 랜덤화 포함 | 구현·검증 완료 |
 | `sim/sim_stage1/params.yaml` | 물리 상수 — **거의 전부 PLACEHOLDER**, `vane_arm_l/r`만 실측 기반 | 실측 대기 |
@@ -82,12 +90,28 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 
 ---
 
-## 현재 상태 (2026-09-17)
+## 문서 경계 — 헷갈리기 쉬운 지점
 
-- **CAD**: EDF 실측 완료(9/13) — 볼트 플랜지 없는 제품이라 클램프 마운트로 설계 변경. 구조 버그 2건
-  (기둥-베인링 반경 불일치, 다리 스태거 미적용) 발견·수정. `cad/hopper_params.scad`가 정본.
-  **STL은 아직 export 안 됨**(OpenSCAD 로컬 미설치, `cad/print_parts/README.md`에 재현 순서 있음) —
-  이전 상태 로그에 "print-ready 7종 완성"이라 적혀 있었던 건 부정확한 기록이었다.
+같은 걸 두 번 설명하지 않으려고 문서를 쪼갠 대신, **어디서 뭘 찾아야 하는지**를 여기 명시해둔다.
+아래에 없는 질문은 문서 맵(위 표)에서 "내용" 컬럼으로 찾을 것.
+
+| 질문 | 볼 문서 |
+|---|---|
+| "PID vs RL, 정확히 어떤 구조로 비교하나?" | `03-control-pipeline-design.md` §3 (여기만 — `AGENTS.md` 본문엔 원칙 한 줄만 남겨둠) |
+| "RL 상태/행동 벡터가 몇 차원이지?" | `03-control-pipeline-design.md` §4 (`00-hopper-master-design.md` §9는 폐기됨) |
+| "시뮬레이션 3D랑 웹 3D 뷰어랑 뭐가 다르지?" | 둘 다 — `03-control-pipeline-design.md` §1.1 과 `02-web-dashboard-design.md` §1.1에 **같은 표**가 있음(어느 쪽을 먼저 읽어도 됨) |
+| "이번 주 동아리 시간에 뭘 하나?" | `docs/execution/semester-roadmap.md` (1–2주차는 `week-01-kickoff.md`) — **팀 단위** |
+| "이번 주에 (내 이름)이 뭘 해야 하나?" | `docs/execution/member-weekly-tasks.md` — **개인별** |
+| "전자 배선·핀맵이 정확히 어떻게 되나?" | `01-avionics-integration-final.md` (마스터 설계도 §6.5·§7보다 이 문서가 최신) |
+| "기구 형상·치수·질량예산은?" | `00-hopper-master-design.md` §3~§7 |
+
+## 현재 상태 (최신 항목: 2026-09-19)
+
+- **CAD**: EDF 실측 완료(9/13) — 볼트 플랜지 없는 제품이라 클램프 마운트로 설계 변경. rev C.1에서
+  장비 선반·서보 보스·스파 커플러·다리 방위 등 구조 대폭 보강(`01-avionics-integration-final.md` §12
+  참고). `cad/hopper_params.scad`가 정본. **STL 9종 실제로 export 완료(2026-09-18)** — 이 PC 바탕화면의
+  `openscad.exe`(2021.01)가 정상 동작함을 확인(`Program Files\OpenSCAD\`는 깨진 설치였을 뿐). 검증
+  `echo()` 12개 전부 통과. 조립 렌더는 `cad/renders/`, STL은 `cad/print_parts/`.
 - **펌웨어**: `firmware/reference/SingleRotorUAV/` 컴파일 성공(BasicLinearAlgebra/SerialTransfer
   라이브러리 이슈 해결). `firmware/cosmos/`에 단위 테스트 스케치 2개 작성 완료(`imu_test/`,
   `throttle_serial/` — 원본 드라이버 재사용, 안전장치 포함). **2026-09-19: 개발환경 Arduino IDE →
@@ -110,6 +134,21 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 - **문서 정합성 점검(2026-09-17)**: 이전 상태 로그가 실제로 존재하지 않는 파일(`cad/print_parts/`의
   STL 7개, 예전 버전 `modelling-notes-ch3.md`)을 "완성"으로 적어놓고 있었던 걸 발견 — 이번에 바로잡음.
   **앞으로 "완료"라고 적을 땐 실제로 그 경로에 파일이 있는지 확인하고 적을 것.**
+- **로드맵 공백 해소(2026-09-18)**: `docs/execution/week-01-kickoff.md`가 1–2주차까지만 있고 그 뒤가
+  하나도 안 짜여 있어서 소프트웨어팀에게 "산출물이 정확히 뭐고 어떻게 진행하는지"를 설명할 수 없는
+  상태였음. 두 문서로 메움: ①`docs/design/02-web-dashboard-design.md` — "웹으로 구현"이 정확히 뭔지
+  (비교 대시보드 + 3D 자세뷰어, CSV 데이터 계약 포함) ②`docs/execution/semester-roadmap.md` — 3–10주차
+  세션별 실행계획(KiCad 스키매틱 캡처 Week 4 포함). **§0.1에 중요 발견**: 원래 매크로 로드맵(1–3주차
+  baseline 확보 가정)이 실제 진행 상황(핀헤더 납땜도 아직인 상태)과 안 맞아서, baseline 확정을 7주차로
+  다시 잡음 — 부장이 "8–10주 압축 vs 학기 연장" 판단 필요(아래 다음 액션 8).
+- **PID/RL 심화 + 문서 중복 정리(2026-09-18, 같은 날 2차)**: 부장이 "이미 대학급 프로젝트, `sim_stage1`은
+  최종이 아니라 테스트 단계, PID·RL 다 수준급으로"라며 심화 리서치 제공 → `docs/design/03-control-pipeline-design.md`
+  신설(PID/RL 아키텍처·3D 물리엔진 전환·온보드 배포·오픈소스 검증). **리서치 항목을 WebFetch/WebSearch로
+  직접 검증**(PyFlyt는 유망하나 소스 미검증, Rocket-Lander는 3D가 아니라 2D Box2D로 정정, 새로 발견한
+  `UrosKukovic/TVC_Self_Landing_Rocket`은 액추에이션은 다르지만 센서스택이 우리 BOM과 거의 동일해
+  STAGE 3 참고가치 높음 — 상세는 03번 문서 §7). 동시에 **문서 간 중복 제거**: 이 파일의 "PID vs RL
+  비교 실험 프로토콜"과 `00-hopper-master-design.md` §9(낡은 12/4차원 스펙, 실제 코드와 이미 안
+  맞았음)를 03번 문서로 흡수·삭제, "문서 경계" 섹션(아래) 신설.
 
 ## 다음 액션 (부장)
 
@@ -121,11 +160,20 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
    자세를 5.8°밖에 못 바꾼다(초기 교란은 최대 17°). 즉 **어떤 제어기도 Stage 1을 못 푼다** —
    PLACEHOLDER라 숫자가 부정확한 정도가 아니라 과제 자체가 성립하지 않는 상태다. RL 학습
    결과를 읽으려면 이게 먼저다. 진단: `python sim/connectome/authority.py`
-3. Teensy 4.0 핀헤더 납땜 → 실물 업로드 → Experiment B(IMU 브링업) 재개.
-4. `cad/print_parts/`의 STL 실제로 export(`cad/print_parts/README.md` 순서대로) → 3D프린트 외주 발주.
+3. ~~Teensy 4.0 핀헤더 납땜~~ — **완료(2026-09-18~19)**, PlatformIO 빌드까지 검증됨.
+   다음: `pio run -t upload`로 실물 업로드 → Experiment B(IMU 브링업) 재개.
+4. ~~`cad/print_parts/`의 STL 실제로 export~~ — **완료(2026-09-18)**. 다음: 슬라이서에서 치수·인필
+   확인(PETG, 인필 40%) → 3D프린트 외주 발주.
 5. 안전 계획서 지도교사 서명 — 완료 여부 미확인, **9/18 전에 확인/완료 우선**.
 6. 안전스테이션 재고 확인: 밸런스충전기·삼각대·소화기.
 7. FS-i6X 송신기 배터리 방식 결정 (AA 알칼라인 vs 충전식).
+8. **`docs/execution/semester-roadmap.md` §0.1 읽고 일정 리스크 판단** — 8–10주 안에 압축(TC-6·TC-7
+   저고도 홉을 제일 먼저 자름) vs 학기 11–12주로 연장. Week 3 세션 A에서 팀에 공유.
+9. 소프트웨어팀에 `docs/design/02-web-dashboard-design.md` 공유 — "웹으로 구현"의 정확한 스펙을
+   이 문서로 설명하고, `semester-roadmap.md` §3 Week 3부터 웹 뼈대(W-A) 착수 가능함을 전달.
+10. 소프트웨어팀(RL 담당)에 `docs/design/03-control-pipeline-design.md` 공유 — 특히 §8-1
+    "PyFlyt 소스코드 직접 검증"을 가장 먼저 맡길 것(이 결과가 나와야 Stage 2 일정을
+    `semester-roadmap.md` §0.2에 배치할 수 있음).
 
 ---
 
@@ -163,34 +211,31 @@ rev C 결정 이후에도 이 파일에 그대로 남아있어서 **실제 상�
 ### 소프트웨어 스택
 1. Baseline: PID 또는 LQR(둘 다 후보, §"PID vs RL" 참고) — Teensy(`firmware/cosmos/`) 자체 구현,
    또는 대안 경로로 ArduPilot SingleCopter(`firmware/singlecopter.param.md`).
-2. 시뮬레이션: ~~gym-pybullet-drones~~ → **자체 제작 커스텀 `gymnasium.Env`로 결정(2026-09-14)**.
-   gym-pybullet-drones의 `_physics()`/`_dynamics()`가 "모터 4개 대칭 배치" 믹싱 공식으로 하드코딩돼
-   있어 모터 1개+베인 4개 구조를 넣으려면 라이브러리 내부를 포크 수준으로 새로 써야 함(확장 지점 아님
-   — 소스코드 직접 확인 후 판단). 도메인 랜덤화도 그 라이브러리 기본 내장이 아니라 원래부터 직접
-   구현해야 하는 부분이었음. 이 기체 형태(EDF 1개+베인 4개)로 공개된 시뮬레이션 코드는 검색해봐도
-   존재하지 않음. → `sim/sim_stage1/hopper_aviary.py`: numpy로 논문 3장 운동방정식 직접 적분하는
-   순수 `gymnasium.Env`(Stage 1, 위치 구속·자세 제어만). 물리상수는 `params.yaml`에 분리(전부
-   PLACEHOLDER) + 도메인 랜덤화 설정도 같이 — 실측값이 나와도 코드는 안 건드리고 `params.yaml`만
-   교체하면 됨. PPO(stable-baselines3). 3D 시각화는 학습에 불필요.
+2. 시뮬레이션: ~~gym-pybullet-drones~~ → **Stage 1: 자체 제작 커스텀 `gymnasium.Env`(2026-09-14 결정,
+   `sim/sim_stage1/hopper_aviary.py`)**. gym-pybullet-drones의 `_physics()`/`_dynamics()`가 "모터 4개
+   대칭 배치" 믹싱 공식으로 하드코딩돼 있어 모터 1개+베인 4개 구조를 넣으려면 포크 수준 수정이 필요해
+   기각(소스코드 직접 확인 후 판단). → numpy로 논문 3장 운동방정식 직접 적분하는 순수 `gymnasium.Env`,
+   물리상수는 `params.yaml`에 분리. PPO(stable-baselines3).
+   **단, 이건 파이프라인 검증용 PoC이지 최종 목표가 아니다** — 3D 물리엔진 기반 Stage 2로 전환하는
+   계획(후보 검증 포함)은 `docs/design/03-control-pipeline-design.md` §2 참고(2026-09-18 확정).
 3. 실기 이식 후 baseline과 정량 비교(복원시간·오버슈트·정상상태오차).
 4. RL 학습 전 SB3 공식 퀵스타트(CartPole-v1/Pendulum-v1)로 워크플로우 먼저 익힐 것 — **완료**(2026-09-13).
-5. (확장 트랙, 2026-09-18 착수) **커넥톰 제약 정책망** — SB3 정책망의 연결 구조를 초파리
+5. **웹 대시보드 + 3D 인터페이스**(신규, 2026-09-18 확정): PID vs RL 비교 결과와 기체 자세를 보여주는
+   웹 앱 — 물리 연산은 안 하고 `data/`·`sim/` 로그를 읽는 **뷰어**다. 상세 스펙은
+   `docs/design/02-web-dashboard-design.md`. RL/시뮬 트랙과 독립적으로 지금 바로 착수 가능(실측 데이터
+   불필요, `docs/execution/semester-roadmap.md` Week 3 W-A부터).
+6. (확장 트랙, 2026-09-18 착수) **커넥톰 제약 정책망** — SB3 정책망의 연결 구조를 초파리
    커넥톰(FlyWire v783)으로 고정하고 가중치만 학습. 환경 코드는 안 건드리고 `policy_kwargs`만
    바꿔 끼운다. **확정된 방향이 아니라 시뮬레이션 전용 비교군 추가**이고, 메인 트랙(PID/LQR vs
    RL)을 대체하지 않는다. 상세: `docs/design/connectome-control.md`.
 
-### PID vs RL 비교 실험 프로토콜
-- 같은 물리적 테스트 리그(구속 상태 테스트 스탠드), 같은 외란 조건을 고정해두고, **제어 알고리즘
-  블록만 PID/LQR ↔ RL 정책으로 교체**해가며 두 번 돌려 비교.
-- RL 정책은 시뮬레이션(`sim/sim_stage1/hopper_aviary.py`)에서 질량·관성·무게중심을 매 에피소드
-  랜덤화해 학습 후 동일 하드웨어에 이식. **시뮬레이션은 학습 단계(비행 전)에서만 쓰이고, 실제 비행
-  중에는 관여하지 않음** — 실비행 시 baseline·RL 모두 같은 IMU(BNO085)가 계산한 자세값을 입력받아
-  서보를 출력.
-- 둘 다 "상태→서보값" 함수라는 점은 같지만, PID/LQR은 사람이 공식과 게인을 직접 정하는 반면 RL은
-  신경망이 시뮬레이션에서 수만 번 시행착오를 거치며 스스로 파라미터를 고쳐나간 결과물 — 이
-  자기수정 과정 자체가 "학습(AI)"의 정의.
-- 핵심 질문은 "RL이 더 낫다"를 전제하지 않고 **"실제로 더 나은지"를 데이터로 검증**하는 것 — baseline이
-  이미 충분할 가능성도 열어둠.
+### PID vs RL 비교 실험 프로토콜 — 상세는 `docs/design/03-control-pipeline-design.md`
+- 원칙만: 같은 물리적 테스트 리그·외란 조건에서 **제어 알고리즘 블록만 PID/LQR ↔ RL 정책으로 교체**해
+  비교. "RL이 더 낫다"를 전제하지 않고 **실제로 더 나은지를 데이터로 검증**하는 게 핵심 질문 —
+  baseline이 이미 충분할 가능성도 열어둠.
+- 아키텍처 옵션(직접비교 vs Residual RL)·정확한 state/action space·시뮬레이션 이식 방식·온보드 배포
+  경로는 전부 `03-control-pipeline-design.md`가 정본 — **여기 다시 적지 않는다**(중복 방지, 2026-09-18
+  정리).
 
 ### 안전 원칙 (필수)
 - LiPo: 방화용기 충전·보관, 1C 이하 충전, 손상 시 즉시 폐기, 물리 킬스위치 상시 확보.
@@ -200,12 +245,18 @@ rev C 결정 이후에도 이 파일에 그대로 남아있어서 **실제 상�
   ⑤(확장) 구속 서서히 해제.
 - **지도교사 서명 전 EDF 전원 절대 안 넣음.**
 
-### 학기 로드맵 (8–10주)
+### 학기 로드맵 (8–10주) — 매크로 골격, 세션 단위 배치는 `docs/execution/semester-roadmap.md`
 - 1–3주차: 기구·전자팀 제작 + baseline 확보 (RL은 이 전에 시작하지 않음 — 단, RL *환경 코드* 준비와
   SB3 워크플로 학습은 병렬로 먼저 해둠, 실제로 그렇게 진행 중).
 - 2–5주차(병렬): 소프트웨어팀 시뮬레이션 구축 + RL 학습.
 - 6–7주차: 실기 이식 + 정량 비교.
 - 8–10주차: 발표 준비 + (여유 시) 자유도 확장.
+
+> ⚠️ **위 매크로 골격은 낙관적 가정("1–3주차에 baseline 확보")이고, 실제로는 더 뒤로 밀렸다.**
+> `docs/execution/semester-roadmap.md` §0.1에서 실제 진행 상황(2026-09-18 기준 핀헤더 납땜도 아직) 기준으로
+> 다시 계산한 결과 **baseline 확정 = 7주차, RL 비교 = 8주차**로 나온다 — 골격(제작→시뮬→이식→발표
+> 4단계 순서)은 안 바뀌었지만 **몇 주차에 뭐가 끝나는지는 이 문단이 아니라 `semester-roadmap.md`를 봐야
+> 정확하다.**
 
 ## 검토했지만 채택 안 한 대안
 

@@ -1,0 +1,171 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 900">
+<style>
+  .bg{fill:#ffffff}
+  .t{font-family:Helvetica,Arial,sans-serif;fill:#152029}
+  .title{font-size:17px;font-weight:bold}
+  .sub{font-size:11.5px;fill:#5b6b75}
+  .h{font-size:13px;font-weight:bold}
+  .lbl{font-size:10.5px}
+  .lblb{font-size:11px;font-weight:bold}
+  .tiny{font-size:9px;fill:#5b6b75}
+  .warn{font-size:10.5px;font-weight:bold;fill:#b4551f}
+  .prt{fill:#e7edf2;stroke:#41525c;stroke-width:1.4}
+  .prt2{fill:#dbe7f5;stroke:#1f6feb;stroke-width:1.4}
+  .buy{fill:#f6efdc;stroke:#a8842c;stroke-width:1.4}
+  .elec{fill:#e8f1ec;stroke:#2f7d5d;stroke-width:1.4}
+  .hot{fill:#fbeadd;stroke:#b4551f;stroke-width:1.4}
+  .flow{fill:#eaf2fb;stroke:none;opacity:0.75}
+  .jet{fill:#fdeee2;stroke:none;opacity:0.85}
+  .dim{stroke:#7d8ea0;stroke-width:0.8;fill:none}
+  .axis{stroke:#b9c4cb;stroke-width:1;stroke-dasharray:6 4;fill:none}
+  .pwr{fill:none;stroke:#c0392b;stroke-width:3.2}
+  .pwr2{fill:none;stroke:#e08a3c;stroke-width:2.4}
+  .sig{fill:none;stroke:#1f6feb;stroke-width:2}
+  .gnd{fill:none;stroke:#6b7a83;stroke-width:1.8;stroke-dasharray:3 3}
+  .note{fill:#fff8f2;stroke:#e6c9b0}
+  .box{fill:#eef2f6;stroke:#2b3a42;stroke-width:1.6}
+</style>
+<rect class="bg" x="0.0" y="0.0" width="1280.0" height="900.0" rx="0"/>
+<text class="t title" x="28.0" y="34.0" text-anchor="start">COSMOS 호퍼 — 기계 통합도 (전자부품이 프린트 구조 어디에 붙나, rev C.1)</text>
+<text class="t sub" x="28.0" y="54.0" text-anchor="start">왼쪽 = 입면(YZ 평면, +Y 오른쪽) / 오른쪽 = 평면(위에서 본 것). 01-avionics-integration-final.md §7 · cad/hopper_params.scad rev C.1 과 동일 치수.</text>
+<text class="t h" x="375.0" y="92.0" text-anchor="middle">입면 (elevation)</text>
+<rect class="flow" x="316.5" y="133.0" width="117.0" height="129.0" rx="0"/>
+<text class="t tiny" x="375.0" y="190.0" text-anchor="middle">흡기 통로</text>
+<text class="t tiny" x="375.0" y="205.0" text-anchor="middle">(부품·배선 금지)</text>
+<rect class="jet" x="321.0" y="400.0" width="108.0" height="225.0" rx="0"/>
+<text class="t tiny" x="375.0" y="572.5" text-anchor="middle">배기 제트</text>
+<path class="axis" d="M375.0,107.5 L375.0,625.0"/>
+<rect class="prt" x="280.5" y="127.0" width="189.0" height="6.0" rx="2"/>
+<rect class="buy" x="322.1" y="133.0" width="4.0" height="300.0" rx="1"/>
+<rect class="buy" x="423.9" y="133.0" width="4.0" height="300.0" rx="1"/>
+<rect class="buy" x="321.0" y="262.0" width="108.0" height="138.0" rx="2"/>
+<text class="t lblb" x="375.0" y="331.0" text-anchor="middle">64mm EDF</text>
+<rect class="hot" x="315.0" y="286.0" width="120.0" height="18.0" rx="2"/>
+<rect class="prt2" x="438.0" y="175.0" width="105.0" height="4.5" rx="2"/>
+<rect class="hot" x="447.0" y="152.5" width="48.8" height="22.5" rx="2"/>
+<rect class="prt2" x="222.0" y="175.0" width="90.0" height="4.5" rx="2"/>
+<rect class="elec" x="226.5" y="155.5" width="75.0" height="3.0" rx="2"/>
+<rect class="prt2" x="237.0" y="143.5" width="54.0" height="9.0" rx="2"/>
+<rect class="hot" x="288.0" y="182.5" width="9.0" height="52.5" rx="2"/>
+<rect class="prt" x="303.0" y="433.0" width="144.0" height="42.0" rx="2"/>
+<rect class="prt2" x="313.5" y="435.2" width="123.0" height="37.5" rx="2"/>
+<rect class="box" x="262.5" y="437.5" width="40.5" height="33.0" rx="2"/>
+<rect class="box" x="447.0" y="437.5" width="40.5" height="33.0" rx="2"/>
+<path class="buy" d="M303.0,475.0 L105.0,610.0" stroke-width="4"/>
+<rect class="hot" x="96.0" y="610.0" width="18.0" height="6.0" rx="2"/>
+<path class="buy" d="M447.0,475.0 L645.0,610.0" stroke-width="4"/>
+<rect class="hot" x="636.0" y="610.0" width="18.0" height="6.0" rx="2"/>
+<path class="dim" d="M190.0,146.0 L170.0,146.0 L267.0,175.0"/>
+<text class="t lblb" x="196.0" y="150.0" text-anchor="end">아비오닉스 선반 (−Y, 프린트)</text>
+<text class="t tiny" x="196.0" y="163.0" text-anchor="end">만능기판 70×50 + Teensy + IMU + 수신기</text>
+<text class="t tiny" x="196.0" y="176.0" text-anchor="end">M3 열융착 인서트 4개 · 53.34×38.10</text>
+<text class="t tiny" x="196.0" y="189.0" text-anchor="end">UBEC 은 선반 하면에 타이 2개</text>
+<path class="dim" d="M190.0,232.0 L170.0,232.0 L288.0,208.0"/>
+<text class="t lblb" x="196.0" y="236.0" text-anchor="end">ESC 브래킷 (270°)</text>
+<text class="t tiny" x="196.0" y="249.0" text-anchor="end">흡기로 빨려드는 공기가 지나 냉각됨</text>
+<path class="dim" d="M190.0,296.0 L170.0,296.0 L324.1,310.0"/>
+<text class="t lblb" x="196.0" y="300.0" text-anchor="end">Ø6 CF 기둥 ×4</text>
+<text class="t tiny" x="196.0" y="313.0" text-anchor="end">45°·135°·225°·315°</text>
+<path class="dim" d="M190.0,368.0 L170.0,368.0 L303.0,454.0"/>
+<text class="t lblb" x="196.0" y="372.0" text-anchor="end">베인링 (프린트)</text>
+<text class="t tiny" x="196.0" y="385.0" text-anchor="end">서보 보스 4 · 스파 부싱 4 · 하드스톱 슬롯 4</text>
+<path class="dim" d="M190.0,466.0 L170.0,466.0 L195.0,550.0"/>
+<text class="t lblb" x="196.0" y="470.0" text-anchor="end">착륙다리 ×4 (Ø6 CF)</text>
+<text class="t tiny" x="196.0" y="483.0" text-anchor="end">기둥과 같은 방위 = 서보와 45° 엇갈림</text>
+<path class="dim" d="M602.0,136.0 L622.0,136.0 L450.0,127.0"/>
+<text class="t lblb" x="596.0" y="140.0" text-anchor="start">상판 (프린트)</text>
+<text class="t tiny" x="596.0" y="153.0" text-anchor="start">Ø78 흡기홀</text>
+<path class="dim" d="M602.0,192.0 L622.0,192.0 L472.5,157.0"/>
+<text class="t lblb" x="596.0" y="196.0" text-anchor="start">배터리 선반 (+Y, 프린트)</text>
+<text class="t tiny" x="596.0" y="209.0" text-anchor="start">4S 1300mAh 팩 · 벨크로 2줄</text>
+<text class="t tiny" x="596.0" y="222.0" text-anchor="start">스트랩 슬롯이 길어 ±8mm 반경 트림</text>
+<path class="dim" d="M602.0,284.0 L622.0,284.0 L432.0,295.0"/>
+<text class="t lblb" x="596.0" y="288.0" text-anchor="start">EDF 클램프 (프린트)</text>
+<text class="t tiny" x="596.0" y="301.0" text-anchor="start">볼트 플랜지 없는 EDF용 분할 클램프</text>
+<path class="dim" d="M602.0,368.0 L622.0,368.0 L465.0,454.0"/>
+<text class="t lblb" x="596.0" y="372.0" text-anchor="start">MG90S ×4 — 베인 직결</text>
+<text class="t tiny" x="596.0" y="385.0" text-anchor="start">스플라인 = 베인 피벗축(반경 방향)</text>
+<path class="dim" d="M602.0,448.0 L622.0,448.0 L405.0,520.0"/>
+<text class="t lblb" x="596.0" y="452.0" text-anchor="start">배기 제트 (하향)</text>
+<text class="t tiny" x="596.0" y="465.0" text-anchor="start">이 원뿔 안엔 배선·다리 뿌리 금지</text>
+<rect class="note" x="40.0" y="548.0" width="230.0" height="190.0" rx="6"/>
+<text class="t lblb" x="52.0" y="570.0" text-anchor="start">z 기준 (배기면 = 0)</text>
+<text class="t tiny" x="52.0" y="590.0" text-anchor="start">+182 mm</text>
+<text class="t tiny" x="120.0" y="590.0" text-anchor="start">상판 윗면</text>
+<text class="t tiny" x="52.0" y="605.0" text-anchor="start">+178 mm</text>
+<text class="t tiny" x="120.0" y="605.0" text-anchor="start">상판 아랫면</text>
+<text class="t tiny" x="52.0" y="620.0" text-anchor="start">+150 mm</text>
+<text class="t tiny" x="120.0" y="620.0" text-anchor="start">장비 선반 상면</text>
+<text class="t tiny" x="52.0" y="635.0" text-anchor="start">+92 mm</text>
+<text class="t tiny" x="120.0" y="635.0" text-anchor="start">EDF 흡입구 립</text>
+<text class="t tiny" x="52.0" y="650.0" text-anchor="start">+70 mm</text>
+<text class="t tiny" x="120.0" y="650.0" text-anchor="start">EDF 클램프</text>
+<text class="t tiny" x="52.0" y="665.0" text-anchor="start">+0 mm</text>
+<text class="t tiny" x="120.0" y="665.0" text-anchor="start">배기면 (기준)</text>
+<text class="t tiny" x="52.0" y="680.0" text-anchor="start">-36 mm</text>
+<text class="t tiny" x="120.0" y="680.0" text-anchor="start">베인 피벗축</text>
+<text class="t tiny" x="52.0" y="695.0" text-anchor="start">-50 mm</text>
+<text class="t tiny" x="120.0" y="695.0" text-anchor="start">베인링 하단</text>
+<text class="t tiny" x="52.0" y="710.0" text-anchor="start">-140 mm</text>
+<text class="t tiny" x="120.0" y="710.0" text-anchor="start">발 바닥</text>
+<text class="t lblb" x="52.0" y="728.0" text-anchor="start">CG 목표 +60~75 → 베인까지 모멘트암 ≈ 100mm</text>
+<text class="t h" x="930.0" y="92.0" text-anchor="middle">평면 (plan, 위에서 본 것)</text>
+<circle cx="930.0" cy="430.0" r="39.6" class="jet"/>
+<circle cx="930.0" cy="430.0" r="42.9" fill="none" stroke="#b9c4cb" stroke-dasharray="5 4"/>
+<circle cx="930.0" cy="430.0" r="52.8" fill="none" stroke="#41525c" stroke-width="1.6"/>
+<circle cx="930.0" cy="430.0" r="41.8" fill="none" stroke="#41525c" stroke-width="1"/>
+<path d="M934.4,430.0 L975.1,430.0" stroke="#1f6feb" stroke-width="4"/>
+<g transform="rotate(0 998.2 430.0)"><rect class="box" x="983.2" y="421.0" width="30.0" height="18.0" rx="2"/></g>
+<text class="t tiny" x="1044.4" y="433.0" text-anchor="middle">0° FWD · S1</text>
+<path d="M930.0,425.6 L930.0,384.9" stroke="#1f6feb" stroke-width="4"/>
+<g transform="rotate(-90 930.0 361.8)"><rect class="box" x="915.0" y="352.8" width="30.0" height="18.0" rx="2"/></g>
+<text class="t tiny" x="930.0" y="318.6" text-anchor="middle">90° LEFT · S2</text>
+<path d="M925.6,430.0 L884.9,430.0" stroke="#1f6feb" stroke-width="4"/>
+<g transform="rotate(-180 861.8 430.0)"><rect class="box" x="846.8" y="421.0" width="30.0" height="18.0" rx="2"/></g>
+<text class="t tiny" x="815.6" y="433.0" text-anchor="middle">180° AFT · S3</text>
+<path d="M930.0,434.4 L930.0,475.1" stroke="#1f6feb" stroke-width="4"/>
+<g transform="rotate(-270 930.0 498.2)"><rect class="box" x="915.0" y="489.2" width="30.0" height="18.0" rx="2"/></g>
+<text class="t tiny" x="930.0" y="547.4" text-anchor="middle">270° RIGHT · S4</text>
+<path d="M967.3,392.7 L1070.0,290.0" stroke="#a8842c" stroke-width="2.5" stroke-dasharray="6 4" fill="none"/>
+<circle cx="967.3" cy="392.7" r="5" class="buy"/>
+<circle cx="1070.0" cy="290.0" r="7" class="hot"/>
+<path d="M892.7,392.7 L790.0,290.0" stroke="#a8842c" stroke-width="2.5" stroke-dasharray="6 4" fill="none"/>
+<circle cx="892.7" cy="392.7" r="5" class="buy"/>
+<circle cx="790.0" cy="290.0" r="7" class="hot"/>
+<path d="M892.7,467.3 L790.0,570.0" stroke="#a8842c" stroke-width="2.5" stroke-dasharray="6 4" fill="none"/>
+<circle cx="892.7" cy="467.3" r="5" class="buy"/>
+<circle cx="790.0" cy="570.0" r="7" class="hot"/>
+<path d="M967.3,467.3 L1070.0,570.0" stroke="#a8842c" stroke-width="2.5" stroke-dasharray="6 4" fill="none"/>
+<circle cx="967.3" cy="467.3" r="5" class="buy"/>
+<circle cx="1070.0" cy="570.0" r="7" class="hot"/>
+<text class="t tiny" x="1095.0" y="265.0" text-anchor="middle">기둥·다리 45° 계열</text>
+<rect class="prt2" x="886.0" y="306.8" width="88.0" height="77.0" rx="2"/>
+<text class="t tiny" x="930.0" y="334.8" text-anchor="middle">배터리 선반 (80×70, 접선x반경)</text>
+<rect class="prt2" x="883.8" y="476.2" width="92.4" height="66.0" rx="2"/>
+<text class="t tiny" x="930.0" y="502.2" text-anchor="middle">아비오닉스 선반 (84×60)</text>
+<text class="t tiny" x="930.0" y="516.2" text-anchor="middle">만능기판 70×50</text>
+<path d="M891.1,468.9 L830.4,529.6" stroke="#1f6feb" stroke-width="2" fill="none"/>
+<text class="t tiny" x="830.4" y="543.6" text-anchor="middle" fill="#1f6feb">서보선 2다발</text>
+<path d="M968.9,468.9 L1029.6,529.6" stroke="#1f6feb" stroke-width="2" fill="none"/>
+<text class="t tiny" x="1029.6" y="543.6" text-anchor="middle" fill="#1f6feb">서보선 2다발</text>
+<path d="M930.0,485.0 L930.0,570.8" stroke="#c0392b" stroke-width="2" fill="none"/>
+<text class="t tiny" x="930.0" y="584.8" text-anchor="middle" fill="#c0392b">3상 · 메인전원</text>
+<text class="t lblb" x="1130.0" y="130.0" text-anchor="start">범례</text>
+<rect class="prt" x="1130.0" y="140.0" width="16.0" height="12.0" rx="2"/>
+<text class="t tiny" x="1152.0" y="150.0" text-anchor="start">프린트 파트</text>
+<rect class="prt2" x="1130.0" y="160.0" width="16.0" height="12.0" rx="2"/>
+<text class="t tiny" x="1152.0" y="170.0" text-anchor="start">프린트(전자 장착)</text>
+<rect class="buy" x="1130.0" y="180.0" width="16.0" height="12.0" rx="2"/>
+<text class="t tiny" x="1152.0" y="190.0" text-anchor="start">구매품(CF관·EDF)</text>
+<rect class="hot" x="1130.0" y="200.0" width="16.0" height="12.0" rx="2"/>
+<text class="t tiny" x="1152.0" y="210.0" text-anchor="start">전자·고전류</text>
+<rect class="flow" x="1130.0" y="220.0" width="16.0" height="12.0" rx="2"/>
+<text class="t tiny" x="1152.0" y="230.0" text-anchor="start">흡기 통로</text>
+<rect class="jet" x="1130.0" y="240.0" width="16.0" height="12.0" rx="2"/>
+<text class="t tiny" x="1152.0" y="250.0" text-anchor="start">배기 제트</text>
+<rect class="note" x="28.0" y="790.0" width="1224.0" height="88.0" rx="6"/>
+<text class="t lblb" x="44.0" y="812.0" text-anchor="start">이 도면이 강제하는 규칙 4가지</text>
+<text class="t lbl" x="44.0" y="832.0" text-anchor="start">① 반경 39mm 안쪽(흡기) · 36mm 안쪽(배기)에는 배선·부품·케이블타이 그 무엇도 두지 않는다.</text>
+<text class="t lbl" x="44.0" y="850.0" text-anchor="start">② 베인·서보 = 0/90/180/270, 기둥·다리·선반 = 45/135/225/315. 방위를 섞으면 다리 뿌리와 서보가 같은 자리를 차지한다.</text>
+<text class="t lbl" x="44.0" y="868.0" text-anchor="start">③ 고전류(3상·메인)는 270° 쪽, 신호선은 225°/315° 쪽으로 분리한다.   ④ 선반 높이는 CG 트림 수단이다 — 클램프를 풀어 5mm씩 올린다.</text>
+</svg>
