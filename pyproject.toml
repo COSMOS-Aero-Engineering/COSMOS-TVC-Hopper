@@ -1,0 +1,33 @@
+# COSMOS 워크스페이스 루트 — 파이썬 패키지 경계와 의존성 해석의 정본.
+#
+# 이 저장소는 파이썬(sim)·C++(firmware)·OpenSCAD(cad)·문서가 한 저장소에 같이 있다.
+# 그중 의존성 해석이 필요한 건 파이썬뿐이라, uv 워크스페이스로 파이썬 쪽만 묶는다.
+# 작업 실행(빌드·검사 순서, 캐시)은 `python tasks.py`가 맡는다 — 둘은 역할이 다르다.
+#
+#   uv sync            워크스페이스 전체 의존성을 uv.lock 그대로 .venv에 설치
+#   python tasks.py    검사·학습·빌드 실행 (내부에서 uv를 호출)
+#
+# 왜 워크스페이스인가: 지금은 멤버가 sim 하나지만, 곧 stage2 환경과 로그 분석 도구가
+# 따로 생긴다(AGENTS.md "소프트웨어 스택"). 그때 폴더마다 venv를 따로 만들면 부원 PC에서
+# gymnasium 버전이 갈라진다. 워크스페이스는 멤버가 몇 개든 uv.lock 하나로 버전을 통일한다.
+
+[tool.uv.workspace]
+members = ["sim"]
+
+[tool.uv]
+# 루트는 설치 대상이 아니다. 워크스페이스 경계 선언과 해석 설정만 담는다.
+package = false
+
+# torch는 stable_baselines3가 끌고 오는 전이 의존성이다. 리눅스용 PyPI 기본 휠은 CUDA
+# 라이브러리까지 포함해 2GB가 넘는데, CI 러너엔 GPU가 없어서 그만큼이 통째로 낭비다.
+# 그래서 리눅스에서만 PyTorch CPU 인덱스를 쓰도록 고정한다.
+# Windows/macOS 기본 휠은 원래 CPU 전용이라 건드릴 이유가 없다 — 부원 PC는 그대로 간다.
+# 리눅스에서 GPU 학습이 필요해지면 sim/pyproject.toml의 marker를 지우고 uv.lock을 다시 만든다.
+#
+# 인덱스 정의는 워크스페이스 전체 설정이라 루트에 둔다. 어떤 패키지를 이 인덱스로 보낼지를
+# 정하는 [tool.uv.sources]는 sim/pyproject.toml에 있다 — sources는 그 패키지를 직접
+# 의존성으로 선언한 곳에서만 적용되기 때문이다(전이 의존성에는 걸리지 않는다).
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
