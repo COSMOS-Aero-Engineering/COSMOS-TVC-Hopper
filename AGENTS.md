@@ -105,17 +105,20 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 | "전자 배선·핀맵이 정확히 어떻게 되나?" | `01-avionics-integration-final.md` (마스터 설계도 §6.5·§7보다 이 문서가 최신) |
 | "기구 형상·치수·질량예산은?" | `00-hopper-master-design.md` §3~§7 |
 
-## 현재 상태 (최신 항목: 2026-09-18)
+## 현재 상태 (최신 항목: 2026-09-19)
 
 - **CAD**: EDF 실측 완료(9/13) — 볼트 플랜지 없는 제품이라 클램프 마운트로 설계 변경. rev C.1에서
   장비 선반·서보 보스·스파 커플러·다리 방위 등 구조 대폭 보강(`01-avionics-integration-final.md` §12
   참고). `cad/hopper_params.scad`가 정본. **STL 9종 실제로 export 완료(2026-09-18)** — 이 PC 바탕화면의
   `openscad.exe`(2021.01)가 정상 동작함을 확인(`Program Files\OpenSCAD\`는 깨진 설치였을 뿐). 검증
   `echo()` 12개 전부 통과. 조립 렌더는 `cad/renders/`, STL은 `cad/print_parts/`.
-- **펌웨어**: Arduino IDE+Teensyduino 설치, `firmware/reference/SingleRotorUAV/` 컴파일 성공
-  (BasicLinearAlgebra/SerialTransfer 라이브러리 이슈 해결). `firmware/cosmos/`에 단위 테스트 스케치
-  2개 작성 완료(`imu_test/`, `throttle_serial/` — 원본 드라이버 재사용, 안전장치 포함). 통합 펌웨어는
-  아직. Teensy 4.0 실물 USB 업로드도 아직 — 핀헤더 미납땜.
+- **펌웨어**: `firmware/reference/SingleRotorUAV/` 컴파일 성공(BasicLinearAlgebra/SerialTransfer
+  라이브러리 이슈 해결). `firmware/cosmos/`에 단위 테스트 스케치 2개 작성 완료(`imu_test/`,
+  `throttle_serial/` — 원본 드라이버 재사용, 안전장치 포함). **2026-09-19: 개발환경 Arduino IDE →
+  PlatformIO(VSCode)로 전환** — `firmware/cosmos/*/platformio.ini` 추가, 각 스케치를 `pio run`으로
+  실제 빌드 검증(전에 아무도 실제로 컴파일해본 적이 없었음). 그 과정에서 `imu_test.ino`의 진짜 컴파일
+  버그 발견·수정(`BNO080` 기본 생성자 없음 — `firmware/cosmos/README.md` 참고). 통합 펌웨어는 아직.
+  Teensy 4.0 핀헤더 납땜·USB 연결 완료(2026-09-18~19), 실물 업로드는 아직(컴파일까지만 검증됨).
 - **소프트웨어(RL)**: SB3 CartPole-v1/Pendulum-v1 완료. `sim/sim_stage1/hopper_aviary.py` — 논문
   3장 운동방정식을 numpy로 직접 적분하는 순수 `gymnasium.Env`(gym-pybullet-drones 포기 이유는
   아래 §소프트웨어 스택). 도메인 랜덤화 포함, PPO 1회 학습 성공(파이프라인 검증 목적, 물리값이
@@ -157,7 +160,8 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
    자세를 5.8°밖에 못 바꾼다(초기 교란은 최대 17°). 즉 **어떤 제어기도 Stage 1을 못 푼다** —
    PLACEHOLDER라 숫자가 부정확한 정도가 아니라 과제 자체가 성립하지 않는 상태다. RL 학습
    결과를 읽으려면 이게 먼저다. 진단: `python sim/connectome/authority.py`
-3. Teensy 4.0 핀헤더 납땜 → 실물 업로드 → Experiment B(IMU 브링업) 재개.
+3. ~~Teensy 4.0 핀헤더 납땜~~ — **완료(2026-09-18~19)**, PlatformIO 빌드까지 검증됨.
+   다음: `pio run -t upload`로 실물 업로드 → Experiment B(IMU 브링업) 재개.
 4. ~~`cad/print_parts/`의 STL 실제로 export~~ — **완료(2026-09-18)**. 다음: 슬라이서에서 치수·인필
    확인(PETG, 인필 40%) → 3D프린트 외주 발주.
 5. 안전 계획서 지도교사 서명 — 완료 여부 미확인, **9/18 전에 확인/완료 우선**.

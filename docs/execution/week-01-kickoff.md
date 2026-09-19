@@ -54,7 +54,7 @@
 ### 2-D · 소프트웨어 · CAD 사전 세팅 (코어에게 위임)
 - [ ] [SolidGeek Onshape 문서](https://cad.onshape.com/documents/e833cc23e7ea826c94a116f3/w/362fc8aca947f44850932dcd/e/4721094f67251fa796bbdcbc)를 COSMOS 계정으로 **Copy(포크)**
 - [ ] 소프트: Python + `stable-baselines3` + `gym-pybullet-drones` 설치, **CartPole-v1 학습 1회 성공**
-- [ ] 소프트: Arduino IDE + Teensyduino 설치, `firmware/reference/SingleRotorUAV/` **컴파일 시도** (라이브러리 의존성 파악)
+- [x] 소프트: ~~Arduino IDE + Teensyduino~~ → **2026-09-19부터 VSCode + PlatformIO로 전환**(`firmware/cosmos/README.md` 참고), `firmware/reference/SingleRotorUAV/` **컴파일 시도** (라이브러리 의존성 파악)
 
 ### 2-E · 부품 도착 후
 - [ ] 핵심 4개(EDF·Teensy·IMU·ESC) **캘리퍼스로 실측** → Onshape `MEASURED` 반영 (EDF 하우징 외경·마운트 볼트 PCD, 보드 치수)
