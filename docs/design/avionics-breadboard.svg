@@ -1,0 +1,531 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 640">
+<style>
+  .bg{fill:#ffffff}
+  .brd{fill:#f2f5f7;stroke:#94a3ac;stroke-width:1.4}
+  .hole{fill:#ffffff;stroke:#b9c4cb;stroke-width:0.8}
+  .ch{fill:#e3e9ed;stroke:#b9c4cb;stroke-width:1}
+  .t{font-family:Helvetica,Arial,sans-serif;fill:#152029}
+  .title{font-size:17px;font-weight:bold}
+  .sub{font-size:11.5px;fill:#5b6b75}
+  .lbl{font-size:10px}
+  .lblb{font-size:11px;font-weight:bold}
+  .tiny{font-size:8.5px;fill:#5b6b75}
+  .warn{font-size:11px;font-weight:bold;fill:#b4551f}
+  .chip{fill:#2b3a42;stroke:#16212a;stroke-width:1.2}
+  .mod{fill:#e8f1ec;stroke:#2f7d5d;stroke-width:1.4}
+  .mod2{fill:#f4e9f7;stroke:#7a3fa8;stroke-width:1.4}
+  .mod3{fill:#fbeadd;stroke:#b4551f;stroke-width:1.4}
+  .note{fill:#fff8f2;stroke:#e6c9b0}
+  .railp{stroke:#c0392b;stroke-width:2;fill:none}
+  .railn{stroke:#3d4a52;stroke-width:2;fill:none}
+  .bus{stroke:#152029;stroke-width:3;fill:none;stroke-linecap:round}
+</style>
+<rect class="bg" x="0" y="0" width="1180" height="640"/>
+<text class="t title" x="28" y="34" text-anchor="start">COSMOS 호퍼 — 빵판(브레드보드) 배치도  [Week 1 벤치 전용]</text>
+<text class="t sub" x="28" y="54" text-anchor="start">01-avionics-integration-final.md §4 의 좌표표와 1:1. 비행·구속시험에는 쓰지 않는다(§5.5) — 같은 배선을 만능기판으로 옮겨 납땜한다.</text>
+<text class="t sub" x="28" y="72" text-anchor="start">Teensy 4.0 은 USB 커넥터가 왼쪽(1열 방향)을 향하게, 가운데 홈을 걸치도록 꽂는다.</text>
+<rect class="brd" x="73" y="87" width="527" height="313" rx="6"/>
+<line class="railp" x1="84" y1="103" x2="589" y2="103"/>
+<text class="t lblb" x="74" y="107" text-anchor="end" fill="#c0392b">+</text>
+<line class="railn" x1="84" y1="119" x2="589" y2="119"/>
+<text class="t lblb" x="74" y="123" text-anchor="end" fill="#3d4a52">-</text>
+<line class="railp" x1="84" y1="369" x2="589" y2="369"/>
+<text class="t lblb" x="74" y="373" text-anchor="end" fill="#c0392b">+</text>
+<line class="railn" x1="84" y1="353" x2="589" y2="353"/>
+<text class="t lblb" x="74" y="357" text-anchor="end" fill="#3d4a52">-</text>
+<rect class="ch" x="81.5" y="226.5" width="510" height="17"/>
+<circle class="hole" cx="90" cy="150" r="3.2"/>
+<circle class="hole" cx="90" cy="167" r="3.2"/>
+<circle class="hole" cx="90" cy="184" r="3.2"/>
+<circle class="hole" cx="90" cy="201" r="3.2"/>
+<circle class="hole" cx="90" cy="218" r="3.2"/>
+<circle class="hole" cx="90" cy="252" r="3.2"/>
+<circle class="hole" cx="90" cy="269" r="3.2"/>
+<circle class="hole" cx="90" cy="286" r="3.2"/>
+<circle class="hole" cx="90" cy="303" r="3.2"/>
+<circle class="hole" cx="90" cy="320" r="3.2"/>
+<circle class="hole" cx="107" cy="150" r="3.2"/>
+<circle class="hole" cx="107" cy="167" r="3.2"/>
+<circle class="hole" cx="107" cy="184" r="3.2"/>
+<circle class="hole" cx="107" cy="201" r="3.2"/>
+<circle class="hole" cx="107" cy="218" r="3.2"/>
+<circle class="hole" cx="107" cy="252" r="3.2"/>
+<circle class="hole" cx="107" cy="269" r="3.2"/>
+<circle class="hole" cx="107" cy="286" r="3.2"/>
+<circle class="hole" cx="107" cy="303" r="3.2"/>
+<circle class="hole" cx="107" cy="320" r="3.2"/>
+<circle class="hole" cx="124" cy="150" r="3.2"/>
+<circle class="hole" cx="124" cy="167" r="3.2"/>
+<circle class="hole" cx="124" cy="184" r="3.2"/>
+<circle class="hole" cx="124" cy="201" r="3.2"/>
+<circle class="hole" cx="124" cy="218" r="3.2"/>
+<circle class="hole" cx="124" cy="252" r="3.2"/>
+<circle class="hole" cx="124" cy="269" r="3.2"/>
+<circle class="hole" cx="124" cy="286" r="3.2"/>
+<circle class="hole" cx="124" cy="303" r="3.2"/>
+<circle class="hole" cx="124" cy="320" r="3.2"/>
+<circle class="hole" cx="141" cy="150" r="3.2"/>
+<circle class="hole" cx="141" cy="167" r="3.2"/>
+<circle class="hole" cx="141" cy="184" r="3.2"/>
+<circle class="hole" cx="141" cy="201" r="3.2"/>
+<circle class="hole" cx="141" cy="218" r="3.2"/>
+<circle class="hole" cx="141" cy="252" r="3.2"/>
+<circle class="hole" cx="141" cy="269" r="3.2"/>
+<circle class="hole" cx="141" cy="286" r="3.2"/>
+<circle class="hole" cx="141" cy="303" r="3.2"/>
+<circle class="hole" cx="141" cy="320" r="3.2"/>
+<circle class="hole" cx="158" cy="150" r="3.2"/>
+<circle class="hole" cx="158" cy="167" r="3.2"/>
+<circle class="hole" cx="158" cy="184" r="3.2"/>
+<circle class="hole" cx="158" cy="201" r="3.2"/>
+<circle class="hole" cx="158" cy="218" r="3.2"/>
+<circle class="hole" cx="158" cy="252" r="3.2"/>
+<circle class="hole" cx="158" cy="269" r="3.2"/>
+<circle class="hole" cx="158" cy="286" r="3.2"/>
+<circle class="hole" cx="158" cy="303" r="3.2"/>
+<circle class="hole" cx="158" cy="320" r="3.2"/>
+<circle class="hole" cx="175" cy="150" r="3.2"/>
+<circle class="hole" cx="175" cy="167" r="3.2"/>
+<circle class="hole" cx="175" cy="184" r="3.2"/>
+<circle class="hole" cx="175" cy="201" r="3.2"/>
+<circle class="hole" cx="175" cy="218" r="3.2"/>
+<circle class="hole" cx="175" cy="252" r="3.2"/>
+<circle class="hole" cx="175" cy="269" r="3.2"/>
+<circle class="hole" cx="175" cy="286" r="3.2"/>
+<circle class="hole" cx="175" cy="303" r="3.2"/>
+<circle class="hole" cx="175" cy="320" r="3.2"/>
+<circle class="hole" cx="192" cy="150" r="3.2"/>
+<circle class="hole" cx="192" cy="167" r="3.2"/>
+<circle class="hole" cx="192" cy="184" r="3.2"/>
+<circle class="hole" cx="192" cy="201" r="3.2"/>
+<circle class="hole" cx="192" cy="218" r="3.2"/>
+<circle class="hole" cx="192" cy="252" r="3.2"/>
+<circle class="hole" cx="192" cy="269" r="3.2"/>
+<circle class="hole" cx="192" cy="286" r="3.2"/>
+<circle class="hole" cx="192" cy="303" r="3.2"/>
+<circle class="hole" cx="192" cy="320" r="3.2"/>
+<circle class="hole" cx="209" cy="150" r="3.2"/>
+<circle class="hole" cx="209" cy="167" r="3.2"/>
+<circle class="hole" cx="209" cy="184" r="3.2"/>
+<circle class="hole" cx="209" cy="201" r="3.2"/>
+<circle class="hole" cx="209" cy="218" r="3.2"/>
+<circle class="hole" cx="209" cy="252" r="3.2"/>
+<circle class="hole" cx="209" cy="269" r="3.2"/>
+<circle class="hole" cx="209" cy="286" r="3.2"/>
+<circle class="hole" cx="209" cy="303" r="3.2"/>
+<circle class="hole" cx="209" cy="320" r="3.2"/>
+<circle class="hole" cx="226" cy="150" r="3.2"/>
+<circle class="hole" cx="226" cy="167" r="3.2"/>
+<circle class="hole" cx="226" cy="184" r="3.2"/>
+<circle class="hole" cx="226" cy="201" r="3.2"/>
+<circle class="hole" cx="226" cy="218" r="3.2"/>
+<circle class="hole" cx="226" cy="252" r="3.2"/>
+<circle class="hole" cx="226" cy="269" r="3.2"/>
+<circle class="hole" cx="226" cy="286" r="3.2"/>
+<circle class="hole" cx="226" cy="303" r="3.2"/>
+<circle class="hole" cx="226" cy="320" r="3.2"/>
+<circle class="hole" cx="243" cy="150" r="3.2"/>
+<circle class="hole" cx="243" cy="167" r="3.2"/>
+<circle class="hole" cx="243" cy="184" r="3.2"/>
+<circle class="hole" cx="243" cy="201" r="3.2"/>
+<circle class="hole" cx="243" cy="218" r="3.2"/>
+<circle class="hole" cx="243" cy="252" r="3.2"/>
+<circle class="hole" cx="243" cy="269" r="3.2"/>
+<circle class="hole" cx="243" cy="286" r="3.2"/>
+<circle class="hole" cx="243" cy="303" r="3.2"/>
+<circle class="hole" cx="243" cy="320" r="3.2"/>
+<circle class="hole" cx="260" cy="150" r="3.2"/>
+<circle class="hole" cx="260" cy="167" r="3.2"/>
+<circle class="hole" cx="260" cy="184" r="3.2"/>
+<circle class="hole" cx="260" cy="201" r="3.2"/>
+<circle class="hole" cx="260" cy="218" r="3.2"/>
+<circle class="hole" cx="260" cy="252" r="3.2"/>
+<circle class="hole" cx="260" cy="269" r="3.2"/>
+<circle class="hole" cx="260" cy="286" r="3.2"/>
+<circle class="hole" cx="260" cy="303" r="3.2"/>
+<circle class="hole" cx="260" cy="320" r="3.2"/>
+<circle class="hole" cx="277" cy="150" r="3.2"/>
+<circle class="hole" cx="277" cy="167" r="3.2"/>
+<circle class="hole" cx="277" cy="184" r="3.2"/>
+<circle class="hole" cx="277" cy="201" r="3.2"/>
+<circle class="hole" cx="277" cy="218" r="3.2"/>
+<circle class="hole" cx="277" cy="252" r="3.2"/>
+<circle class="hole" cx="277" cy="269" r="3.2"/>
+<circle class="hole" cx="277" cy="286" r="3.2"/>
+<circle class="hole" cx="277" cy="303" r="3.2"/>
+<circle class="hole" cx="277" cy="320" r="3.2"/>
+<circle class="hole" cx="294" cy="150" r="3.2"/>
+<circle class="hole" cx="294" cy="167" r="3.2"/>
+<circle class="hole" cx="294" cy="184" r="3.2"/>
+<circle class="hole" cx="294" cy="201" r="3.2"/>
+<circle class="hole" cx="294" cy="218" r="3.2"/>
+<circle class="hole" cx="294" cy="252" r="3.2"/>
+<circle class="hole" cx="294" cy="269" r="3.2"/>
+<circle class="hole" cx="294" cy="286" r="3.2"/>
+<circle class="hole" cx="294" cy="303" r="3.2"/>
+<circle class="hole" cx="294" cy="320" r="3.2"/>
+<circle class="hole" cx="311" cy="150" r="3.2"/>
+<circle class="hole" cx="311" cy="167" r="3.2"/>
+<circle class="hole" cx="311" cy="184" r="3.2"/>
+<circle class="hole" cx="311" cy="201" r="3.2"/>
+<circle class="hole" cx="311" cy="218" r="3.2"/>
+<circle class="hole" cx="311" cy="252" r="3.2"/>
+<circle class="hole" cx="311" cy="269" r="3.2"/>
+<circle class="hole" cx="311" cy="286" r="3.2"/>
+<circle class="hole" cx="311" cy="303" r="3.2"/>
+<circle class="hole" cx="311" cy="320" r="3.2"/>
+<circle class="hole" cx="328" cy="150" r="3.2"/>
+<circle class="hole" cx="328" cy="167" r="3.2"/>
+<circle class="hole" cx="328" cy="184" r="3.2"/>
+<circle class="hole" cx="328" cy="201" r="3.2"/>
+<circle class="hole" cx="328" cy="218" r="3.2"/>
+<circle class="hole" cx="328" cy="252" r="3.2"/>
+<circle class="hole" cx="328" cy="269" r="3.2"/>
+<circle class="hole" cx="328" cy="286" r="3.2"/>
+<circle class="hole" cx="328" cy="303" r="3.2"/>
+<circle class="hole" cx="328" cy="320" r="3.2"/>
+<circle class="hole" cx="345" cy="150" r="3.2"/>
+<circle class="hole" cx="345" cy="167" r="3.2"/>
+<circle class="hole" cx="345" cy="184" r="3.2"/>
+<circle class="hole" cx="345" cy="201" r="3.2"/>
+<circle class="hole" cx="345" cy="218" r="3.2"/>
+<circle class="hole" cx="345" cy="252" r="3.2"/>
+<circle class="hole" cx="345" cy="269" r="3.2"/>
+<circle class="hole" cx="345" cy="286" r="3.2"/>
+<circle class="hole" cx="345" cy="303" r="3.2"/>
+<circle class="hole" cx="345" cy="320" r="3.2"/>
+<circle class="hole" cx="362" cy="150" r="3.2"/>
+<circle class="hole" cx="362" cy="167" r="3.2"/>
+<circle class="hole" cx="362" cy="184" r="3.2"/>
+<circle class="hole" cx="362" cy="201" r="3.2"/>
+<circle class="hole" cx="362" cy="218" r="3.2"/>
+<circle class="hole" cx="362" cy="252" r="3.2"/>
+<circle class="hole" cx="362" cy="269" r="3.2"/>
+<circle class="hole" cx="362" cy="286" r="3.2"/>
+<circle class="hole" cx="362" cy="303" r="3.2"/>
+<circle class="hole" cx="362" cy="320" r="3.2"/>
+<circle class="hole" cx="379" cy="150" r="3.2"/>
+<circle class="hole" cx="379" cy="167" r="3.2"/>
+<circle class="hole" cx="379" cy="184" r="3.2"/>
+<circle class="hole" cx="379" cy="201" r="3.2"/>
+<circle class="hole" cx="379" cy="218" r="3.2"/>
+<circle class="hole" cx="379" cy="252" r="3.2"/>
+<circle class="hole" cx="379" cy="269" r="3.2"/>
+<circle class="hole" cx="379" cy="286" r="3.2"/>
+<circle class="hole" cx="379" cy="303" r="3.2"/>
+<circle class="hole" cx="379" cy="320" r="3.2"/>
+<circle class="hole" cx="396" cy="150" r="3.2"/>
+<circle class="hole" cx="396" cy="167" r="3.2"/>
+<circle class="hole" cx="396" cy="184" r="3.2"/>
+<circle class="hole" cx="396" cy="201" r="3.2"/>
+<circle class="hole" cx="396" cy="218" r="3.2"/>
+<circle class="hole" cx="396" cy="252" r="3.2"/>
+<circle class="hole" cx="396" cy="269" r="3.2"/>
+<circle class="hole" cx="396" cy="286" r="3.2"/>
+<circle class="hole" cx="396" cy="303" r="3.2"/>
+<circle class="hole" cx="396" cy="320" r="3.2"/>
+<circle class="hole" cx="413" cy="150" r="3.2"/>
+<circle class="hole" cx="413" cy="167" r="3.2"/>
+<circle class="hole" cx="413" cy="184" r="3.2"/>
+<circle class="hole" cx="413" cy="201" r="3.2"/>
+<circle class="hole" cx="413" cy="218" r="3.2"/>
+<circle class="hole" cx="413" cy="252" r="3.2"/>
+<circle class="hole" cx="413" cy="269" r="3.2"/>
+<circle class="hole" cx="413" cy="286" r="3.2"/>
+<circle class="hole" cx="413" cy="303" r="3.2"/>
+<circle class="hole" cx="413" cy="320" r="3.2"/>
+<circle class="hole" cx="430" cy="150" r="3.2"/>
+<circle class="hole" cx="430" cy="167" r="3.2"/>
+<circle class="hole" cx="430" cy="184" r="3.2"/>
+<circle class="hole" cx="430" cy="201" r="3.2"/>
+<circle class="hole" cx="430" cy="218" r="3.2"/>
+<circle class="hole" cx="430" cy="252" r="3.2"/>
+<circle class="hole" cx="430" cy="269" r="3.2"/>
+<circle class="hole" cx="430" cy="286" r="3.2"/>
+<circle class="hole" cx="430" cy="303" r="3.2"/>
+<circle class="hole" cx="430" cy="320" r="3.2"/>
+<circle class="hole" cx="447" cy="150" r="3.2"/>
+<circle class="hole" cx="447" cy="167" r="3.2"/>
+<circle class="hole" cx="447" cy="184" r="3.2"/>
+<circle class="hole" cx="447" cy="201" r="3.2"/>
+<circle class="hole" cx="447" cy="218" r="3.2"/>
+<circle class="hole" cx="447" cy="252" r="3.2"/>
+<circle class="hole" cx="447" cy="269" r="3.2"/>
+<circle class="hole" cx="447" cy="286" r="3.2"/>
+<circle class="hole" cx="447" cy="303" r="3.2"/>
+<circle class="hole" cx="447" cy="320" r="3.2"/>
+<circle class="hole" cx="464" cy="150" r="3.2"/>
+<circle class="hole" cx="464" cy="167" r="3.2"/>
+<circle class="hole" cx="464" cy="184" r="3.2"/>
+<circle class="hole" cx="464" cy="201" r="3.2"/>
+<circle class="hole" cx="464" cy="218" r="3.2"/>
+<circle class="hole" cx="464" cy="252" r="3.2"/>
+<circle class="hole" cx="464" cy="269" r="3.2"/>
+<circle class="hole" cx="464" cy="286" r="3.2"/>
+<circle class="hole" cx="464" cy="303" r="3.2"/>
+<circle class="hole" cx="464" cy="320" r="3.2"/>
+<circle class="hole" cx="481" cy="150" r="3.2"/>
+<circle class="hole" cx="481" cy="167" r="3.2"/>
+<circle class="hole" cx="481" cy="184" r="3.2"/>
+<circle class="hole" cx="481" cy="201" r="3.2"/>
+<circle class="hole" cx="481" cy="218" r="3.2"/>
+<circle class="hole" cx="481" cy="252" r="3.2"/>
+<circle class="hole" cx="481" cy="269" r="3.2"/>
+<circle class="hole" cx="481" cy="286" r="3.2"/>
+<circle class="hole" cx="481" cy="303" r="3.2"/>
+<circle class="hole" cx="481" cy="320" r="3.2"/>
+<circle class="hole" cx="498" cy="150" r="3.2"/>
+<circle class="hole" cx="498" cy="167" r="3.2"/>
+<circle class="hole" cx="498" cy="184" r="3.2"/>
+<circle class="hole" cx="498" cy="201" r="3.2"/>
+<circle class="hole" cx="498" cy="218" r="3.2"/>
+<circle class="hole" cx="498" cy="252" r="3.2"/>
+<circle class="hole" cx="498" cy="269" r="3.2"/>
+<circle class="hole" cx="498" cy="286" r="3.2"/>
+<circle class="hole" cx="498" cy="303" r="3.2"/>
+<circle class="hole" cx="498" cy="320" r="3.2"/>
+<circle class="hole" cx="515" cy="150" r="3.2"/>
+<circle class="hole" cx="515" cy="167" r="3.2"/>
+<circle class="hole" cx="515" cy="184" r="3.2"/>
+<circle class="hole" cx="515" cy="201" r="3.2"/>
+<circle class="hole" cx="515" cy="218" r="3.2"/>
+<circle class="hole" cx="515" cy="252" r="3.2"/>
+<circle class="hole" cx="515" cy="269" r="3.2"/>
+<circle class="hole" cx="515" cy="286" r="3.2"/>
+<circle class="hole" cx="515" cy="303" r="3.2"/>
+<circle class="hole" cx="515" cy="320" r="3.2"/>
+<circle class="hole" cx="532" cy="150" r="3.2"/>
+<circle class="hole" cx="532" cy="167" r="3.2"/>
+<circle class="hole" cx="532" cy="184" r="3.2"/>
+<circle class="hole" cx="532" cy="201" r="3.2"/>
+<circle class="hole" cx="532" cy="218" r="3.2"/>
+<circle class="hole" cx="532" cy="252" r="3.2"/>
+<circle class="hole" cx="532" cy="269" r="3.2"/>
+<circle class="hole" cx="532" cy="286" r="3.2"/>
+<circle class="hole" cx="532" cy="303" r="3.2"/>
+<circle class="hole" cx="532" cy="320" r="3.2"/>
+<circle class="hole" cx="549" cy="150" r="3.2"/>
+<circle class="hole" cx="549" cy="167" r="3.2"/>
+<circle class="hole" cx="549" cy="184" r="3.2"/>
+<circle class="hole" cx="549" cy="201" r="3.2"/>
+<circle class="hole" cx="549" cy="218" r="3.2"/>
+<circle class="hole" cx="549" cy="252" r="3.2"/>
+<circle class="hole" cx="549" cy="269" r="3.2"/>
+<circle class="hole" cx="549" cy="286" r="3.2"/>
+<circle class="hole" cx="549" cy="303" r="3.2"/>
+<circle class="hole" cx="549" cy="320" r="3.2"/>
+<circle class="hole" cx="566" cy="150" r="3.2"/>
+<circle class="hole" cx="566" cy="167" r="3.2"/>
+<circle class="hole" cx="566" cy="184" r="3.2"/>
+<circle class="hole" cx="566" cy="201" r="3.2"/>
+<circle class="hole" cx="566" cy="218" r="3.2"/>
+<circle class="hole" cx="566" cy="252" r="3.2"/>
+<circle class="hole" cx="566" cy="269" r="3.2"/>
+<circle class="hole" cx="566" cy="286" r="3.2"/>
+<circle class="hole" cx="566" cy="303" r="3.2"/>
+<circle class="hole" cx="566" cy="320" r="3.2"/>
+<circle class="hole" cx="583" cy="150" r="3.2"/>
+<circle class="hole" cx="583" cy="167" r="3.2"/>
+<circle class="hole" cx="583" cy="184" r="3.2"/>
+<circle class="hole" cx="583" cy="201" r="3.2"/>
+<circle class="hole" cx="583" cy="218" r="3.2"/>
+<circle class="hole" cx="583" cy="252" r="3.2"/>
+<circle class="hole" cx="583" cy="269" r="3.2"/>
+<circle class="hole" cx="583" cy="286" r="3.2"/>
+<circle class="hole" cx="583" cy="303" r="3.2"/>
+<circle class="hole" cx="583" cy="320" r="3.2"/>
+<text class="t tiny" x="90" y="123" text-anchor="middle">1</text>
+<text class="t tiny" x="90" y="343" text-anchor="middle">1</text>
+<text class="t tiny" x="158" y="123" text-anchor="middle">5</text>
+<text class="t tiny" x="158" y="343" text-anchor="middle">5</text>
+<text class="t tiny" x="243" y="123" text-anchor="middle">10</text>
+<text class="t tiny" x="243" y="343" text-anchor="middle">10</text>
+<text class="t tiny" x="328" y="123" text-anchor="middle">15</text>
+<text class="t tiny" x="328" y="343" text-anchor="middle">15</text>
+<text class="t tiny" x="413" y="123" text-anchor="middle">20</text>
+<text class="t tiny" x="413" y="343" text-anchor="middle">20</text>
+<text class="t tiny" x="498" y="123" text-anchor="middle">25</text>
+<text class="t tiny" x="498" y="343" text-anchor="middle">25</text>
+<text class="t tiny" x="583" y="123" text-anchor="middle">30</text>
+<text class="t tiny" x="583" y="343" text-anchor="middle">30</text>
+<text class="t tiny" x="63" y="153" text-anchor="middle">A</text>
+<text class="t tiny" x="596" y="153" text-anchor="middle">A</text>
+<text class="t tiny" x="63" y="170" text-anchor="middle">B</text>
+<text class="t tiny" x="596" y="170" text-anchor="middle">B</text>
+<text class="t tiny" x="63" y="187" text-anchor="middle">C</text>
+<text class="t tiny" x="596" y="187" text-anchor="middle">C</text>
+<text class="t tiny" x="63" y="204" text-anchor="middle">D</text>
+<text class="t tiny" x="596" y="204" text-anchor="middle">D</text>
+<text class="t tiny" x="63" y="221" text-anchor="middle">E</text>
+<text class="t tiny" x="596" y="221" text-anchor="middle">E</text>
+<text class="t tiny" x="63" y="255" text-anchor="middle">F</text>
+<text class="t tiny" x="596" y="255" text-anchor="middle">F</text>
+<text class="t tiny" x="63" y="272" text-anchor="middle">G</text>
+<text class="t tiny" x="596" y="272" text-anchor="middle">G</text>
+<text class="t tiny" x="63" y="289" text-anchor="middle">H</text>
+<text class="t tiny" x="596" y="289" text-anchor="middle">H</text>
+<text class="t tiny" x="63" y="306" text-anchor="middle">I</text>
+<text class="t tiny" x="596" y="306" text-anchor="middle">I</text>
+<text class="t tiny" x="63" y="323" text-anchor="middle">J</text>
+<text class="t tiny" x="596" y="323" text-anchor="middle">J</text>
+<rect class="chip" x="149.5" y="210" width="238" height="50" rx="4" opacity="0.92"/>
+<text class="t lblb" x="268.5" y="239" text-anchor="middle" fill="#ffffff">Teensy 4.0</text>
+<rect x="139.5" y="232" width="10" height="26" rx="2" fill="#8c98a0"/>
+<text class="t tiny" x="135.5" y="226" text-anchor="end">USB</text>
+<circle cx="158" cy="218" r="3.4" fill="#c0392b"/>
+<text class="t lblb" x="161" y="182" text-anchor="end" fill="#c0392b" transform="rotate(-90 161 182)">VIN</text>
+<circle cx="175" cy="218" r="3.4" fill="#3d4a52"/>
+<text class="t lblb" x="178" y="182" text-anchor="end" fill="#3d4a52" transform="rotate(-90 178 182)">GND</text>
+<circle cx="192" cy="218" r="3.4" fill="#c0392b"/>
+<text class="t lblb" x="195" y="182" text-anchor="end" fill="#c0392b" transform="rotate(-90 195 182)">3V3</text>
+<circle cx="209" cy="218" r="3.4" fill="#7a3fa8"/>
+<text class="t lblb" x="212" y="182" text-anchor="end" fill="#7a3fa8" transform="rotate(-90 212 182)">23</text>
+<circle cx="226" cy="218" r="3.4" fill="#2f7d5d"/>
+<text class="t lblb" x="229" y="182" text-anchor="end" fill="#2f7d5d" transform="rotate(-90 229 182)">22</text>
+<circle cx="243" cy="218" r="3.4" fill="#2f7d5d"/>
+<text class="t lblb" x="246" y="182" text-anchor="end" fill="#2f7d5d" transform="rotate(-90 246 182)">21</text>
+<circle cx="260" cy="218" r="3.4" fill="#2f7d5d"/>
+<text class="t lblb" x="263" y="182" text-anchor="end" fill="#2f7d5d" transform="rotate(-90 263 182)">20</text>
+<circle cx="277" cy="218" r="3.4" fill="#7a3fa8"/>
+<text class="t lblb" x="280" y="182" text-anchor="end" fill="#7a3fa8" transform="rotate(-90 280 182)">19</text>
+<circle cx="294" cy="218" r="3.4" fill="#7a3fa8"/>
+<text class="t lblb" x="297" y="182" text-anchor="end" fill="#7a3fa8" transform="rotate(-90 297 182)">18</text>
+<circle cx="311" cy="218" r="3.4" fill="#9aa7b0"/>
+<text class="t lblb" x="314" y="182" text-anchor="end" fill="#9aa7b0" transform="rotate(-90 314 182)">17</text>
+<circle cx="328" cy="218" r="3.4" fill="#9aa7b0"/>
+<text class="t lblb" x="331" y="182" text-anchor="end" fill="#9aa7b0" transform="rotate(-90 331 182)">16</text>
+<circle cx="345" cy="218" r="3.4" fill="#9aa7b0"/>
+<text class="t lblb" x="348" y="182" text-anchor="end" fill="#9aa7b0" transform="rotate(-90 348 182)">15</text>
+<circle cx="362" cy="218" r="3.4" fill="#9aa7b0"/>
+<text class="t lblb" x="365" y="182" text-anchor="end" fill="#9aa7b0" transform="rotate(-90 365 182)">14</text>
+<circle cx="379" cy="218" r="3.4" fill="#2f7d5d"/>
+<text class="t lblb" x="382" y="182" text-anchor="end" fill="#2f7d5d" transform="rotate(-90 382 182)">13</text>
+<circle cx="158" cy="252" r="3.4" fill="#3d4a52"/>
+<text class="t lblb" x="155" y="288" text-anchor="start" fill="#3d4a52" transform="rotate(-90 155 288)">GND</text>
+<circle cx="175" cy="252" r="3.4" fill="#9aa7b0"/>
+<text class="t lblb" x="172" y="288" text-anchor="start" fill="#9aa7b0" transform="rotate(-90 172 288)">0</text>
+<circle cx="192" cy="252" r="3.4" fill="#7a3fa8"/>
+<text class="t lblb" x="189" y="288" text-anchor="start" fill="#7a3fa8" transform="rotate(-90 189 288)">1</text>
+<circle cx="209" cy="252" r="3.4" fill="#1f6feb"/>
+<text class="t lblb" x="206" y="288" text-anchor="start" fill="#1f6feb" transform="rotate(-90 206 288)">2</text>
+<circle cx="226" cy="252" r="3.4" fill="#1f6feb"/>
+<text class="t lblb" x="223" y="288" text-anchor="start" fill="#1f6feb" transform="rotate(-90 223 288)">3</text>
+<circle cx="243" cy="252" r="3.4" fill="#1f6feb"/>
+<text class="t lblb" x="240" y="288" text-anchor="start" fill="#1f6feb" transform="rotate(-90 240 288)">4</text>
+<circle cx="260" cy="252" r="3.4" fill="#1f6feb"/>
+<text class="t lblb" x="257" y="288" text-anchor="start" fill="#1f6feb" transform="rotate(-90 257 288)">5</text>
+<circle cx="277" cy="252" r="3.4" fill="#9aa7b0"/>
+<text class="t lblb" x="274" y="288" text-anchor="start" fill="#9aa7b0" transform="rotate(-90 274 288)">6</text>
+<circle cx="294" cy="252" r="3.4" fill="#9aa7b0"/>
+<text class="t lblb" x="291" y="288" text-anchor="start" fill="#9aa7b0" transform="rotate(-90 291 288)">7</text>
+<circle cx="311" cy="252" r="3.4" fill="#b4551f"/>
+<text class="t lblb" x="308" y="288" text-anchor="start" fill="#b4551f" transform="rotate(-90 308 288)">8</text>
+<circle cx="328" cy="252" r="3.4" fill="#7a3fa8"/>
+<text class="t lblb" x="325" y="288" text-anchor="start" fill="#7a3fa8" transform="rotate(-90 325 288)">9</text>
+<circle cx="345" cy="252" r="3.4" fill="#2f7d5d"/>
+<text class="t lblb" x="342" y="288" text-anchor="start" fill="#2f7d5d" transform="rotate(-90 342 288)">10</text>
+<circle cx="362" cy="252" r="3.4" fill="#2f7d5d"/>
+<text class="t lblb" x="359" y="288" text-anchor="start" fill="#2f7d5d" transform="rotate(-90 359 288)">11</text>
+<circle cx="379" cy="252" r="3.4" fill="#2f7d5d"/>
+<text class="t lblb" x="376" y="288" text-anchor="start" fill="#2f7d5d" transform="rotate(-90 376 288)">12</text>
+<rect class="mod" x="421.5" y="242" width="102" height="51" rx="4"/>
+<text class="t lblb" x="472.5" y="266" text-anchor="middle">BNO085 (SPI)</text>
+<text class="t tiny" x="472.5" y="283" text-anchor="middle">PS1→3V3 로 SPI 모드</text>
+<circle cx="430" cy="252" r="3.4" fill="#2f7d5d"/>
+<text class="t tiny" x="430" y="238" text-anchor="middle">VIN</text>
+<circle cx="447" cy="252" r="3.4" fill="#2f7d5d"/>
+<text class="t tiny" x="447" y="238" text-anchor="middle">GND</text>
+<circle cx="464" cy="252" r="3.4" fill="#2f7d5d"/>
+<text class="t tiny" x="464" y="238" text-anchor="middle">SCK</text>
+<circle cx="481" cy="252" r="3.4" fill="#2f7d5d"/>
+<text class="t tiny" x="481" y="238" text-anchor="middle">SI</text>
+<circle cx="498" cy="252" r="3.4" fill="#2f7d5d"/>
+<text class="t tiny" x="498" y="238" text-anchor="middle">SO</text>
+<circle cx="515" cy="252" r="3.4" fill="#2f7d5d"/>
+<text class="t tiny" x="515" y="238" text-anchor="middle">CS</text>
+<text class="t tiny" x="73" y="397" text-anchor="start">※ BNO085 의 INT(21)·RST(20)·WAK/PS0(22)·PS1 은 모듈 핀 배열에 맞춰 남은 홀에 꽂는다 — 모듈마다 핀 순서가 달라 실물 실크를 보고 결정.</text>
+<rect class="mod2" x="421.5" y="140" width="102" height="51" rx="4"/>
+<text class="t lblb" x="472.5" y="171" text-anchor="middle">레벨시프터 4ch (BSS138)</text>
+<text class="t tiny" x="472.5" y="190" text-anchor="middle">HV=5V(수신기) / LV=3.3V(Teensy)</text>
+<text class="t tiny" x="472.5" y="202" text-anchor="middle">※ 핀 간격은 제품마다 다름 — 실물 보고 열 조정</text>
+<text class="t lblb" x="640" y="138" text-anchor="start">Teensy 핀 용도 (§2.2)</text>
+<circle cx="646" cy="154" r="4.5" fill="#7a3fa8"/>
+<text class="t lblb" x="660" y="158" text-anchor="start">핀 18</text>
+<text class="t lbl" x="706" y="158" text-anchor="start">RC CH1 스로틀</text>
+<circle cx="646" cy="171" r="4.5" fill="#7a3fa8"/>
+<text class="t lblb" x="660" y="175" text-anchor="start">핀 19</text>
+<text class="t lbl" x="706" y="175" text-anchor="start">RC CH2 롤</text>
+<circle cx="646" cy="188" r="4.5" fill="#7a3fa8"/>
+<text class="t lblb" x="660" y="192" text-anchor="start">핀 23</text>
+<text class="t lbl" x="706" y="192" text-anchor="start">RC CH3 피치</text>
+<circle cx="646" cy="205" r="4.5" fill="#7a3fa8"/>
+<text class="t lblb" x="660" y="209" text-anchor="start">핀 1</text>
+<text class="t lbl" x="706" y="209" text-anchor="start">RC CH4 요</text>
+<circle cx="646" cy="222" r="4.5" fill="#7a3fa8"/>
+<text class="t lblb" x="660" y="226" text-anchor="start">핀 9</text>
+<text class="t lbl" x="706" y="226" text-anchor="start">RC CH5 킬</text>
+<circle cx="646" cy="239" r="4.5" fill="#1f6feb"/>
+<text class="t lblb" x="660" y="243" text-anchor="start">핀 2</text>
+<text class="t lbl" x="706" y="243" text-anchor="start">서보1 FWD</text>
+<circle cx="646" cy="256" r="4.5" fill="#1f6feb"/>
+<text class="t lblb" x="660" y="260" text-anchor="start">핀 3</text>
+<text class="t lbl" x="706" y="260" text-anchor="start">서보2 LEFT</text>
+<circle cx="646" cy="273" r="4.5" fill="#1f6feb"/>
+<text class="t lblb" x="660" y="277" text-anchor="start">핀 4</text>
+<text class="t lbl" x="706" y="277" text-anchor="start">서보3 AFT</text>
+<circle cx="646" cy="290" r="4.5" fill="#1f6feb"/>
+<text class="t lblb" x="660" y="294" text-anchor="start">핀 5</text>
+<text class="t lbl" x="706" y="294" text-anchor="start">서보4 RIGHT</text>
+<circle cx="646" cy="307" r="4.5" fill="#b4551f"/>
+<text class="t lblb" x="660" y="311" text-anchor="start">핀 8</text>
+<text class="t lbl" x="706" y="311" text-anchor="start">DShot → ESC</text>
+<circle cx="646" cy="324" r="4.5" fill="#2f7d5d"/>
+<text class="t lblb" x="660" y="328" text-anchor="start">핀 10</text>
+<text class="t lbl" x="706" y="328" text-anchor="start">IMU CS</text>
+<circle cx="646" cy="341" r="4.5" fill="#2f7d5d"/>
+<text class="t lblb" x="660" y="345" text-anchor="start">핀 11</text>
+<text class="t lbl" x="706" y="345" text-anchor="start">IMU MOSI</text>
+<circle cx="646" cy="358" r="4.5" fill="#2f7d5d"/>
+<text class="t lblb" x="660" y="362" text-anchor="start">핀 12</text>
+<text class="t lbl" x="706" y="362" text-anchor="start">IMU MISO</text>
+<circle cx="646" cy="375" r="4.5" fill="#2f7d5d"/>
+<text class="t lblb" x="660" y="379" text-anchor="start">핀 13</text>
+<text class="t lbl" x="706" y="379" text-anchor="start">IMU SCK</text>
+<circle cx="646" cy="392" r="4.5" fill="#2f7d5d"/>
+<text class="t lblb" x="660" y="396" text-anchor="start">핀 20</text>
+<text class="t lbl" x="706" y="396" text-anchor="start">IMU RST</text>
+<circle cx="646" cy="409" r="4.5" fill="#2f7d5d"/>
+<text class="t lblb" x="660" y="413" text-anchor="start">핀 21</text>
+<text class="t lbl" x="706" y="413" text-anchor="start">IMU INT</text>
+<circle cx="646" cy="426" r="4.5" fill="#2f7d5d"/>
+<text class="t lblb" x="660" y="430" text-anchor="start">핀 22</text>
+<text class="t lbl" x="706" y="430" text-anchor="start">IMU WAK/PS0</text>
+<text class="t tiny" x="640" y="453" text-anchor="start">나머지 핀(0·6·7·14~17)은 예약 — 비워둔다.</text>
+<text class="t tiny" x="640" y="467" text-anchor="start">3V3=BNO085·시프터LV / VIN=미연결(USB급전) / GND=공통</text>
+<rect class="mod3" x="890" y="150" width="262" height="86" rx="5"/>
+<text class="t lblb" x="1021" y="169" text-anchor="middle">ESC (DShot) — 보드 밖</text>
+<text class="t tiny" x="1021" y="186" text-anchor="middle">신호선 → 핀 8 (14열 F행)</text>
+<text class="t tiny" x="1021" y="200" text-anchor="middle">GND → −레일  ★ 없으면 DShot 안 나감</text>
+<text class="t tiny" x="1021" y="214" text-anchor="middle">전원(굵은선)은 빵판에 절대 꽂지 않는다</text>
+<rect class="mod2" x="890" y="256" width="262" height="86" rx="5"/>
+<text class="t lblb" x="1021" y="275" text-anchor="middle">FS-iA6B 수신기 — 보드 밖</text>
+<text class="t tiny" x="1021" y="292" text-anchor="middle">CH1 스로틀 / CH5 킬 최소 2채널</text>
+<text class="t tiny" x="1021" y="306" text-anchor="middle">5V 신호 → 레벨시프터 경유 필수</text>
+<text class="t tiny" x="1021" y="320" text-anchor="middle">전원은 UBEC 5V 에서</text>
+<rect class="mod" x="890" y="362" width="262" height="100" rx="5"/>
+<text class="t lblb" x="1021" y="381" text-anchor="middle">UBEC 5.5V — 보드 밖</text>
+<text class="t tiny" x="1021" y="398" text-anchor="middle">서보 4개 전원 = UBEC 직결</text>
+<text class="t tiny" x="1021" y="412" text-anchor="middle">빵판 레일로 서보 전원 보내지 말 것</text>
+<text class="t tiny" x="1021" y="426" text-anchor="middle">(돌입전류로 접점이 탄다)</text>
+<text class="t tiny" x="1021" y="440" text-anchor="middle">GND 는 −레일과 공통</text>
+<path d="M345,326 C345,380 515,380 515,326" fill="none" stroke="#d4a017" stroke-width="2.2" opacity="0.85"/>
+<path d="M379,156 C379,210 464,380 464,326" fill="none" stroke="#1f6feb" stroke-width="2.2" opacity="0.85"/>
+<path d="M362,326 C362,380 481,380 481,326" fill="none" stroke="#2f9e44" stroke-width="2.2" opacity="0.85"/>
+<path d="M379,326 C379,380 498,380 498,326" fill="none" stroke="#8c98a0" stroke-width="2.2" opacity="0.85"/>
+<rect class="note" x="28" y="522" width="1124" height="86" rx="6"/>
+<text class="t lblb" x="44" y="544" text-anchor="start">안전 · 필독</text>
+<text class="t lbl" x="44" y="562" text-anchor="start">• 빵판에 들어오는 최고 전압은 5V. 4S(16.8V)는 한 가닥도 빵판에 오지 않는다.</text>
+<text class="t lbl" x="44" y="580" text-anchor="start">• 배선 변경은 항상 배터리를 물리적으로 분리한 뒤 (킬스위치만 믿지 않는다).</text>
+<text class="t lbl" x="44" y="598" text-anchor="start">• 전원 인가 순서: ① USB로 Teensy만 → ② UBEC·수신기 → ③ 마지막에 배터리 메인.</text>
+<text class="t warn" x="44" y="616" text-anchor="start">• EDF는 추력 스탠드에 볼트로 고정된 상태에서만 회전시킨다. 보안경·방호판·지도교사 입회.</text>
+</svg>
