@@ -69,10 +69,13 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 | `cad/legacy/` | rev B 단계 3분할 스크립트 — `hopper_params.scad`로 대체됨, 더 이상 안 씀 | 보존만 |
 | `sim/sim_stage1/hopper_aviary.py` | RL Stage 1 환경(자세 안정화, 위치 구속) — 관측 6·행동 5차원, 도메인 랜덤화 포함 | 구현·검증 완료 |
 | `sim/sim_stage1/params.yaml` | 물리 상수 — **거의 전부 PLACEHOLDER**, `vane_arm_l/r`만 실측 기반 | 실측 대기 |
+| `sim/connectome/` | **커넥톰 제약 정책망**(확장 트랙) — 초파리 배선을 PPO 정책망 구조로. 합성 CX 그래프 + FlyWire 실측 경로, 차수보존 셔플 대조군, PD baseline, 평가지표, 제어권한 진단 | 2026-09-18 착수 |
+| `docs/design/connectome-control.md` | 위 트랙의 목표·설계·한계·구현 중 겪은 함정 | 2026-09-18 |
 | `test_cartpole.py`, `test_pendulum.py` | SB3 워크플로 익히기용 | 완료 |
 | `data/` | 실험 로그(CSV) | 착수 전 |
-| `sim/requirements.txt` | 파이썬 의존성 **버전 고정본** — 부원마다 다른 버전이 깔려 결과가 재현 안 되는 걸 막는 용도 | 2026-09-18 추가 |
-| `tasks.py` | 작업 실행기(`setup`/`sanity`/`smoke`/`check`/`train`/`deck`) — Windows에 `make`가 없어서 파이썬 stdlib로 구현 | 2026-09-18 추가 |
+| `pyproject.toml` · `sim/pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 **버전 고정본**(uv) — 부원마다 다른 버전이 깔려 결과가 재현 안 되는 걸 막는 용도. `sim/pyproject.toml`이 sim 의존성 정본, `uv.lock`이 실제 고정본 | 2026-09-18 추가 |
+| `sim/requirements.txt` | 위 lock에서 생성되는 **사본**(`python tasks.py lock`) — uv 없이 pip만 쓸 때용. 손으로 고치지 않는다 | 2026-09-18 생성물로 전환 |
+| `tasks.py` | 작업 실행기(`setup`/`lock`/`compile`/`sanity`/`smoke`/`check`/`train`/`deck`/`graph`/`clean`) — 작업 간 순서와 입력 해시 캐시를 갖는다. Windows에 `make`가 없어서 파이썬 stdlib로 구현. CI도 `python tasks.py check`를 그대로 호출한다 | 2026-09-18 추가 |
 | `.github/workflows/ci.yml` | CI — PR마다 문법 체크 + `sanity_check` + PPO 스모크(256스텝). 학습은 돌리지 않는다 | 2026-09-18 추가 |
 | `docs/presentation/` | 동아리 설명회 발표자료(.pptx) + 대본 | 발표 완료(9/5) |
 | `club promoting material/` | 홍보용 PDF/PPTX | — |
@@ -97,6 +100,11 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
   아래 §소프트웨어 스택). 도메인 랜덤화 포함, PPO 1회 학습 성공(파이프라인 검증 목적, 물리값이
   PLACEHOLDER라 성능 숫자 자체는 무의미). 코드-논문 대응 검토 결과 베인력 계산에 단순화 지점 발견 —
   `docs/design/modelling-notes-ch3.md` §2 참고, 실측값 넣을 때 반드시 확인.
+- **커넥톰 확장 트랙(2026-09-18 착수)**: `sim/connectome/` — 초파리 커넥톰 배선을 PPO 정책망의
+  연결 구조로 고정하고 가중치만 학습하는 비교군. 합성 CX 링 어트랙터 그래프(104뉴런)로
+  파이프라인 검증 완료, 차수보존 셔플 대조군·PD baseline·공통 평가지표까지 구현. CI가
+  `conncheck`로 매 PR 검사한다. FlyWire 실측 그래프 경로는 코드만 있고 아직 안 돌렸다(수백 MB
+  다운로드 필요). **비교 결과는 위 `Kf` 문제 때문에 아직 읽으면 안 된다.**
 - **Git**: `origin` = `github.com/COSMOS-Aero-Engineering/COSMOS-TVC-Hopper`(팀 공용). 로컬은 최신,
   커밋 이력 정상.
 - **문서 정합성 점검(2026-09-17)**: 이전 상태 로그가 실제로 존재하지 않는 파일(`cad/print_parts/`의
@@ -109,6 +117,10 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
    금요일은 팀 확정+착수, 토요일은 실험 A(EDF 추력곡선)·B(IMU 브링업)·C(DShot 모터제어).
 2. 실험 A 진행 → `sim/sim_stage1/params.yaml`의 PLACEHOLDER(Kf 등) 실측값으로 교체
    (`docs/design/modelling-notes-ch3.md` §2·§6 대응표 보고 반영).
+   **우선순위 상향(2026-09-18)**: `Kf`가 실제값보다 약 37배 작아서 지금은 베인이 5초 동안
+   자세를 5.8°밖에 못 바꾼다(초기 교란은 최대 17°). 즉 **어떤 제어기도 Stage 1을 못 푼다** —
+   PLACEHOLDER라 숫자가 부정확한 정도가 아니라 과제 자체가 성립하지 않는 상태다. RL 학습
+   결과를 읽으려면 이게 먼저다. 진단: `python sim/connectome/authority.py`
 3. Teensy 4.0 핀헤더 납땜 → 실물 업로드 → Experiment B(IMU 브링업) 재개.
 4. `cad/print_parts/`의 STL 실제로 export(`cad/print_parts/README.md` 순서대로) → 3D프린트 외주 발주.
 5. 안전 계획서 지도교사 서명 — 완료 여부 미확인, **9/18 전에 확인/완료 우선**.
@@ -162,6 +174,10 @@ rev C 결정 이후에도 이 파일에 그대로 남아있어서 **실제 상�
    교체하면 됨. PPO(stable-baselines3). 3D 시각화는 학습에 불필요.
 3. 실기 이식 후 baseline과 정량 비교(복원시간·오버슈트·정상상태오차).
 4. RL 학습 전 SB3 공식 퀵스타트(CartPole-v1/Pendulum-v1)로 워크플로우 먼저 익힐 것 — **완료**(2026-09-13).
+5. (확장 트랙, 2026-09-18 착수) **커넥톰 제약 정책망** — SB3 정책망의 연결 구조를 초파리
+   커넥톰(FlyWire v783)으로 고정하고 가중치만 학습. 환경 코드는 안 건드리고 `policy_kwargs`만
+   바꿔 끼운다. **확정된 방향이 아니라 시뮬레이션 전용 비교군 추가**이고, 메인 트랙(PID/LQR vs
+   RL)을 대체하지 않는다. 상세: `docs/design/connectome-control.md`.
 
 ### PID vs RL 비교 실험 프로토콜
 - 같은 물리적 테스트 리그(구속 상태 테스트 스탠드), 같은 외란 조건을 고정해두고, **제어 알고리즘
@@ -233,6 +249,8 @@ rev C 결정 이후에도 이 파일에 그대로 남아있어서 **실제 상�
 - 예산 구체 금액, 팀 구성 인원 및 실력 분포 — 부장 액션.
 - 3D프린트 외주업체 미확정, 안전스테이션 재고 미확인, FS-i6X 배터리 방식 미결정.
 - `COSMOS_면접_예상질문.md` 유실 — 다시 작성 필요한지 확인.
+- 커넥톰 트랙(`sim/connectome/`)을 학기 산출물에 포함할지 — 실험 A 이후 `run_comparison.py`
+  결과를 보고 결정. 셔플 대조군과 차이가 없으면 트랙을 접고 메인만 간다.
 - CONTRIBUTING.md를 따로 만들지 여부 — 지금은 `README.md`의 "부원 퀵스타트/협업 규칙/트러블슈팅"
   섹션이 그 역할을 이미 하고 있어서 안 만듦(내용 중복 방지). GitHub가 자동으로 찾는 파일명이라는
   이점은 있지만, 외부 기여자가 없는 학교 동아리 저장소라 지금은 실익이 적다고 판단 — 나중에 필요해지면
