@@ -35,11 +35,15 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 
 ## 실행
 
+저장소 루트에서 실행한다. 가상환경을 따로 활성화할 필요 없다 — uv가 `uv.lock`에 맞춰 알아서 맞춰준다.
+
 ```bash
-cd sim/sim_stage1
-python sanity_check.py   # 환경 정상 동작 확인
-python train.py          # PPO 학습
+python tasks.py sanity   # 환경 정상 동작 확인 (20스텝)
+python tasks.py check    # CI와 같은 검사 — PR 올리기 전에
+python tasks.py train    # PPO 학습 (200k 스텝)
 ```
+
+처음이라면 `python tasks.py setup`을 한 번 먼저. 설치 방법은 루트 [`README.md`](../README.md)의 부원 퀵스타트.
 
 ## 다음 단계
 

@@ -28,16 +28,36 @@ git config user.email "본인 이메일"
 
 ### 소프트웨어팀
 
+먼저 [uv](https://docs.astral.sh/uv/)를 한 번만 깔아둔다. 파이썬 버전과 패키지를 한꺼번에 맞춰주는
+도구다 — 부원마다 파이썬 버전이 다른 문제까지 같이 없애준다.
+
+```powershell
+# Windows PowerShell
+irm https://astral.sh/uv/install.ps1 | iex
+```
 ```bash
-python tasks.py setup      # sim/venv 생성 + 고정 버전 의존성 설치 (torch 포함, 3~5분)
+# Mac / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+그다음은 어느 OS든 같다. (Mac은 **Apple Silicon만** 된다 — 고정된 torch 2.14.0에 Intel Mac용
+휠이 없다. Intel Mac이면 Windows/Linux PC를 쓰거나, 부장에게 말해서 torch 버전을 조정한다.)
+
+```bash
+python tasks.py setup      # .venv 생성 + 고정 버전 의존성 설치 (torch 포함, 3~5분)
 python tasks.py sanity     # 환경이 살아 있는지 확인
 ```
 
 `환경 정상 동작 확인 완료`가 뜨면 끝. 안 뜨면 아래 [트러블슈팅](#트러블슈팅)부터 본다.
 
-버전은 `sim/requirements.txt`에 고정돼 있다 — 손으로 `pip install` 하지 말 것. 부원마다 다른 버전이
+버전은 `uv.lock`에 고정돼 있다 — 손으로 `pip install` 하지 말 것. 부원마다 다른 버전이
 깔리면 학습 결과가 서로 재현되지 않아, 문제가 생겼을 때 코드 탓인지 환경 탓인지 구분할 수 없다.
-쓸 수 있는 명령 전체는 인자 없이 `python tasks.py`로 확인.
+버전을 바꿔야 하면 `sim/pyproject.toml`을 고치고 `python tasks.py lock`을 돌린다(`uv.lock`과
+`sim/requirements.txt`가 함께 갱신된다). 쓸 수 있는 명령 전체는 인자 없이 `python tasks.py`로 확인.
+
+`python tasks.py check`는 한 번 통과한 검사를 건너뛴다 — 읽는 파일의 내용이 지난번과 같으면
+다시 돌리지 않는다(약 39초 → 1초). 어떤 작업이 왜 건너뛰어지는지는 `python tasks.py graph`,
+캐시를 무시하려면 `--force`, 아예 비우려면 `python tasks.py clean`.
 
 환경을 다 갖췄으면 `hopper_aviary.py`를 열어보고, AI에게 이렇게 물어본다 — 그냥 읽고 넘어가지 말고 답을 **자기 말로 3문장**으로 줄여 팀 채팅방에 올릴 것. 서로 다르게 요약된 지점이 팀이 헷갈리는 지점이다.
 
@@ -51,6 +71,23 @@ python tasks.py sanity     # 환경이 살아 있는지 확인
 ```
 
 작업 폴더: `sim/`(RL 환경·학습 스크립트), `firmware/cosmos/`(Teensy 스케치 — Arduino IDE + Teensyduino 필요, 펌웨어 담당만 설치하면 됨).
+
+#### 확장 트랙 — 커넥톰 제약 정책망 (`sim/connectome/`)
+
+초파리 커넥톰(실제 뇌 배선도)을 PPO 정책망의 **연결 구조**로 쓰는 비교군. 메인 트랙을
+대체하지 않고 비교군을 하나 더 얹는 것이다. 설계 의도는
+[`docs/design/connectome-control.md`](docs/design/connectome-control.md),
+실행법은 [`sim/connectome/README.md`](sim/connectome/README.md).
+
+```bash
+python tasks.py connectome   # 그래프 생성 (합성 CX 링 어트랙터 + 셔플 대조군)
+python tasks.py conncheck    # 제대로 도는지 확인
+```
+
+⚠ **지금 비교 결과를 읽으면 안 된다.** `params.yaml`의 `Kf`가 실제값보다 약 37배 작아서
+베인이 5초 동안 자세를 5.8°밖에 못 바꾸는데 초기 교란은 최대 17°다 — 어떤 제어기도
+Stage 1을 못 푸는 상태다. 실험 A로 `Kf`를 채우는 게 먼저다.
+진단: `python sim/connectome/authority.py`
 
 ### 엔지니어링팀
 
@@ -116,13 +153,15 @@ gh pr create --base main --reviewer junwonkim07
 | 증상 | 원인 | 해결 |
 |---|---|---|
 | `python`, `pip` 명령이 안 먹음 | 설치 시 PATH 미등록 | 파이썬 재설치 시 "Add python.exe to PATH" 체크. 이미 설치했다면 제어판에서 python 재설치(Modify) |
-| `venv\Scripts\activate` 실행 시 오류(실행 정책) | Windows 기본 PowerShell 스크립트 실행 제한 | PowerShell을 관리자로 열고 `Set-ExecutionPolicy RemoteSigned` 후 재시도, 또는 명령 프롬프트(cmd)에서 `venv\Scripts\activate.bat` 사용 |
-| `sanity_check.py` 실행 시 `ModuleNotFoundError` | 가상환경 활성화 전에 `pip install` 했거나, 활성화가 안 된 상태로 실행 | 터미널 프롬프트 앞에 `(venv)`가 보이는지 확인 후 `pip install` 다시 |
+| `.venv\Scripts\activate` 실행 시 오류(실행 정책) | Windows 기본 PowerShell 스크립트 실행 제한 | PowerShell을 관리자로 열고 `Set-ExecutionPolicy RemoteSigned` 후 재시도, 또는 명령 프롬프트(cmd)에서 `.venv\Scripts\activate.bat` 사용. 애초에 활성화 없이 `python tasks.py <작업>`만 써도 된다 |
+| `sanity_check.py` 실행 시 `ModuleNotFoundError` | 활성화가 안 된 상태로 직접 실행 | `python tasks.py sanity` 로 실행하면 uv가 알아서 맞춰준다. 직접 실행하려면 프롬프트 앞에 `(.venv)`가 보이는지 확인 |
 | `git push` 시 로그인 창이 반복됨 | Git Credential Manager 인증 만료 | 뜨는 브라우저 창에서 GitHub 로그인 재시도. 안 뜨면 Settings → Developer settings → Personal access tokens에서 토큰 생성 후 비밀번호 칸에 붙여넣기 |
 | Teensy 업로드 시 보드가 안 잡힘 | USB 드라이버 미인식 또는 프로그램 버튼 타이밍 | Teensyduino 재설치, 업로드 시작 직후 보드의 프로그램 버튼 눌러주기 |
 | BNO085 값이 안 뜸 | I2C 배선 순서 또는 주소 문제 | I2C 스캔 스케치로 장치 인식 여부 확인(보통 `0x4A`/`0x4B`), SDA/SCL 순서 재확인 |
 | `pip install` 중 `OSError: [Errno 2] No such file or directory: ...torch\include\...` | Windows 경로 길이 260자 제한 (torch는 경로가 아주 깊다) | 저장소를 더 짧은 경로로 옮기거나(예: `C:\dev\COSMOS-TVC-Hopper`), [긴 경로 지원 활성화](https://pip.pypa.io/warnings/enable-long-paths) |
-| 설치 후 OneDrive가 몇 GB를 동기화하기 시작함 | `sim/venv`(torch 포함 ~1GB)가 OneDrive 폴더 안에 생겨서 | OneDrive 설정 → 백업/폴더 선택에서 `sim/venv` 제외. 지워도 `python tasks.py setup`으로 언제든 다시 만든다 |
+| 설치 후 OneDrive가 몇 GB를 동기화하기 시작함 | `.venv`(torch 포함 ~1GB)가 OneDrive 폴더 안에 생겨서 | OneDrive 설정 → 백업/폴더 선택에서 `.venv` 제외. 지워도 `python tasks.py setup`으로 언제든 다시 만든다 |
+| `uv: command not found` / `uv 이(가) 없다` | uv 미설치 또는 설치 후 터미널 미재시작 | 위 [소프트웨어팀](#소프트웨어팀) 설치 명령 실행 후 터미널을 새로 연다 |
+| `환경을 uv.lock 에 맞추지 못했다` 또는 CI의 `uv sync --locked` 실패 | `pyproject.toml`만 고치고 `uv.lock`을 갱신하지 않음 | `python tasks.py lock` 후 `uv.lock`·`sim/requirements.txt`를 함께 커밋 |
 
 ## 구조
 
@@ -133,9 +172,11 @@ gh pr create --base main --reviewer junwonkim07
 | `docs/presentation/` | 동아리 설명회 발표자료 |
 | `firmware/` | 펌웨어 — `reference/SingleRotorUAV/`는 [SolidGeek/SingleRotorUAV](https://github.com/SolidGeek/SingleRotorUAV) (MIT) vendor-copy, `cosmos/`는 우리 코드 |
 | `cad/` | 자체 파라메트릭 CAD (대안 — 주 경로는 SolidGeek Onshape 포크) |
-| `sim/` | 시뮬레이션 · RL — Stage 1 환경 + PPO 학습 1회 성공 완료 |
+| `sim/sim_stage1/` | 시뮬레이션 · RL — Stage 1 환경 + PPO 학습 1회 성공 완료 |
+| `sim/connectome/` | 커넥톰 제약 정책망 (확장 트랙) — 초파리 배선을 정책망 구조로 |
 | `data/` | 실험 로그 (CSV) |
-| `tasks.py` | 자주 쓰는 명령 모음 — 인자 없이 실행하면 목록 |
+| `tasks.py` | 작업 실행기 — 작업 순서와 입력 해시 캐시. 인자 없이 실행하면 목록 |
+| `pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 고정본 (`sim/pyproject.toml`이 sim 의존성 정본) |
 | `.github/workflows/` | CI — PR마다 sim 환경 로딩 + SB3 연결 자동 확인 |
 
 ## 라이선스 / 출처
