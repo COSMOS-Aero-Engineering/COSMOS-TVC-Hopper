@@ -15,7 +15,7 @@
 있다 — 이 파일과 역할이 다르다: AGENTS.md = 설계 의도·확정 결정·현재 상태(왜 이렇게 하는지),
 README.md = 지금 당장 뭘 타이핑해야 하는지.
 
-**마지막 갱신: 2026-09-18.**
+**마지막 갱신: 2026-09-22.**
 
 ---
 
@@ -27,16 +27,17 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 1. **브랜치를 먼저 만든다.** `git switch -c <태그>/<짧은-설명>` — 태그는 커밋 태그와 같은 걸 쓴다
    (`cad`/`fw`/`sim`/`data`/`docs`, 그 외 인프라성 작업은 `infra`). 예: `sim/thrust-const-실측반영`.
 2. **그 브랜치에만 커밋·푸시한다.** `main`으로 직접 push 금지.
-3. **PR을 올리고 리뷰어로 `junwonkim07`(부장 김준원)을 지정한다.**
-   `gh pr create --base main --reviewer junwonkim07` (웹에서 올릴 땐 우측 Reviewers에 지정)
-4. **머지 권한이 있는 사람은 두 명뿐이다 — 김준원(`junwonkim07`), 김민찬(`MINBBBB1201`).**
-   그 외에는 누구도, 본인이 올린 PR이라도 임의로 머지하지 않는다. 그리고 이 두 명도 **부장 승인
-   (Approve) 전에는 머지하지 않는다** — CI(`.github/workflows/ci.yml`)가 초록불이 아니면 애초에
-   승인 대상이 아니다.
-5. 승인이 떨어진 뒤에 머지한다: `gh pr merge --squash --delete-branch`
+3. **PR을 올리고 수동 리뷰어를 지정한다.** 리뷰 권한자는 부장 김민찬(`MINBBBB1201`)과 차장
+   김준원(`junwonkim07`) 두 명뿐이다. 작성자가 둘 중 한 명이 아니면 둘 중 한 명을 리뷰어로 지정한다.
+   예: `gh pr create --base main --reviewer junwonkim07`.
+4. **머지 권한도 김민찬·김준원 두 명에게만 있다.** 두 사람은 CI(`.github/workflows/ci.yml`)가
+   초록불인 것을 확인하고 변경사항을 직접 검토한 뒤, 본인이 올린 PR도 스스로 머지할 수 있다.
+   그 외 사람은 반드시 두 사람 중 한 명의 승인(Approve)을 받아야 하며 직접 머지하지 않는다.
+5. 권한자가 squash 방식으로 머지한다: `gh pr merge --squash --delete-branch`
 
 **AI 에이전트에게 특히 해당되는 것**: PR 생성과 CI 통과까지는 따로 묻지 않고 진행해도 된다. 하지만
-**머지는 매번 별도로 확인받는다** — "다 해줘" 같은 포괄적 지시는 머지 승인으로 치지 않는다.
+AI는 머지 권한자가 아니므로 **직접 머지하지 않는다**. 머지는 김민찬 또는 김준원이 변경사항과 CI를
+직접 확인한 뒤 실행한다.
 
 왜 바꿨나: 이전 규칙은 "작업 폴더가 팀별로 나뉘어 있으니 `main`에 직접 커밋"이었다. 충돌은 확실히
 줄지만, 그 규칙의 진짜 비용은 충돌이 아니라 **깨진 코드가 곧바로 모두의 `git pull`에 실려 간다**는
@@ -66,7 +67,7 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 | `docs/execution/member-weekly-tasks.md` | **부원 7명 개인별 주간 태스크(신규)** — 팀 단위 계획을 Week 1 잔여~Week 10까지 이름별로 배정(엔지니어링: 김민찬·박지훈·이민우·김시우 / 소프트웨어: 김준원·김민지·권재후) | 신규, 2026-09-18 |
 | `docs/execution/procurement-review.md` | 구글시트 행별 검토 | — |
 | `docs/execution/bench-wiring.svg` | 벤치 배선도(구버전 — `01-avionics-integration-final.md` §4로 대체됨) | — |
-| `kicad/` | 아비오닉스 배선 스키매틱 캡처(신규 — 아직 비어있음, Week 4 착수 예정) | 착수 전 |
+| `kicad/` | Teensy·IMU·서보·RC·ESC 전원/신호 계통 KiCad 스키매틱 + 코드 기반 생성·검증 도구 | 생성 완료, ERC 확인 대기 |
 | `firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 원본 vendor-copy(MIT, `ORIGIN.md`에 수정 계획) — **컴파일 성공 확인**(2026-09-13) | 원본, 손대지 않음 |
 | `firmware/cosmos/imu_test/` | BNO085 브링업 스케치(실험 B용) — 원본 드라이버 복사, 실물 업로드는 아직 | 작성 완료 |
 | `firmware/cosmos/throttle_serial/` | DShot 스로틀 시리얼 테스트 스케치(실험 A·C용, 2초 무입력 자동0% 페일세이프 포함) | 작성 완료 |
@@ -85,7 +86,7 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 | `pyproject.toml` · `sim/pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 **버전 고정본**(uv) — 부원마다 다른 버전이 깔려 결과가 재현 안 되는 걸 막는 용도. `sim/pyproject.toml`이 sim 의존성 정본, `uv.lock`이 실제 고정본 | 2026-09-18 추가 |
 | `sim/requirements.txt` | 위 lock에서 생성되는 **사본**(`python tasks.py lock`) — uv 없이 pip만 쓸 때용. 손으로 고치지 않는다 | 2026-09-18 생성물로 전환 |
 | `tasks.py` | 작업 실행기(`setup`/`lock`/`compile`/`sanity`/`smoke`/`check`/`train`/`deck`/`graph`/`clean`) — 작업 간 순서와 입력 해시 캐시를 갖는다. Windows에 `make`가 없어서 파이썬 stdlib로 구현. CI도 `python tasks.py check`를 그대로 호출한다 | 2026-09-18 추가 |
-| `.github/workflows/ci.yml` | CI — PR마다 문법 체크 + `sanity_check` + PPO 스모크(256스텝). 학습은 돌리지 않는다 | 2026-09-18 추가 |
+| `.github/workflows/ci.yml` | CI — PR마다 sim 문법·sanity·PPO 스모크 + PlatformIO 펌웨어 2종 빌드. 학습은 돌리지 않는다 | 2026-09-19 갱신 |
 | `docs/presentation/` | 동아리 설명회 발표자료(.pptx) + 대본 | 발표 완료(9/5) |
 | `club promoting material/` | 홍보용 PDF/PPTX | — |
 
@@ -107,7 +108,7 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 | "전자 배선·핀맵이 정확히 어떻게 되나?" | `01-avionics-integration-final.md` (마스터 설계도 §6.5·§7보다 이 문서가 최신) |
 | "기구 형상·치수·질량예산은?" | `00-hopper-master-design.md` §3~§7 |
 
-## 현재 상태 (최신 항목: 2026-09-19)
+## 현재 상태 (최신 항목: 2026-09-22)
 
 - **CAD**: EDF 실측 완료(9/13) — 볼트 플랜지 없는 제품이라 클램프 마운트로 설계 변경. rev C.1에서
   장비 선반·서보 보스·스파 커플러·다리 방위 등 구조 대폭 보강(`01-avionics-integration-final.md` §12
@@ -120,7 +121,9 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
   PlatformIO(VSCode)로 전환** — `firmware/cosmos/*/platformio.ini` 추가, 각 스케치를 `pio run`으로
   실제 빌드 검증(전에 아무도 실제로 컴파일해본 적이 없었음). 그 과정에서 `imu_test.ino`의 진짜 컴파일
   버그 발견·수정(`BNO080` 기본 생성자 없음 — `firmware/cosmos/README.md` 참고). 통합 펌웨어는 아직.
-  Teensy 4.0 핀헤더 납땜·USB 연결 완료(2026-09-18~19), 실물 업로드는 아직(컴파일까지만 검증됨).
+  이어 PR #13에서 BNO085 연결을 I2C(핀 18/19)에서 확정 핀맵의 SPI(CS=10, MOSI=11, MISO=12,
+  SCK=13, RST=20, INT=21, WAK/PS0=22)로 전환해 RC CH1·CH2와의 핀 충돌을 제거했다. Teensy 4.0
+  핀헤더 납땜·USB 연결 완료(2026-09-18~19), 실물 업로드는 아직(컴파일까지만 검증됨).
 - **소프트웨어(RL)**: SB3 CartPole-v1/Pendulum-v1 완료. `sim/sim_stage1/hopper_aviary.py` — 논문
   3장 운동방정식을 numpy로 직접 적분하는 순수 `gymnasium.Env`(gym-pybullet-drones 포기 이유는
   아래 §소프트웨어 스택). 도메인 랜덤화 포함, PPO 1회 학습 성공(파이프라인 검증 목적, 물리값이
@@ -130,7 +133,8 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
   연결 구조로 고정하고 가중치만 학습하는 비교군. 합성 CX 링 어트랙터 그래프(104뉴런)로
   파이프라인 검증 완료, 차수보존 셔플 대조군·PD baseline·공통 평가지표까지 구현. CI가
   `conncheck`로 매 PR 검사한다. FlyWire 실측 그래프 경로는 코드만 있고 아직 안 돌렸다(수백 MB
-  다운로드 필요). **비교 결과는 위 `Kf` 문제 때문에 아직 읽으면 안 된다.**
+  다운로드 필요). 기존 `Kf=3.0e-8` 오류는 PR #10에서 잠정값 `1.1e-6`으로 보정돼 비교 파이프라인은
+  다시 동작하지만, 실측값이 아니므로 결과를 최종 성능으로 해석하면 안 된다.
 - **Git**: `origin` = `github.com/COSMOS-Aero-Engineering/COSMOS-TVC-Hopper`(팀 공용). 로컬은 최신,
   커밋 이력 정상.
 - **문서 정합성 점검(2026-09-17)**: 이전 상태 로그가 실제로 존재하지 않는 파일(`cad/print_parts/`의
@@ -158,10 +162,9 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
    금요일은 팀 확정+착수, 토요일은 실험 A(EDF 추력곡선)·B(IMU 브링업)·C(DShot 모터제어).
 2. 실험 A 진행 → `sim/sim_stage1/params.yaml`의 PLACEHOLDER(Kf 등) 실측값으로 교체
    (`docs/design/modelling-notes-ch3.md` §2·§6 대응표 보고 반영).
-   **우선순위 상향(2026-09-18)**: `Kf`가 실제값보다 약 37배 작아서 지금은 베인이 5초 동안
-   자세를 5.8°밖에 못 바꾼다(초기 교란은 최대 17°). 즉 **어떤 제어기도 Stage 1을 못 푼다** —
-   PLACEHOLDER라 숫자가 부정확한 정도가 아니라 과제 자체가 성립하지 않는 상태다. RL 학습
-   결과를 읽으려면 이게 먼저다. 진단: `python sim/connectome/authority.py`
+   기존 `Kf=3.0e-8` 오류는 PR #10에서 10 N 정적추력 기준 잠정값 `1.1e-6`으로 보정 완료.
+   파이프라인 검증은 가능하지만 실제 성능 비교 전에는 실험 A 값으로 다시 교체해야 한다.
+   진단: `python sim/connectome/authority.py`
 3. ~~Teensy 4.0 핀헤더 납땜~~ — **완료(2026-09-18~19)**, PlatformIO 빌드까지 검증됨.
    다음: `pio run -t upload`로 실물 업로드 → Experiment B(IMU 브링업) 재개.
 4. ~~`cad/print_parts/`의 STL 실제로 export~~ — **완료(2026-09-18)**. 다음: 슬라이서에서 치수·인필
@@ -184,6 +187,7 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 - 이전 학기: 로켓 모터 추력 측정 스탠드, AEROVIEW 풍동(wind tunnel) 실험 완료.
 - 이번 학기 목표: 기존 엔지니어링 실험에 AI(강화학습) 요소를 접목, 대학 수준의 제어공학 실험을 자체 설계·검증.
 - 동아리부장: 김민찬.
+- 동아리차장: 김준원.
 
 ## 확정된 방향 (더 이상 재검토하지 않는 골격)
 
