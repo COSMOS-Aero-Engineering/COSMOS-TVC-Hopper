@@ -75,10 +75,13 @@ python tasks.py sanity     # 환경이 살아 있는지 확인
 
 작업 폴더: `sim/`(RL 환경·학습 스크립트), `firmware/cosmos/`(Teensy 펌웨어 — **VSCode + PlatformIO 익스텐션** 필요, 펌웨어 담당만 설치하면 됨. 2026-09-19부터 Arduino IDE 대신 이걸 씀, `firmware/cosmos/README.md` 참고). 폴더마다 `platformio.ini`가 있는 독립 프로젝트라 `cd firmware/cosmos/imu_test && pio run -t upload`로 바로 업로드.
 
-#### 확장 트랙 — 커넥톰 제약 정책망 (`sim/connectome/`)
+#### 확장 트랙 (A 또는 B 중 하나만, 실험 A 이후 결정)
 
-초파리 커넥톰(실제 뇌 배선도)을 PPO 정책망의 **연결 구조**로 쓰는 비교군. 메인 트랙을
-대체하지 않고 비교군을 하나 더 얹는 것이다. 설계 의도는
+**B. 리버스 엔지니어링(공개 자료 분석)**: 착륙 로켓·TVC 기체의 제어 방식을 공개 논문과 공개
+프로젝트로만 분석해 우리 PID/LQR baseline 설계에 적용한다. 착수 전. 범위는 `AGENTS.md` §목표 6.
+
+**A. 커넥톰 제약 정책망 (`sim/connectome/`)**: 초파리 커넥톰(실제 뇌 배선도)을 PPO 정책망의
+**연결 구조**로 쓰는 비교군. 메인 트랙을 대체하지 않고 비교군을 하나 더 얹는 것이다. 설계 의도는
 [`docs/design/connectome-control.md`](docs/design/connectome-control.md),
 실행법은 [`sim/connectome/README.md`](sim/connectome/README.md).
 
@@ -197,7 +200,7 @@ gh pr create --base main --reviewer junwonkim07
 | `cad/` | 자체 파라메트릭 CAD (대안 — 주 경로는 SolidGeek Onshape 포크) |
 | `kicad/` | Teensy·IMU·서보·RC·ESC 전원/신호 계통 스키매틱과 생성·검증 도구 |
 | `sim/sim_stage1/` | 시뮬레이션 · RL — Stage 1 환경 + PPO 학습 1회 성공 완료 |
-| `sim/connectome/` | 커넥톰 제약 정책망 (확장 트랙) — 초파리 배선을 정책망 구조로 |
+| `sim/connectome/` | 커넥톰 제약 정책망 (확장 트랙 A, B와 택1): 초파리 배선을 정책망 구조로 |
 | `data/` | 실험 로그 (CSV) |
 | `tasks.py` | 작업 실행기 — 작업 순서와 입력 해시 캐시. 인자 없이 실행하면 목록 |
 | `pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 고정본 (`sim/pyproject.toml`이 sim 의존성 정본) |
