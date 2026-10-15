@@ -208,7 +208,7 @@ Week 9(여유 주차)의 확장 옵션으로 `semester-roadmap.md` §3 Week 9 �
 
 | # | 항목 | 누가 | 언제 |
 |---|---|---|---|
-| 1 | **PyFlyt 소스코드(`PyFlyt/core/drones/`, `PyFlyt/core/abstractions/`) 직접 읽고 EDF1+베인4 구성이 포크 없이 되는지 확인** — 안 되면 §2의 "커스텀 PyBullet+URDF" 폴백으로 | 소프트웨어팀(RL 담당) | Stage 2 착수 전(`semester-roadmap.md` 상 여유 있을 때, 늦어도 baseline 확정 전) |
+| 1 | **PyFlyt 소스코드(`PyFlyt/core/drones/`, `PyFlyt/core/abstractions/`) 직접 읽고 EDF1+베인4 구성이 포크 없이 되는지 확인** (2026-10-15 확인: 기본 `LiftingSurface`는 제트 속도를 쓰지 않아 그대로는 불가. 직접 만든 제트 베인 부품을 조합하는 방향, [`rl-open-source-survey.md`](rl-open-source-survey.md) §3) — 안 되면 §2의 "커스텀 PyBullet+URDF" 폴백으로 | 소프트웨어팀(RL 담당) | Stage 2 착수 전(`semester-roadmap.md` 상 여유 있을 때, 늦어도 baseline 확정 전) |
 | 2 | CAD→URDF 변환 실제 작성 — `cad/print_parts/` STL export 완료가 선행조건 | 소프트웨어팀 + 기구팀 연결 | STL export 완료 후 |
 | 3 | Residual RL(§3 Phase B) 착수 여부 | 부장 + 소프트웨어팀 | Phase A(직접비교) 완료 후, 여유 시간 보고 |
 | 4 | 온보드 배포 경로 A(TFLite Micro) vs B(수동 C++) 확정 | 소프트웨어팀(펌웨어 연동 담당) | 학습된 정책이 처음 나온 뒤 |
