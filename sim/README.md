@@ -18,6 +18,7 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 | `params.yaml` | 물리 상수. **CLalpha/CD0/Kf/mass/Jxx·Jyy·Jzz는 전부 PLACEHOLDER** — 실험 A(EDF 추력곡선) + 조립 후 실측 전까지는 의미 없는 값. `vane_arm_l/r`만 `cad/hopper_params.scad` 실측 기반이라 PLACEHOLDER 아님 |
 | `sanity_check.py` | 환경이 안 깨졌는지 빠르게 확인(무작위 액션 20스텝) |
 | `train.py` | PPO(stable-baselines3) 학습 스크립트 |
+| `export_episode.py` | 에피소드 1회를 웹 대시보드 CSV 형식(`docs/design/02-web-dashboard-design.md` §4)으로 `episode_logs/`에 저장. 정책 `pd`(기준 PD)·`zero`·`ppo`, 옆에 시드·물리 상수·결과를 담은 `.meta.json`. 실물 시험 로그와 같은 3D 뷰어로 재생하기 위한 것 |
 | `hopper_attitude_ppo.zip` | 학습된 모델 1회분 — PLACEHOLDER 물리값 기준이라 **성능 숫자 자체는 의미 없음**, 파이프라인이 도는지 확인용 |
 
 ## 관측 / 행동 (실제 구현 기준 — 이전 계획의 12/4차원 문서와 다름, 이게 현재 정답)
@@ -42,6 +43,15 @@ python tasks.py sanity   # 환경 정상 동작 확인 (20스텝)
 python tasks.py check    # CI와 같은 검사 — PR 올리기 전에
 python tasks.py train    # PPO 학습 (200k 스텝)
 ```
+
+에피소드를 3D 뷰어용 CSV로 남기려면 `sim/sim_stage1/`에서:
+
+```bash
+python export_episode.py --policy pd --no-dr --seed 0     # 랜덤화 끈 PD 1회
+python export_episode.py --policy ppo --episodes 5        # 학습 모델 5회 (stable-baselines3 필요)
+```
+
+결과는 `sim/sim_stage1/episode_logs/`(git 제외)에 쌓인다. 같은 시드와 커밋이면 같은 파일이 다시 나온다.
 
 처음이라면 `python tasks.py setup`을 한 번 먼저. 설치 방법은 루트 [`README.md`](../README.md)의 부원 퀵스타트.
 

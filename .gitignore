@@ -24,6 +24,7 @@ Thumbs.db
 *.gcode
 /sim/runs/
 /sim/logs/
+/sim/sim_stage1/episode_logs/
 # 커넥톰 그래프는 build_subgraph.py가 결정론적으로 다시 만든다 (python tasks.py connectome)
 /sim/connectome/graphs/
 /sim/connectome/results/
