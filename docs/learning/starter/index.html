@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COSMOS 첫 3D 실습</title>
+<style>
+body{margin:0;font:16px/1.6 system-ui,sans-serif;background:#eef2f5;color:#152534}
+main{max-width:1100px;margin:auto;padding:24px}h1{margin:0;font-size:26px}
+.note{margin:8px 0 18px}#stage{height:440px;background:#dde6ef;border-radius:12px;overflow:hidden}
+.controls{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:18px 0}
+input[type=range]{width:230px}button{font:inherit;padding:6px 15px}
+#status{background:white;padding:12px;border-radius:8px}
+@media(max-width:600px){#stage{height:320px}main{padding:16px}}
+</style><main>
+<h1>COSMOS 첫 3D 실습</h1>
+<p class="note">팬·베인 네 개를 단순화한 연습 모형입니다. 실물 CAD, 물리 시뮬레이션, 센서 측정 화면이 아닙니다.</p>
+<div id="stage" aria-label="호퍼 연습 모형"></div>
+<div class="controls">
+<label>화면 Z축 회전 <input id="angle" type="range" min="-30" max="30" value="0" step="1"><output id="value">0°</output></label>
+<label><input id="auto" type="checkbox"> 합성 데이터로 반복 회전</label>
+<button id="reset" type="button">초기화</button></div>
+<div id="status" role="status">3D 모듈을 불러오는 중…</div>
+<p>첫 실습: 슬라이더를 양쪽으로 움직이고 초기화하세요. 다음으로 index.html의 <code>fanColor</code> 값을 바꿔 팬의 색을 변경해보세요.</p>
+<p>이 화면은 Y가 위쪽인 화면 좌표계를 씁니다. 실제 IMU의 roll·pitch·yaw와 연결하는 변환은 아직 없습니다.</p>
+</main><script type="module">
+import * as THREE from './vendor/three.module.js';
+// 첫 코드 수정은 이 색 값 하나부터 시작합니다.
+const fanColor = 0x2778a9;
+const stage = document.querySelector('#stage');
+const slider = document.querySelector('#angle');
+const auto = document.querySelector('#auto');
+const label = document.querySelector('#value');
+const status = document.querySelector('#status');
+
+try {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xdde6ef);
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+  camera.position.set(4, 3, 5);
+  camera.lookAt(0, 0.15, 0);
+  const renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  stage.appendChild(renderer.domElement);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x536077, 3));
+  const light = new THREE.DirectionalLight(0xffffff, 3);
+  light.position.set(3, 4, 2);
+  scene.add(light);
+  scene.add(new THREE.GridHelper(6, 12, 0x8393a6, 0xb5c2d1));
+  const hopper = new THREE.Group();
+  hopper.position.y = 0.9;
+  scene.add(hopper);
+  const fan = new THREE.Mesh(new THREE.CylinderGeometry(0.48,0.48,0.9,32),
+    new THREE.MeshStandardMaterial({color:fanColor,roughness:0.6}));
+  fan.position.y = 0.2;
+  hopper.add(fan);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5,0.07,10,36),
+    new THREE.MeshStandardMaterial({color:0x243b53}));
+  ring.rotation.x = Math.PI/2;
+  ring.position.y = -0.35;
+  hopper.add(ring);
+  for(let i=0;i<4;i++){
+    const azimuth = i*Math.PI/2;
+    const vane = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.26,0.05),
+      new THREE.MeshStandardMaterial({color:0xd57935}));
+    vane.position.set(Math.cos(azimuth)*0.3,-0.53,Math.sin(azimuth)*0.3);
+    vane.rotation.y = -azimuth;
+    hopper.add(vane);
+  }
+  hopper.add(new THREE.AxesHelper(1.0));
+  function resize(){
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w,h);
+    camera.aspect = w/h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize',resize);
+  resize();
+  slider.addEventListener('input',()=>{auto.checked=false;});
+  document.querySelector('#reset').addEventListener('click',()=>{
+    auto.checked=false;slider.value='0';
+  });
+  renderer.setAnimationLoop((time)=>{
+    const deg = auto.checked ? 20*Math.sin(time/1000) : Number(slider.value);
+    if(auto.checked) slider.value = String(Math.round(deg));
+    // 화면 좌표계의 회전 연습이며 실제 센서 자세 변환은 아닙니다.
+    hopper.rotation.z = THREE.MathUtils.degToRad(deg);
+    label.textContent = deg.toFixed(1)+'°';
+    status.textContent = '합성 데이터 · 화면 Z축 '+deg.toFixed(1)+'° · 센서/제어기 연결 없음';
+    renderer.render(scene,camera);
+  });
+} catch(error) {
+  status.textContent = '3D 실행 실패: '+error.message+
+    ' / 이 폴더에서 python -m http.server 8000 --bind 127.0.0.1 을 실행한 뒤 브라우저로 접속하세요.';
+}
+</script></html>

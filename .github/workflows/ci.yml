@@ -55,6 +55,11 @@ jobs:
       - name: 검사 — python tasks.py check
         run: python3 tasks.py check
 
+      - name: 학습 자료 목록·내부 링크 확인
+        run: |
+          python3 docs/learning/render_catalog.py --check
+          python3 docs/learning/check_library.py
+
   firmware:
     # 2026-09-19: Arduino IDE -> PlatformIO 전환하면서 추가. 예전엔 펌웨어가 실제로
     # 컴파일되는지 아무도 CI에서 확인 안 했다(사람이 IDE를 직접 열어야 알 수 있었음) —
