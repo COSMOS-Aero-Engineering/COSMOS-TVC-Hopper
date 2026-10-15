@@ -68,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [imu_test, throttle_serial]
+        project: [imu_test, imu_test_i2c, throttle_serial]
     steps:
       - uses: actions/checkout@v4
 

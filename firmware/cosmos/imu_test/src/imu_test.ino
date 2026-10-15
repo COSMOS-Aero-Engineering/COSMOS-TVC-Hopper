@@ -12,21 +12,20 @@
 // 배선(전부 3.3V 로직 — 5V 절대 금지):
 //   BNO085(GY-BNO08X)   Teensy 4.0
 //   ------------------  ----------
-//   UCC (전원)      →   3.3V
+//   VCC_3V3         →   3.3V
 //   GND             →   GND
 //   CS              →   핀 10
 //   INT             →   핀 21
 //   RST             →   핀 20
 //   PS0             →   핀 22   (WAKE 겸용 — 스톡 코드가 이 핀을 토글)
 //   PS1             →   3.3V    (PS1:PS0 = 1:1 로 SPI 모드 고정)
-//   SCL             →   핀 13   (SCK, 하드웨어 SPI 기본핀 — beginSPI() 가 자동으로 씀)
-//   SDA             →   핀 11   (MOSI/SDI)
-//   AD0             →   핀 12   (MISO/SDO — ⚠️ 확인 포인트: 이 보드는 I2C 주소선(AD0)을
-//                                SPI 모드에서 MISO로 겸용하는 것으로 보임. 실제 실크·후면
-//                                표기가 다르면 이 한 줄만 배선 바꾸면 됨, 나머지는 안 바뀜)
+//   SCL/SCK/RX      →   핀 13   (SCK, 하드웨어 SPI 기본핀 — beginSPI() 가 자동으로 씀)
+//   ADDR/MOSI       →   핀 11   (MOSI)
+//   SDA/MISO/TX     →   핀 12   (MISO)
+// 핀 이름은 GY-BNO08X 모듈 뒷면 실크 그대로(2026-10-15 실물 확인). SDA 핀이 SPI에선
+// MISO, ADDR 핀이 MOSI다 — 이전 주석은 이 둘이 뒤바뀌어 있었다.
 //
-// 브레드보드에 이미 SDA/SCL 로 I2C 배선을 해놨다면, 그 두 선을 위 표대로 SCL→13,
-// SDA→11 로 옮기고 CS/INT/RST/PS0/PS1 5개를 새로 추가하면 된다(AD0/GND/UCC는 그대로).
+// SPI 배선 전에 IMU가 살아 있는지만 보려면 ../imu_test_i2c (4선 I2C)를 먼저 쓴다.
 
 #include "BNO080.h"
 
