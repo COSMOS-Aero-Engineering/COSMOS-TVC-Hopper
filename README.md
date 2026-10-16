@@ -115,7 +115,7 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
 
 정본은 [`AGENTS.md`](AGENTS.md)의 **"핵심 규칙"**과 **"작업 순서 — 이슈에서 PR까지"**다. 작업은 이슈에서
 시작하고, 이슈 번호를 브랜치 이름과 PR 본문(`Closes #번호`)에 넣는다. 처음 한 번 `python ship.py tools`로
-도구를 확인한다(없는 gh, opencode는 자동 설치). 이슈를 맡으면 `python ship.py wt <이슈 번호>`로 작업 폴더와
+도구를 확인한다(Windows·Mac의 gh와 Node.js가 있는 PC의 opencode는 자동 설치, 그 밖에는 설치 방법을 출력). 이슈를 맡으면 `python ship.py wt <이슈 번호>`로 작업 폴더와
 브랜치를 만든다. 아래는 부원이 실제 작업할 때 따르는 절차다.
 
 1. **한 작업 폴더에서는 한 번에 한 세션만 Git을 조작한다.** Claude·Codex·사람 터미널이 같은 폴더에서
@@ -157,8 +157,8 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
 | `[docs]` | 문서 | README 트러블슈팅 추가 |
 
 ```bash
-git switch main && git pull              # 항상 최신 main에서 시작
-git switch -c sim/thrust-const-실측반영    # 브랜치부터 만든다
+python ship.py wt 21                     # 이슈 #21용 폴더와 브랜치(sim/21)를 최신 main에서 만든다
+cd ../COSMOS-TVC-Hopper-wt/issue-21      # 위 명령이 출력한 폴더로 이동
 # ... 작업 ...
 python tasks.py check                    # CI가 볼 걸 미리 확인
 git add -A
@@ -169,8 +169,8 @@ gh pr create --base main --reviewer junwonkim07
 # 일반 부원은 CI 통과 + 김민찬 또는 김준원의 Approve를 기다린다.
 ```
 
-브랜치 이름은 `<커밋 태그>/<짧은 설명>` 형태다. 예: `fw/imu-test-spi-mode`,
-`docs/timeline-overview`. 머지와 원격 브랜치 삭제는 김민찬 또는 김준원이 처리한다.
+브랜치 이름은 `ship.py wt`가 만드는 `<커밋 태그>/<이슈 번호>` 형태다. 예: `fw/24`, `docs/30`.
+태그는 이슈 제목의 `[태그]`에서 정한다. 머지와 원격 브랜치 삭제는 김민찬 또는 김준원이 처리한다.
 
 ---
 

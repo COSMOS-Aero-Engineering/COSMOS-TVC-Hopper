@@ -8,7 +8,9 @@
 
 왜 이 파일이 있나: 김준원의 서버에는 `wt`, `capped`, `codex`가 깔려 있지만 부원 PC(Windows 위주)에는
 없다. 없다고 그 단계를 빼면 사람마다 작업 순서가 달라진다. 그래서 같은 동작을 표준 라이브러리만으로
-여기 구현하고, 없는 외부 도구는 처음 쓸 때 설치한다.
+여기 구현하고, 없는 외부 도구는 처음 쓸 때 설치한다. 설치할 수 없는 경우(Linux의 gh는 관리자 권한
+필요, Node.js가 없으면 opencode)는 설치 방법을 출력하고 멈춘다. Windows의 `capped`는 상한을 걸지
+못하고 경고만 낸다.
 
 사람만 할 수 있는 단계(로그인)는 설치해도 대신하지 못한다. 그때는 무엇을 입력하면 되는지 출력하고
 멈춘다. OpenCode의 무료 모델은 로그인 없이 쓸 수 있어서, 리뷰는 로그인이 없어도 돈다.
@@ -42,11 +44,17 @@ def say(cmd):
     print(f"$ {' '.join(str(c) for c in cmd)}", flush=True)
 
 
+def exe_of(name):
+    # Windows에서 npm·opencode 같은 .cmd 래퍼는 shutil.which가 찾은 전체 경로로 불러야 한다.
+    path = shutil.which(str(name))
+    if not path:
+        die(f"명령을 찾지 못했다: {name}")
+    return path
+
+
 def call(cmd, check=True, capture=False, cwd=None):
     say(cmd)
-    # Windows에서 npm·opencode 같은 .cmd 래퍼는 shutil.which가 찾은 전체 경로로 불러야 한다.
-    exe = shutil.which(cmd[0]) or cmd[0]
-    r = subprocess.run([exe, *map(str, cmd[1:])], cwd=cwd, text=True, encoding="utf-8",
+    r = subprocess.run([exe_of(cmd[0]), *map(str, cmd[1:])], cwd=cwd, text=True, encoding="utf-8",
                        errors="replace", capture_output=capture)
     if check and r.returncode != 0:
         if capture:
@@ -120,13 +128,15 @@ def cmd_wt(a):
                       capture=True, cwd=ROOT).stdout.strip()
     root = Path(git_common).parent
     path = root.parent / f"{root.name}-wt" / f"issue-{a.issue}"
-    if path.exists():
-        print(path)
-        return
     info = json.loads(call(["gh", "issue", "view", str(a.issue), "--json", "title,labels,state"],
                            capture=True, cwd=root).stdout)
     if info["state"] != "OPEN":
         die(f"이슈 #{a.issue}가 열려 있지 않다({info['state']}).")
+    if path.exists():
+        branch = call(["git", "-C", path, "branch", "--show-current"], capture=True).stdout.strip()
+        print(f"이미 있는 worktree를 쓴다. 브랜치: {branch}", file=sys.stderr)
+        print(path)
+        return
     tag = a.tag or issue_tag(info)
     if tag not in TAGS:
         die(f"이슈 제목이나 라벨에서 태그를 못 찾았다. --tag 로 정한다: {', '.join(TAGS)}")
@@ -134,6 +144,8 @@ def cmd_wt(a):
     call(["git", "-C", root, "fetch", "origin", "--quiet"])
     path.parent.mkdir(parents=True, exist_ok=True)
     call(["git", "-C", root, "worktree", "add", "--quiet", path, "-b", branch, "origin/main"])
+    # 마지막 줄은 경로만 쓴다. 스크립트가 `cd "$(python ship.py wt 12 | tail -1)"`처럼 쓸 수 있게.
+    print(f"브랜치: {branch}", file=sys.stderr)
     print(path)
 
 
@@ -153,6 +165,7 @@ def cmd_capped(a):
     if not cmd:
         die("실행할 명령이 없다. 예: python ship.py capped 8G -- python tasks.py check")
     limit = parse_size(a.size)
+    exe_of(cmd[0])  # 없는 명령이면 상한을 걸기 전에 멈춘다
     if sys.platform.startswith("linux") and shutil.which("systemd-run"):
         probe = subprocess.run(["systemd-run", "--user", "--scope", "--quiet", "true"],
                                capture_output=True)
@@ -167,12 +180,11 @@ def cmd_capped(a):
         if sys.platform == "darwin":
             print("[주의] macOS는 RLIMIT_AS를 강제하지 않을 수 있다. 상한이 안 걸릴 수 있다.",
                   file=sys.stderr)
-        sys.exit(subprocess.run(cmd, preexec_fn=limit_as).returncode)
+        sys.exit(subprocess.run([exe_of(cmd[0]), *cmd[1:]], preexec_fn=limit_as).returncode)
     # Windows: Job Object로 걸 수 있지만 여기서는 시험하지 못해서 넣지 않았다.
     print("[주의] Windows에서는 메모리 상한을 걸지 못한다. 상한 없이 실행한다. "
           "작업 관리자로 메모리를 지켜본다.", file=sys.stderr)
-    exe = shutil.which(cmd[0]) or cmd[0]
-    sys.exit(subprocess.run([exe, *cmd[1:]]).returncode)
+    sys.exit(subprocess.run([exe_of(cmd[0]), *cmd[1:]]).returncode)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -183,7 +195,7 @@ def family(name):
     name = name.lower()
     if "claude" in name or "anthropic" in name:
         return "claude"
-    if name in ("codex", "openai") or "gpt" in name:
+    if "codex" in name or "openai" in name or "gpt" in name:
         return "openai"
     for f in OPENCODE_REVIEWERS:
         if f in name:
@@ -215,9 +227,9 @@ def cmd_review(a):
     call(["git", "fetch", "origin", "--quiet"])
     # 리뷰 요청에는 범위만 넣는다(AGENTS.md §작업 순서 6). 힌트나 체크리스트를 넣지 않는다.
     if author != "openai" and logged_in(["codex", "login", "status"]):
-        reviewer, cmd = "codex", ["codex", "exec", prompt]
+        reviewer, cmd = "codex", ["codex", "exec", "--sandbox", "read-only", prompt]
     elif author != "claude" and logged_in(["claude", "auth", "status"]):
-        reviewer, cmd = "claude", ["claude", "-p", prompt]
+        reviewer, cmd = "claude", ["claude", "-p", "--permission-mode", "plan", prompt]
     else:
         model = opencode_model(author)
         reviewer, cmd = model, ["opencode", "run", "--agent", "plan", "-m", model, prompt]
