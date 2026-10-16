@@ -67,6 +67,8 @@ saddle_h      = 16;    // 기둥을 감싸는 새들 링 높이
 saddle_wall   = 2.9;   // 새들 링 두께
 tie_slot_w    = 3.2;   // 케이블타이 슬롯 폭 (2.5mm 타이 기준)
 tie_slot_l    = 8;     // 케이블타이 슬롯 길이
+wire_slot_x0 = 40; wire_slot_x1 = 50;      // 아비오닉스 선반 배선 통로(로컬 x, 반경 방향)
+wire_slot_y0 = 23; wire_slot_y1 = 30.5;    // 로컬 |y|. ESC 브래킷 플랜지(|y| ≤ 22) 바깥
 
 // 만능기판(5x7cm) 장착 — 01-avionics-integration-final.md §5.1 의 확공 좌표와 1:1
 perf_hole_dx  = 53.34; // C2↔C23 = 21홀 × 2.54
@@ -459,9 +461,12 @@ module equip_shelf_avionics() {
             tie_slot(shelf_r_inner + 34, sy, shelf_top_z - shelf_t);
         }
         // 배선 통로 슬롯 2개 (서보선·3상선이 아래로 빠지는 길)
-        for (sy = [-20, 20])
-            translate([shelf_r_inner + 1, sy - 7.5, shelf_top_z - shelf_t - 1])
-                cube([6, 15, shelf_t + 2]);
+        // 2026-10-16(#59): 예전 슬롯(x 43-49, y ±12.5-27.5)은 바로 아래 ESC 브래킷 플랜지(y ±(esc_l+8)/2 = ±22)에
+        // 절반 넘게 가려져 약 6x5.5 mm만 열려 있었다. 플랜지 바깥(y 23-30.5)으로 옮기고 x를 넓혔다(10x7.5 mm).
+        // 바깥 끝 30.5는 새들 타이 슬롯(y 32.3부터)과 1.8 mm 벽을 남긴다.
+        for (s = [-1, 1])
+            translate([wire_slot_x0, s > 0 ? wire_slot_y0 : -wire_slot_y1, shelf_top_z - shelf_t - 1])
+                cube([wire_slot_x1 - wire_slot_x0, wire_slot_y1 - wire_slot_y0, shelf_t + 2]);
     }
 }
 
@@ -593,5 +598,7 @@ echo(str("Ø3 CF 스파 재단 길이 = ", vane_spar_len, " mm  (베인 안쪽 �
 echo(str("상판 상단 z = ", top_plate_top_z, " mm"));
 echo(str("베인 피벗 z = ", vane_pivot_z, " mm — 마스터 §4 의 '배기면→피벗 ", vane_gap_below_exit,
          "mm'는 실제로는 '배기면→링 상단'. 제어 모멘트암은 |z_cg - ", vane_pivot_z, "| 로 계산할 것"));
+echo(str("배선 슬롯 |y| ", wire_slot_y0, "~", wire_slot_y1, "mm vs ESC 브래킷 플랜지 |y| ≤ ", (esc_l + 8)/2,
+         "mm → ", wire_slot_y0 > (esc_l + 8)/2 ? "정상(슬롯이 안 가려짐)" : "!! 플랜지가 슬롯을 가림 !!"));
 echo(str("발 바닥 z = ", foot_z, " mm"));
 echo(str("상판top~발bottom 실제 전고 = ", top_plate_top_z - foot_z, " mm  (설계 H_total 참고값 = ", H_total, " mm)"));

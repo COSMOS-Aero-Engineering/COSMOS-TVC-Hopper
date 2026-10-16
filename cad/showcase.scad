@@ -4,7 +4,7 @@
 // 배선을 외형만 더한다. 구매품 치수 중 실측이 아닌 것은 공칭값이다(아래 주석).
 //
 // 렌더 예:
-//   openscad -o showcase.png --imgsize=1600,1200 --camera=520,-620,330,0,0,40 --projection=p cad/showcase.scad
+//   openscad -o cad/renders/showcase.png --imgsize=1600,1200 --camera=600,-720,420,0,0,30 --projection=p cad/showcase.scad
 include <hopper_params.scad>
 render_mode = "showcase";   // hopper_params.scad 의 preview/print 분기를 끈다
 
@@ -126,18 +126,28 @@ module esc_detail() {
 }
 
 // 서보선: 서보에서 가장 가까운 기둥(45° 계열)을 타고 올라간 뒤, 흡입구(반경 39) 바깥 원호를 돌아
-// 아비오닉스 선반(270°)으로 간다. 흡입구 위를 가로지르면 선이 팬에 빨려 들어간다.
+// 아비오닉스 선반의 배선 슬롯으로 올라간다. 흡입구 위를 가로지르면 선이 팬에 빨려 들어간다.
+// 슬롯은 ESC(270° ±21°) 양옆이라 원호가 ESC를 지나지 않는다.
 function arc(r, a0, a1, z, n = 12) = [for (k = [0 : n]) rot([r, 0, z], a0 + (a1 - a0) * k / n)];
-function to270(a) = a > 270 ? 270 : (a < 90 ? -90 : 270);   // 가까운 방향으로 돌아 270°에 닿는 각
+slot_c = [(wire_slot_x0 + wire_slot_x1) / 2, (wire_slot_y0 + wire_slot_y1) / 2];   // 선반 로컬
+slot_r = norm(slot_c);
+slot_da = atan2(slot_c[1], slot_c[0]);           // 270°에서 벌어진 각
+// 0°·45° 쪽 기둥은 −90°(= 270°) 오른쪽 슬롯으로, 135°·225° 쪽은 왼쪽 슬롯으로 간다
+function slot_a(ca) = (ca < 90 || ca > 270) ? -90 + slot_da : 270 - slot_da;
 module servo_leads() {
     for (i = [0 : n_vanes - 1]) {
         a = i * 360 / n_vanes + az_vane;
         col_a = (a + 45) % 360;
+        ca = col_a > 270 ? col_a - 360 : col_a;       // 315°는 −45°로 보고 −90° 쪽으로 돈다
+        ta = slot_a(col_a);
+        r_arc = col_mount_r + 5 + i * 1.5;             // 원호를 조금씩 벌려 겹치지 않게
+        z1 = shelf_top_z - 22 + i * 3;
         s0 = rot([servo_plate_r + servo_boss_t + servo_body_h, 8, vane_pivot_z + 4], a);
-        c0 = rot([col_mount_r + 5, 0, vane_ring_top_z + 6], col_a);
-        z1 = shelf_top_z - 22;
-        dst = rot([avi_r - 10, 0, shelf_top_z + 4], 270);
-        path = concat([s0, (s0 + c0) / 2 + [0, 0, 6], c0], arc(col_mount_r + 5, col_a, to270(col_a), z1), [dst]);
+        c0 = rot([r_arc, 0, vane_ring_top_z + 6], ca);
+        up0 = rot([slot_r, 0, z1], ta);
+        up1 = rot([slot_r, 0, shelf_top_z + 3], ta);
+        dst = rot([avi_r - 10, 0, shelf_top_z + 5], 270 + (ta < 0 ? 8 : -8));
+        path = concat([s0, (s0 + c0) / 2 + [0, 0, 6], c0], arc(r_arc, ca, ta, z1), [up0, up1, dst]);
         for (k = [0 : 2])
             wire([for (q = path) q + [0, 0, k * 1.0]], 0.9, ["brown", "red", "orange"][k]);
     }

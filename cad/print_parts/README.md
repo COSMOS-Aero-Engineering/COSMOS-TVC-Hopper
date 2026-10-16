@@ -14,6 +14,7 @@
 | `avionics_shelf.stl` | 아비오닉스 선반(−Y, 만능기판 인서트 포함) |
 | `esc_bracket.stl` | ESC 브래킷 |
 | `vane_couplers_x4.stl` | 서보혼↔스파 커플러 4개 |
+| `vane_couplers_x4_slack0.4.stl` | 같은 커플러, 혼 슬롯 두께·폭 +0.4 mm (혼 실측 전 발주용, #59) |
 | `foot_pads_x4.stl` | 발 범퍼 4개 |
 
 ## 다시 뽑기 (2026-10-16부터 스크립트, #59)
@@ -25,7 +26,7 @@ python cad/tools/export_print_parts.py --out cad/print-orders/20261017   # 발�
 
 스크립트는 `hopper_params.scad`의 정의부만 임시 파일로 복사해 부품마다 STL을 뽑는다(원본은 고치지 않는다). 다 뽑은 뒤 부품마다 크기, 부피, 열린 모서리 수를 표로 출력하고, 열린 모서리가 있으면 실패한다. OpenSCAD 위치는 환경변수 `OPENSCAD`, PATH, Windows 기본 경로 순서로 찾는다.
 
-**주의:** 9/18에 뽑은 `vane_ring.stl`은 9/19의 서보 장착판 수정 전 형상이었다(높이 28 → 33 mm). CAD를 고친 뒤에는 반드시 다시 뽑는다.
+**주의:** 9/18에 뽑은 `vane_ring.stl`은 9/19의 서보 장착판 수정 전 형상이었다. 링 자체 높이(`vane_ring_h` 28 mm)는 같지만 서보 장착판까지 포함한 부품 높이가 28 → 33 mm, 부피가 98 → 131 cm³로 달라졌다. CAD를 고친 뒤에는 반드시 다시 뽑는다.
 
 ### 커플러 두 크기
 

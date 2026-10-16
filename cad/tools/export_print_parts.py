@@ -52,7 +52,10 @@ def find_openscad():
                   str(Path.home() / "Desktop" / "openscad.exe")]
     for c in cands:
         if c and Path(c).is_file():
-            return c
+            # 설치가 깨진 경우가 있었다(9/18, Program Files). 실제로 실행되는 것만 쓴다.
+            r = subprocess.run([c, "--version"], capture_output=True)
+            if r.returncode == 0:
+                return c
     sys.exit("OpenSCAD를 찾지 못했다. 환경변수 OPENSCAD에 openscad.exe 경로를 넣는다.")
 
 
@@ -84,6 +87,8 @@ def check_stl(path):
             edges[tuple(sorted((u, v)))] += 1
     open_edges = sum(1 for k in edges.values() if k != 2)
     pts = [p for t in tris for p in t]
+    if not pts:
+        return None, 0.0, 0
     size = [max(p[i] for p in pts) - min(p[i] for p in pts) for i in range(3)]
     return size, abs(vol) / 1000, open_edges
 
@@ -110,6 +115,8 @@ def main():
             scad = Path(tmp) / f"{name}.scad"
             scad.write_text(head + "\n" + PARTS[name] + "\n", encoding="utf-8")
             stl = out / f"{name}.stl"
+            if stl.exists():
+                stl.unlink()   # 실패했을 때 옛 STL이 발주 폴더에 남지 않게
             r = subprocess.run([exe, "--render", "-o", str(stl), str(scad)],
                                capture_output=True, text=True, encoding="utf-8", errors="replace")
             if r.returncode != 0 or not stl.exists():
@@ -117,8 +124,16 @@ def main():
                 sys.stderr.write(r.stderr[-2000:])
                 bad += 1
                 continue
+            # OpenSCAD는 없는 모듈·변수를 경고만 하고 exit 0으로 끝낼 수 있다. 경고는 항상 보여 준다.
+            warns = [l for l in r.stderr.splitlines() if "WARNING" in l or "ERROR" in l]
+            for w in warns:
+                print(f"  {name}: {w}", file=sys.stderr)
             size, vol, open_edges = check_stl(stl)
-            bad += open_edges != 0
+            if size is None:
+                print(f"| {name} | 빈 STL (삼각형 0개) | | |")
+                bad += 1
+                continue
+            bad += open_edges != 0 or bool(warns)
             print(f"| {name} | {size[0]:.1f} x {size[1]:.1f} x {size[2]:.1f} | {vol:.1f} | {open_edges} |")
     print()
     print("전부 통과" if bad == 0 else f"문제 {bad}건")
