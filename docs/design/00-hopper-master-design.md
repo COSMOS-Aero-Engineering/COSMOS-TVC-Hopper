@@ -188,7 +188,7 @@ CAD 툴만 다를 뿐, 형상 스펙은 동일.
 
 ### 5.3 CG · 관성 — rev B와 동일 원칙, Bresciani 교차검증 추가
 
-- ~~목표 CG: 배기면 위 140~180 mm. 트리밍: 중앙 트레이 ±20 mm 슬라이드.~~ **정정(rev C.1): 140 mm는 도달 불가. 목표는 배기면 위 60~75 mm(계산 약 68 mm), 베인 토크 팔 약 104 mm, 트림은 선반 슬라이드.** 근거는 [`01-avionics-integration-final.md`](01-avionics-integration-final.md) §8.4, 다시 계산하는 스크립트는 `cad/cg/cg_estimate.py`.
+- ~~목표 CG: 배기면 위 140~180 mm. 트리밍: 중앙 트레이 ±20 mm 슬라이드.~~ **정정(rev C.1): 140 mm는 도달 불가. 목표는 배기면 위 60-75 mm(계산 약 68 mm), 베인 토크 팔 약 104 mm, 트림은 선반 슬라이드.** 근거는 [`01-avionics-integration-final.md`](01-avionics-integration-final.md) §8.4, 다시 계산하는 스크립트는 `cad/cg/cg_estimate.py`.
 - **Bresciani가 독립적으로 검증**: "CG를 높였더니 안정성이 좋아졌다" — 같은 원칙, 다른 팀, 같은 결론.
 - 관성 텐서 측정 방법(2선/비틀림 진자)은 rev B와 동일. 논문 3장의 관성 추정 방법론도 참고 가능.
 

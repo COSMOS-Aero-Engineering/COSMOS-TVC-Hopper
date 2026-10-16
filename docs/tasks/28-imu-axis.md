@@ -3,7 +3,7 @@
 ## 지금 상태
 
 - Teensy와 BNO085를 4선 I2C(3V·G·18·19)로 연결해 주소 0x4B에서 Roll·Pitch·Yaw가 나온다(10/15, `firmware/cosmos/imu_test_i2c`).
-- 손 시험에서 Roll·Pitch는 잘 변했지만 Yaw는 돌린 만큼 안 변했다(약 −20~−70°).
+- 손 시험에서 Roll·Pitch는 잘 변했지만 Yaw는 돌린 만큼 안 변했다(약 −20°에서 −70°).
 - 원인 후보를 찾았다. 스케치는 `enableRotationVector`를 쓰는데, 이 모드는 **지자기(나침반)** 를 섞는다. 그런데 설계는 처음부터 **자력계를 안 쓰기로** 했다(01 문서 §7.5-4, 마스터 §12 리스크: "자력계 미사용으로 회피"). 자력계를 빼는 모드는 `enableGameRotationVector`다. 라이브러리에 이미 있다(`src/BNO080.h` 152행).
 
 ## 용어
@@ -36,7 +36,7 @@ IMU 출력이 위 부호와 반대여도 일관되면 "축 매핑 필요"로 판
    pio device monitor --filter time --filter log2file
    ```
    `log2file`은 화면에 나온 줄을 이 폴더의 `logs/device-monitor-날짜-시각.log`로 저장한다(Git에는 안 올라감). `time`은 각 줄 앞에 시각을 붙인다.
-3. 노트북에서 30 cm 이상 떨어진 평평한 책상에서 위 표 1~5를 측정한다.
+3. 노트북에서 30 cm 이상 떨어진 평평한 책상에서 위 표 1-5를 측정한다.
 
 정상 결과: 2번에서 Pitch만, 3번에서 Roll만 크게 변한다.
 
