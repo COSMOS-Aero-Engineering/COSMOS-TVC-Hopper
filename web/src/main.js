@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { parseLog } from './csv.js';
 import { bodyToThreeQuat, bodyToThreeVec } from './frames.js';
-import { buildHopper } from './hopper.js';
+import { buildHopper, poseVanes } from './hopper.js';
 
 const $ = (id) => document.getElementById(id);
 const deg = (r) => (r === null ? '-' : (r * 180 / Math.PI).toFixed(1));
@@ -32,7 +32,7 @@ grid.position.y = -140;
 scene.add(grid);
 scene.add(new THREE.AxesHelper(60)); // 빨강 = three X, 초록 = three Y(위), 파랑 = three Z
 
-const { group: hopper } = buildHopper();
+const { group: hopper, vanes } = buildHopper();
 scene.add(hopper);
 
 function resize() {
@@ -50,13 +50,18 @@ let idx = 0;
 let playing = false;
 let playStartWall = 0;
 let playStartT = 0;
+let speed = 1;
+$('speed').addEventListener('change', (e) => {
+  speed = Number(e.target.value);
+  if (playing && rows.length) { playStartWall = performance.now(); playStartT = rows[idx].t_ms; }
+});
 
 function show(i) {
   idx = Math.max(0, Math.min(i, rows.length - 1));
   const r = rows[idx];
   if (!r) return;
   hopper.quaternion.copy(bodyToThreeQuat(r.qw, r.qx, r.qy, r.qz));
-  // TODO(#29 작업 6, 선택): servo1..4를 베인 회전각으로 보여주기 (02 문서 §5.3)
+  poseVanes(vanes, [r.servo1, r.servo2, r.servo3, r.servo4]);
   $('t').textContent = r.t_ms;
   $('mode').textContent = r.mode ?? '-';
   $('phi').textContent = deg(r.phi);
@@ -102,8 +107,8 @@ $('play').addEventListener('click', () => {
 
 renderer.setAnimationLoop(() => {
   if (playing && rows.length) {
-    // 벽시계 경과시간으로 t_ms를 따라간다 (1x). TODO(#29 작업 5): 배속 곱하기
-    const target = playStartT + (performance.now() - playStartWall);
+    // 벽시계 경과시간 × 배속으로 t_ms를 따라간다 (#29 작업 5: 1×, 0.25×)
+    const target = playStartT + (performance.now() - playStartWall) * speed;
     let i = idx;
     while (i < rows.length - 1 && rows[i + 1].t_ms <= target) i += 1;
     show(i);

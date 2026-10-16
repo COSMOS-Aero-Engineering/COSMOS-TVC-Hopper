@@ -88,3 +88,15 @@ export function buildHopper() {
 
   return { group: g, vanes };
 }
+
+// 베인 애니메이션 (02 문서 §5.3, PRD #29 작업 6).
+// servo1..4(-1~1)를 힌지 회전각으로: servo × 10° (10° = sim alpha_max_deg 선형 범위).
+// 힌지축이 body Z(three Y)라서 방위 맞춤 회전(pivot.rotation.y)에 그대로 더한다.
+// 부호가 반대면 화면에서 바로 티가 남 — TC-1에서 실물과 대조해 부호를 확정한다.
+export function poseVanes(vanes, servos) {
+  const max = THREE.MathUtils.degToRad(10);
+  vanes.forEach((pivot, i) => {
+    const s = servos[i];
+    pivot.rotation.y = THREE.MathUtils.degToRad(VANE_AZ_DEG[i]) + (s === null ? 0 : s * max);
+  });
+}
