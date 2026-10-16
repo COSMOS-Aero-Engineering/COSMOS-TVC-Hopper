@@ -17,7 +17,7 @@ Claude Code, Codex, OpenCode 등 어떤 도구를 쓰든 이 규칙을 먼저 �
 3. 구현하기 전에 Best practice를 조사한다: 공식 문서, 데이터시트, 라이브러리가 권장하는 방식, 잘 관리된 참고 프로젝트, 이 저장소의 기존 코드와 문서. 조사한 출처는 PR의 "근거"에 적는다.
 4. 추측하지 않는다. 실행한 명령과 출력이 없으면 "완료"라고 쓰지 않는다.
 5. 이슈 범위 밖의 문제는 고치지 않고 새 이슈로 남긴다.
-6. 이슈, PR, 커밋 메시지는 `ste-ko` 스킬(`.claude/skills/ste-ko/SKILL.md`)을 불러온 뒤 쓴다. 스킬 목록에 `ste-ko`가 없는 도구(예: Codex는 `.agents/skills`만 읽는다)는 그 파일을 직접 읽는다. `ship-issue` 스킬(`.claude/skills/ship-issue/SKILL.md`)도 같다.
+6. 이슈, PR, 커밋 메시지는 `ste-ko` 스킬(`.claude/skills/ste-ko/SKILL.md`)을 불러온 뒤 쓴다. `ship-issue` 스킬(`.claude/skills/ship-issue/SKILL.md`)도 같다. 스킬 정본은 `.claude/skills/`다. Codex는 `.agents/skills/`만 읽으므로 그 폴더에 복사본을 둔다(#39). 정본을 고치면 `python ship.py skills`로 복사본을 맞춰 같이 커밋한다. `python tasks.py check`(CI도 같은 명령)가 두 폴더가 같은지 검사한다. 스킬 목록에 스킬이 없는 도구는 정본 파일을 직접 읽는다.
 7. force push, `git reset --hard`, 푸시한 커밋 amend, 여러 파일 삭제를 하지 않는다. `.env`와 비밀 키를 읽지 않는다.
 8. **사람만 하는 일**을 만나면 AI는 멈추고 라벨 `agent physically incapable` 이슈를 연다: 돈 쓰기(부품 구매), 외부 계정, 비밀 키, 물리 동작(EDF·ESC 전원 인가, 실물 업로드, LiPo 충전). 이슈 본문은 "풀 방법 / 선택지 / 근거"로 쓴다.
 9. **이슈를 만들면 담당자(assignee)를 지정한다.** 이슈의 태그·라벨과 바뀌는 파일 경로로 아래 표에서 담당 부원을 고르고 `gh issue create --assignee <아이디>`로 지정한다. 여러 영역에 걸치면 여러 명을 지정한다. 정확하지 않아도 된다. 고를 수 없으면 차장 `junwonkim07`을 지정한다. 표의 영역은 `docs/execution/member-weekly-tasks.md` §0 홈 레인을 줄인 것이다.
