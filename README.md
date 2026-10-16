@@ -8,7 +8,7 @@
 ## 시작점
 
 - **[처음 참여하는 부원용 학습 안내](docs/learning/README.md)**: **"지금 내가 뭘 해야 하나"는 이 문서의 [지금 할 일 표](docs/learning/README.md#지금-할-일-2026-10-16-기준) 하나만 본다.** 프로젝트 설명, 담당별 첫 실습, 글·그림·영상 자료실도 여기 있다.
-- **[`AGENTS.md`](AGENTS.md)** — 정본 컨텍스트 문서: 프로젝트 한눈에(숫자·좌표계·전체 흐름·팀), 현재 상태, 작업 규칙, 안전 원칙, 문서 맵. AI 세션이든 사람이든 기술적인 걸 파악하려면 이거 먼저. (`CLAUDE.md`는 이 파일로 가는 한 줄짜리 안내판)
+- **[`AGENTS.md`](AGENTS.md)** — 정본 컨텍스트 문서: 작업 규칙, 프로젝트 한눈에(숫자·좌표계·전체 흐름·팀), 안전 원칙. 현재 상태([`docs/execution/STATUS.md`](docs/execution/STATUS.md))와 문서 맵([`docs/README.md`](docs/README.md))은 거기서 링크한다. AI 세션이든 사람이든 기술적인 걸 파악하려면 이거 먼저. (`CLAUDE.md`는 이 파일로 가는 한 줄짜리 안내판)
 - **[`docs/design/00-hopper-master-design.md`](docs/design/00-hopper-master-design.md)** — 마스터 설계도 (rev C)
 - **[`docs/tasks/`](docs/tasks/README.md)**: PRD 이슈(#26~#29)별 착수 초안. 실행되는 뼈대 코드, 기록 양식, 첫 30분 절차가 있다.
 - **[`docs/execution/TIMELINE.md`](docs/execution/TIMELINE.md)** — 전체 타임라인 한 장과 지금 병목. 9월에 만든 주차별 계획(`week-01-kickoff.md`, `member-weekly-tasks.md`)은 기록으로만 남아 있다.
