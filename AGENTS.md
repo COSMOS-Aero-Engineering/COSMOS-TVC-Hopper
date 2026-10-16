@@ -17,7 +17,7 @@ Claude Code, Codex, OpenCode 등 어떤 도구를 쓰든 이 규칙을 먼저 �
 3. 구현하기 전에 Best practice를 조사한다: 공식 문서, 데이터시트, 라이브러리가 권장하는 방식, 잘 관리된 참고 프로젝트, 이 저장소의 기존 코드와 문서. 조사한 출처는 PR의 "근거"에 적는다.
 4. 추측하지 않는다. 실행한 명령과 출력이 없으면 "완료"라고 쓰지 않는다.
 5. 이슈 범위 밖의 문제는 고치지 않고 새 이슈로 남긴다.
-6. 이슈, PR, 커밋 메시지는 `ste-ko` 스킬(`.claude/skills/ste-ko/SKILL.md`)을 불러온 뒤 쓴다. 스킬 목록에 `ste-ko`가 없는 도구(예: Codex는 `.agents/skills`만 읽는다)는 그 파일을 직접 읽는다. `ship-issue` 스킬(`.claude/skills/ship-issue/SKILL.md`)도 같다.
+6. 이슈, PR, 커밋 메시지는 `ste-ko` 스킬(`.claude/skills/ste-ko/SKILL.md`)을 불러온 뒤 쓴다. `ship-issue` 스킬(`.claude/skills/ship-issue/SKILL.md`)도 같다. 스킬 정본은 `.claude/skills/`다. Codex는 `.agents/skills/`만 읽으므로 그 폴더에 복사본을 둔다(#39). 정본을 고치면 `python ship.py skills`로 복사본을 맞춰 같이 커밋한다. `python tasks.py check`(CI도 같은 명령)가 두 폴더가 같은지 검사한다. 스킬 목록에 스킬이 없는 도구는 정본 파일을 직접 읽는다.
 7. force push, `git reset --hard`, 푸시한 커밋 amend, 여러 파일 삭제를 하지 않는다. `.env`와 비밀 키를 읽지 않는다.
 8. **사람만 하는 일**을 만나면 AI는 멈추고 라벨 `agent physically incapable` 이슈를 연다: 돈 쓰기(부품 구매), 외부 계정, 비밀 키, 물리 동작(EDF·ESC 전원 인가, 실물 업로드, LiPo 충전). 이슈 본문은 "풀 방법 / 선택지 / 근거"로 쓴다.
 9. **이슈를 만들면 담당자(assignee)를 지정한다.** 이슈의 태그·라벨과 바뀌는 파일 경로로 아래 표에서 담당 부원을 고르고 `gh issue create --assignee <아이디>`로 지정한다. 여러 영역에 걸치면 여러 명을 지정한다. 정확하지 않아도 된다. 고를 수 없으면 차장 `junwonkim07`을 지정한다. 표의 영역은 `docs/execution/member-weekly-tasks.md` §0 홈 레인을 줄인 것이다.
@@ -188,3 +188,4 @@ AI가 지킬 선:
 - (2026-10-16) 부원 PC에 없는 도구라고 작업 단계를 빼지 않는다. 저장소가 그 도구를 주거나(`ship.py`) 없으면 자동으로 설치하게 한다.
 - (2026-10-16) 남은 일과 확인하지 못한 항목을 보고만 하고 끝내지 않는다. 후속 이슈로 만들어야 추적된다(#36-#39).
 - (2026-10-16) Claude Code는 같은 폴더나 상위 폴더에 `CLAUDE.md`가 있으면 `AGENTS.md`를 자동으로 읽지 않는다([공식 문서](https://code.claude.com/docs/en/memory#agents-md)). 그래서 `CLAUDE.md` 첫 줄에 `@AGENTS.md`를 둔다.- (2026-10-16) 다른 문서에서 이 파일을 가리킬 때는 "5절" 같은 번호가 아니라 "§작업 순서" 같은 절 이름을 쓴다. 절을 옮기면 번호 참조가 틀린 곳을 조용히 가리킨다(#38, #41). `@import`는 세션 시작 때 함께 읽혀 이 파일을 줄이지 못한다. 줄일 때는 일반 링크로 옮긴다.
+- (2026-10-16) 에이전트 gh 토큰에는 `workflow` 권한이 없어서 `.github/workflows/`를 바꾸는 커밋은 push가 거부된다(#49). 새 검사는 ci.yml이 아니라 `tasks.py`의 작업으로 넣는다. CI는 이미 `python tasks.py check`를 실행한다.

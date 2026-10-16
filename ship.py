@@ -5,6 +5,7 @@
     python ship.py wt <이슈 번호>          ../<저장소>-wt/issue-<n> worktree + 브랜치 <태그>/<n>
     python ship.py capped 8G -- <명령...>  메모리 상한을 걸고 명령 실행
     python ship.py review --author claude  작성한 모델과 다른 계열의 모델로 교차 리뷰
+    python ship.py skills [--check]        .claude/skills를 .agents/skills(Codex용)로 복사, --check는 비교만
 
 왜 이 파일이 있나: 김준원의 서버에는 `wt`, `capped`, `codex`가 깔려 있지만 부원 PC(Windows 위주)에는
 없다. 없다고 그 단계를 빼면 사람마다 작업 순서가 달라진다. 그래서 같은 동작을 표준 라이브러리만으로
@@ -31,6 +32,9 @@ LABEL_TAGS = {"fw": "fw", "sim": "sim", "web": "web", "cad": "cad", "kicad": "ki
               "documentation": "docs"}
 # 리뷰 모델 계열. 작성자와 같은 계열은 리뷰어로 고르지 않는다.
 OPENCODE_REVIEWERS = ("mimo", "muse-spark", "deepseek", "nemotron")
+# 스킬 정본과 Codex용 복사본. Claude Code는 .claude/skills만, Codex는 .agents/skills만 읽는다(#39).
+SKILLS_SRC = ROOT / ".claude" / "skills"
+SKILLS_DST = ROOT / ".agents" / "skills"
 REVIEW_PROMPT = ("Review the changes on this branch against {base}. Report concrete findings "
                  "with file and line. Do not edit files.")
 
@@ -240,6 +244,47 @@ def cmd_review(a):
     sys.exit(r.returncode)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# skills — Codex용 스킬 복사본
+# ─────────────────────────────────────────────────────────────────────────────
+# 심볼릭 링크를 쓰지 않는 이유: Windows checkout에서 core.symlinks가 꺼져 있으면 링크가 경로 한 줄짜리
+# 일반 파일이 된다. 복사본은 어디서나 그대로 읽히고, 어긋나면 CI의 --check가 잡는다.
+
+def skill_files(base):
+    if not base.is_dir():
+        return {}
+    return {p.relative_to(base).as_posix(): p.read_bytes() for p in sorted(base.rglob("*"))
+            if p.is_file() and "__pycache__" not in p.relative_to(base).parts}
+
+
+def cmd_skills(a):
+    src, dst = skill_files(SKILLS_SRC), skill_files(SKILLS_DST)
+    if not src:
+        die(f"스킬 정본이 없다: {SKILLS_SRC}")
+    diff = sorted(k for k in src.keys() | dst.keys() if src.get(k) != dst.get(k))
+    if a.check:
+        if diff:
+            for k in diff:
+                state = "없음" if k not in dst else "남는 파일" if k not in src else "내용 다름"
+                print(f"  {state}: .agents/skills/{k}", file=sys.stderr)
+            die(".agents/skills가 .claude/skills와 다르다. `python ship.py skills`로 맞춘 뒤 커밋한다.")
+        print(f"스킬 복사본이 정본과 같다 (파일 {len(src)}개).")
+        return
+    for k in diff:
+        target = SKILLS_DST / k
+        if k in src:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(src[k])
+        else:
+            target.unlink()
+    # 정본에서 지운 스킬의 빈 폴더를 정리한다. 깊은 폴더부터 지운다.
+    for d in sorted((d for d in SKILLS_DST.rglob("*") if d.is_dir()), key=lambda d: len(d.parts),
+                    reverse=True):
+        if not any(d.iterdir()):
+            d.rmdir()
+    print(f"바꾼 파일 {len(diff)}개. .agents/skills가 .claude/skills와 같다.")
+
+
 def main():
     p = argparse.ArgumentParser(prog="ship.py", description="COSMOS ship-issue 도구")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -257,6 +302,9 @@ def main():
                    help="이 브랜치를 쓴 모델 (예: claude, codex, mimo, muse-spark)")
     r.add_argument("--base", default="origin/main", help="비교 기준 (기본: origin/main)")
     r.set_defaults(fn=cmd_review)
+    k = sub.add_parser("skills", help=".claude/skills를 .agents/skills(Codex용)로 복사")
+    k.add_argument("--check", action="store_true", help="복사하지 않고 같은지만 확인 (CI용)")
+    k.set_defaults(fn=cmd_skills)
     a = p.parse_args()
     a.fn(a)
 
