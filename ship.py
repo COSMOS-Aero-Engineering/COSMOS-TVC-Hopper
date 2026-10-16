@@ -3,6 +3,7 @@
 
     python ship.py tools                  필요한 도구 확인, 없으면 설치 (gh, opencode)
     python ship.py wt <이슈 번호>          ../<저장소>-wt/issue-<n> worktree + 브랜치 <태그>/<n>
+                                          (라벨 prd 이슈는 안내만 출력하고 멈춘다)
     python ship.py capped 8G -- <명령...>  메모리 상한을 걸고 명령 실행
     python ship.py review --author claude  작성한 모델과 다른 계열의 모델로 교차 리뷰
     python ship.py skills [--check]        .claude/skills를 .agents/skills(Codex용)로 복사, --check는 비교만
@@ -136,6 +137,17 @@ def cmd_wt(a):
                            capture=True, cwd=root).stdout)
     if info["state"] != "OPEN":
         die(f"이슈 #{a.issue}가 열려 있지 않다({info['state']}).")
+    if any(label["name"] == "prd" for label in info["labels"]):
+        # PRD 하나를 여러 명이 맡는다. PRD 번호로 브랜치를 만들면 둘 다 `cad/26`이 된다(#52).
+        n = a.issue
+        die(f"이슈 #{n}은 PRD(라벨 prd)다. PRD 번호로는 worktree와 브랜치를 만들지 않는다.\n"
+            "     한 PRD를 여러 명이 맡으면 브랜치 이름이 겹친다. AGENTS.md §작업 순서 1단계대로 한다.\n"
+            f"     1. PRD #{n}에 담당 부원의 \"이해 먼저\"(§0) 댓글이 있는지 본다. 없으면 담당 부원이 직접 쓴다. AI는 대신 쓰지 않는다.\n"
+            "     2. 담당 부원의 작업 이슈를 만든다. 본문은 .github/ISSUE_TEMPLATE/task.yml 항목으로 쓰고, "
+            f"배경 첫 줄에 `PRD: #{n}`을 쓴다.\n"
+            f"          gh issue create --title \"[태그] ...\" --parent {n} --assignee <담당 아이디>\n"
+            "          (gh가 --parent를 모르면 빼고 만든다. 담당 아이디는 AGENTS.md 담당 표)\n"
+            "     3. python ship.py wt <새 작업 이슈 번호>")
     if path.exists():
         branch = call(["git", "-C", path, "branch", "--show-current"], capture=True).stdout.strip()
         print(f"이미 있는 worktree를 쓴다. 브랜치: {branch}", file=sys.stderr)
