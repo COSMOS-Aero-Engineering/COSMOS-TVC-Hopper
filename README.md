@@ -7,12 +7,12 @@
 
 ## 시작점
 
-- **[처음 참여하는 부원용 학습 안내](docs/learning/README.md)** — 프로젝트 설명, 담당별 첫 실습, 글·그림·영상 자료실. 프린트 없이 진행하는 [2주차 활동표](docs/learning/week-02.md)부터 바로 사용할 수 있다.
+- **[처음 참여하는 부원용 학습 안내](docs/learning/README.md)**: **"지금 내가 뭘 해야 하나"는 이 문서의 [지금 할 일 표](docs/learning/README.md#지금-할-일-2026-10-16-기준) 하나만 본다.** 프로젝트 설명, 담당별 첫 실습, 글·그림·영상 자료실도 여기 있다. 프린트 없이 진행하는 [2주차 활동표](docs/learning/week-02.md)부터 바로 사용할 수 있다.
 - **[`AGENTS.md`](AGENTS.md)** — 정본 컨텍스트 문서: 설계 의도·확정 방향·현재 상태·문서 맵·다음 액션·안전 원칙. AI 세션이든 사람이든 기술적인 걸 파악하려면 이거 먼저. (`CLAUDE.md`는 이 파일로 가는 한 줄짜리 안내판)
 - **[`docs/design/00-hopper-master-design.md`](docs/design/00-hopper-master-design.md)** — 마스터 설계도 (rev C)
 - **[`docs/execution/TIMELINE.md`](docs/execution/TIMELINE.md)** — ⭐ **전체 타임라인 한 장** (간트차트로 한 것/남은 것/현재 병목). 진행 상황이 궁금하면 여기부터
 - **[`docs/execution/week-01-kickoff.md`](docs/execution/week-01-kickoff.md)** — 1–2주차 실행 계획
-- **[`docs/execution/member-weekly-tasks.md`](docs/execution/member-weekly-tasks.md)** — 부원 7명 개인별 주간 할 일
+- **[`docs/execution/member-weekly-tasks.md`](docs/execution/member-weekly-tasks.md)**: 부원 7명 개인별 주간 계획(9월 기준 원래 계획, 실제 진행은 약 3주 늦음)
 
 지금 당장 개발환경만 세팅하고 싶다면 바로 아래 "부원 퀵스타트"로.
 
