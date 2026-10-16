@@ -16,35 +16,26 @@
 | `vane_couplers_x4.stl` | 서보혼↔스파 커플러 4개 |
 | `foot_pads_x4.stl` | 발 범퍼 4개 |
 
-## 재현 방법 (수치가 바뀌었을 때 다시 export하려면)
+## 다시 뽑기 (2026-10-16부터 스크립트, #59)
 
-`hopper_params.scad`는 `render_mode`(preview/print) 하나로만 나뉘어 있어서, "print"로 렌더해도 9개
-파츠가 한 덩어리로 합쳐져 나온다 — **개별 STL을 얻으려면 파일 맨 아래 조립 섹션을 부품 하나 호출로
-바꾼 임시 사본을 만들어 export해야 한다** (진짜 소스 파일은 건드리지 않는다 — 다른 세션이 계속
-`hopper_params.scad`를 고치고 있어서 충돌 위험이 있다).
+```bash
+python cad/tools/export_print_parts.py                          # cad/print_parts/ 에 전부
+python cad/tools/export_print_parts.py --out cad/print-orders/20261017   # 발주 기록 폴더에
+```
 
-1. `hopper_params.scad`의 1~516행(변수·모듈 정의부, `// ---------- 조립 ----------` 주석 앞까지)을
-   임시 파일로 복사.
-2. 그 뒤에 원하는 파츠 호출 한 줄만 추가(아래 표 — 이건 소스 파일의 "print" 분기에 있는 호출을 그대로
-   옮긴 것):
+스크립트는 `hopper_params.scad`의 정의부만 임시 파일로 복사해 부품마다 STL을 뽑는다(원본은 고치지 않는다). 다 뽑은 뒤 부품마다 크기, 부피, 열린 모서리 수를 표로 출력하고, 열린 모서리가 있으면 실패한다. OpenSCAD 위치는 환경변수 `OPENSCAD`, PATH, Windows 기본 경로 순서로 찾는다.
 
-   | 파츠 | 추가할 줄 |
-   |---|---|
-   | top_plate | `translate([0,0,top_plate_bot_z]) top_plate();` |
-   | vane_ring | `vane_ring();` |
-   | vanes_x4 | `vanes();` |
-   | edf_clamp | `edf_clamp();` |
-   | battery_shelf | `rotate([0,0,90]) equip_shelf_battery();` |
-   | avionics_shelf | `rotate([0,0,270]) equip_shelf_avionics();` |
-   | esc_bracket | `rotate([0,0,270]) esc_bracket();` |
-   | vane_couplers_x4 | `for (i=[0:n_vanes-1]) rotate([0,0,i*360/n_vanes + az_vane]) translate([servo_mount_r + 1.5, 0, vane_pivot_z]) vane_coupler();` |
-   | foot_pads_x4 | `foot_pads();` |
+**주의:** 9/18에 뽑은 `vane_ring.stl`은 9/19의 서보 장착판 수정 전 형상이었다(높이 28 → 33 mm). CAD를 고친 뒤에는 반드시 다시 뽑는다.
 
-3. `openscad.exe --render -o <파츠이름>.stl <임시파일>.scad`
-4. 임시 파일 삭제(커밋 대상 아님).
+### 커플러 두 크기
 
-GUI로 하고 싶으면 원래 방식(모듈 하나만 남기고 나머지 주석 처리 → F6 → Export as STL)도 그대로 유효 —
-위 방법은 그걸 커맨드라인으로 자동화한 것뿐이다.
+서보 혼 슬롯(`coupler_horn_t` 2.2, `coupler_horn_w` 9.0 mm)은 실측값이 아니다. 재발주를 피하려고 슬롯을 0.4 mm 키운 `vane_couplers_x4_slack0.4.stl`을 같이 뽑는다. 두 세트를 함께 주문하고 실물 혼에 맞는 쪽을 쓴다. 두 세트를 합쳐도 약 15 cm³다.
+
+### 발주 메모 (한 번에 주문할 때)
+
+- 재료 PETG, 벽 4라인, 인필 40 %(마스터 설계 §10-4).
+- `vanes_x4`, `vane_couplers_x4*`, `foot_pads_x4`는 한 파일에 4개가 조립 위치대로 떨어져 있다. 업체에 "개별 부품 4개"라고 알린다.
+- 베인과 커플러는 작고 부러지기 쉬우니 예비 1세트씩 같이 주문하는 것을 권한다(재발주 비용이 더 크다).
 
 ## 다음 단계
 

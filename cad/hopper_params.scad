@@ -267,15 +267,16 @@ module vane_wall_cuts() {
 
 // 스파 커플러 — 서보 혼(알루미늄 싱글암, BOM C5)과 Ø3 CF 스파를 잇는 프린트 파트 ×4
 // ⚠️ 혼 슬롯 치수(두께·폭)는 실물 혼을 재서 coupler_horn_t / coupler_horn_w 를 고칠 것.
-module vane_coupler() {
+// slack: 혼 슬롯 두께·폭에 더하는 여유(mm). 혼 실측 전 발주용으로 0.4 mm 세트를 같이 뽑는다(#59).
+module vane_coupler(slack = 0) {
     difference() {
         rotate([0,90,0]) cylinder(h = coupler_len, r = coupler_d/2, center=false, $fn=40);
         // 스파 보어 (반경 방향 관통)
         translate([-1,0,0]) rotate([0,90,0])
             cylinder(h = coupler_len + 2, r = vane_spar_bore/2, center=false, $fn=32);
         // 혼 암이 들어가는 슬롯 (바깥쪽 절반까지)
-        translate([coupler_len - coupler_horn_depth, -coupler_horn_w/2, -coupler_horn_t/2])
-            cube([coupler_horn_depth + 1, coupler_horn_w, coupler_horn_t]);
+        translate([coupler_len - coupler_horn_depth, -(coupler_horn_w + slack)/2, -(coupler_horn_t + slack)/2])
+            cube([coupler_horn_depth + 1, coupler_horn_w + slack, coupler_horn_t + slack]);
         // 혼 고정 핀/나사 구멍 2개 (슬롯을 가로지름)
         for (dx = [coupler_len - 4, coupler_len - 9])
             translate([dx, 0, -coupler_d])
@@ -550,7 +551,7 @@ if (render_mode == "preview") {
     mock_battery(); mock_avionics(); mock_esc();   // ⚠️ 프린트 안 함 — 실물 자리 표시용
     servo_blocks();                                 // ⚠️ 프린트 안 함 — MG90S 자리 표시용
     foot_pads();
-} else {
+} else if (render_mode == "print") {
     // 진짜 프린트 파트만 (개별 export 순서는 cad/print_parts/README.md):
     //   상판 · 베인링(서보보스·스파보어·스톱슬롯 포함) · 베인 4 · EDF 클램프 · 배터리선반 ·
     //   아비오닉스선반 · ESC 브래킷 · 발범퍼 4
