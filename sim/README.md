@@ -15,9 +15,10 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 | 파일 | 내용 |
 |---|---|
 | `hopper_aviary.py` | **`HopperAttitudeEnv`** — 위치 구속(만능조인트) 상태에서 자세만 제어하는 Stage 1 환경. 뉴턴-오일러 강체 회전방정식(자이로스코픽 교차항 포함) + ZYX 오일러각 운동학을 numpy로 직접 적분. `docs/design/references/`의 논문 3장(Modelling)을 그대로 코드화한 것 |
-| `params.yaml` | 물리 상수. **CLalpha/CD0/Kf/mass/Jxx·Jyy·Jzz는 전부 PLACEHOLDER** — 실험 A(EDF 추력곡선) + 조립 후 실측 전까지는 의미 없는 값. `vane_arm_l/r`만 `cad/hopper_params.scad` 실측 기반이라 PLACEHOLDER 아님 |
+| `params.yaml` | 물리 상수. **CLalpha/A_fin/A_duct/CD0/Kf/mass/Jxx·Jyy·Jzz/vane_arm_l은 PLACEHOLDER** — 실험 A(EDF 추력곡선)·TC-2·조립 후 실측 전까지는 추정값. 각 값의 계산 근거는 파일 주석에 있다(#27) |
+| `pd_gate.py` | **RL 학습 전 합격 기준**(#27): 도메인 랜덤화 켠 상태에서 PD(kp=8, kd=2)가 평가 seed 0~199에서 넘어짐 ≤ 5 %, 최종 기울기 중앙값 ≤ 5°인지. `--model`로 PPO도 같은 seed로 비교. `tasks.py check`가 매번 돌린다 |
 | `sanity_check.py` | 환경이 안 깨졌는지 빠르게 확인(무작위 액션 20스텝) |
-| `train.py` | PPO(stable-baselines3) 학습 스크립트 |
+| `train.py` | PPO(stable-baselines3) 학습 스크립트. 학습 seed 10000(평가 seed 0~199와 분리) |
 | `export_episode.py` | 에피소드 1회를 웹 대시보드 CSV 형식(`docs/design/02-web-dashboard-design.md` §4)으로 `episode_logs/`에 저장. 정책 `pd`(기준 PD)·`zero`·`ppo`, 옆에 시드·물리 상수·결과를 담은 `.meta.json`. 실물 시험 로그와 같은 3D 뷰어로 재생하기 위한 것 |
 | `hopper_attitude_ppo.zip` | 학습된 모델 1회분 — PLACEHOLDER 물리값 기준이라 **성능 숫자 자체는 의미 없음**, 파이프라인이 도는지 확인용 |
 
@@ -57,7 +58,8 @@ python export_episode.py --policy ppo --episodes 5        # 학습 모델 5회 (
 
 ## 다음 단계
 
-- **실험 A(EDF 추력곡선) → `params.yaml`의 Kf·CLalpha·CD0 실측값 반영.**
+- **실험 A(EDF 추력곡선) → `params.yaml`의 Kf 실측값 반영. TC-2(베인각별 복원 모멘트) → CL 실측 회귀로 CLalpha·A_fin·A_duct 추정값 교체.**
+- #26 CAD 무게중심 추정·조립 후 CG 실측 → `vane_arm_l` 교체. 바꾼 뒤 `python pd_gate.py`로 합격 기준을 다시 확인.
 - 조립 후 질량·관성 실측 → mass/Jxx/Jyy/Jzz 반영.
 - Stage 2(전체 6DOF, 위치 자유) — 실험 A 데이터 확보 후 착수.
 - baseline 제어(PID/LQR)가 실기에서 서기 전엔 이 학습 결과를 실기에 올리지 않음 (CLAUDE.md/AGENTS.md 원칙).

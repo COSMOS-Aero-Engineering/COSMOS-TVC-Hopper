@@ -79,7 +79,7 @@ AI는 머지 권한자가 아니므로 **직접 머지하지 않는다**. 머지
 | `cad/renders/` | 조립 렌더 PNG(전체·베인링 클로즈업) | 2026-09-18 |
 | `cad/legacy/` | rev B 단계 3분할 스크립트 — `hopper_params.scad`로 대체됨, 더 이상 안 씀 | 보존만 |
 | `sim/sim_stage1/hopper_aviary.py` | RL Stage 1 환경(자세 안정화, 위치 구속) — 관측 6·행동 5차원, 도메인 랜덤화 포함 | 구현·검증 완료 |
-| `sim/sim_stage1/params.yaml` | 물리 상수 — **거의 전부 PLACEHOLDER**, `vane_arm_l/r`만 실측 기반 | 실측 대기 |
+| `sim/sim_stage1/params.yaml` | 물리 상수 — **거의 전부 PLACEHOLDER**(추정 근거는 파일 주석). 베인 제어력(CL 기하 인자·`vane_arm_l`)은 #27에서 정정 | 실측 대기 |
 | `sim/connectome/` | **확장 트랙 A: 커넥톰 제약 정책망**(B와 택1) — 초파리 배선을 PPO 정책망 구조로. 합성 CX 그래프 + FlyWire 실측 경로, 차수보존 셔플 대조군, PD baseline, 평가지표, 제어권한 진단 | 2026-09-18 착수 |
 | `docs/design/connectome-control.md` | 위 트랙의 목표·설계·한계·구현 중 겪은 함정 | 2026-09-18 |
 | `test_cartpole.py`, `test_pendulum.py` | SB3 워크플로 익히기용 | 완료 |
