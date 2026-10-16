@@ -3,7 +3,7 @@
 
     python tasks.py                 작업 목록
     python tasks.py setup           uv.lock 그대로 .venv 구성
-    python tasks.py check           CI와 같은 검사 (compile → sanity → smoke → conncheck)
+    python tasks.py check           CI와 같은 검사 (compile → sanity → gate → smoke → conncheck)
     python tasks.py check --force   캐시 무시하고 전부 다시 실행
     python tasks.py graph           작업 그래프와 캐시 상태 보기
     python tasks.py lock            의존성 다시 풀고 uv.lock/requirements.txt 갱신
@@ -363,6 +363,10 @@ def task_sanity():
     uv_run(["python", "sanity_check.py"], cwd=STAGE1)
 
 
+def task_gate():
+    uv_run(["python", "pd_gate.py"], cwd=STAGE1)
+
+
 def task_smoke():
     uv_run(["python", "-c", SMOKE], cwd=STAGE1)
 
@@ -421,6 +425,8 @@ TASKS = {t.name: t for t in [
     Task("compile", "파이썬 문법 체크", task_compile,
          inputs=["sim/**/*.py", "test_*.py", "ship.py", *DEPS_IN], uses_env=True),
     Task("sanity", "환경이 살아 있는지 20스텝 확인", task_sanity, inputs=SIM_IN, uses_env=True),
+    Task("gate", "RL 전 합격 기준 - 랜덤화 켠 PD 200 에피소드 (#27)", task_gate, inputs=SIM_IN,
+         uses_env=True),
     Task("smoke", "SB3-환경 연결 확인 (256스텝, 학습 아님)", task_smoke, inputs=SIM_IN,
          uses_env=True),
     Task("connectome", "커넥톰 그래프 생성 (합성 + 셔플 대조군)", task_connectome,
@@ -430,8 +436,8 @@ TASKS = {t.name: t for t in [
          uses_env=True),
     Task("conncheck", "커넥톰 정책망 점검 (그래프/셔플/수치/SB3연결)", task_conncheck,
          inputs=CONN_IN, uses_env=True),
-    Task("check", "CI와 같은 검사 - compile + sanity + smoke + conncheck", task_check,
-         deps=["compile", "sanity", "smoke", "conncheck"]),
+    Task("check", "CI와 같은 검사 - compile + sanity + gate + smoke + conncheck", task_check,
+         deps=["compile", "sanity", "gate", "smoke", "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,

@@ -31,7 +31,7 @@
 | `firmware/cosmos/throttle_serial/` | DShot 벤치 펌웨어 | ESC 없이 확인 |
 | `firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 원본(MIT). 통합 펌웨어의 출발점 | 손대지 않음 |
 | `firmware/singlecopter.param.md` | ArduPilot SingleCopter 대안 경로 | 보존 |
-| `sim/sim_stage1/` | Stage 1 환경(`hopper_aviary.py`, 관측 6·행동 5), `params.yaml`, `train.py`, `export_episode.py` | #21 버그 있음(PR #35에서 수정 중) |
+| `sim/sim_stage1/` | Stage 1 환경(`hopper_aviary.py`, 관측 6·행동 5), `params.yaml`, `train.py`, `export_episode.py` | #21 베인 제어력 정정(CL 기하 인자·`vane_arm_l`, PR #35). 값은 아직 추정값 |
 | `sim/connectome/` | 확장 트랙 A: 커넥톰 제약 정책망 | 파이프라인 검증 |
 | `kicad/` | 회로도(생성물)와 생성·검증 스크립트(`_tools/`) | ERC 미실행 |
 | `web/` | CSV 재생 3D 뷰어(W-A 뼈대) | 신규, 10/16 |

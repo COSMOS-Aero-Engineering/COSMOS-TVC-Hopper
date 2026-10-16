@@ -3,18 +3,39 @@
 #    sim/hopper_aviary.py 코드는 손대지 않아도 됨 (일부러 그렇게 분리해둠).
 
 # --- 질량 특성 ---
-mass: 0.8            # kg, PLACEHOLDER — EDF+배터리+프레임+전자 개산 합. 조립 후 저울 실측 필요
+mass: 0.735          # kg, PLACEHOLDER — 01-avionics-integration-final.md §8.1 AUW 추정(마스터 §5.1의 660 g은 합계 오류). 조립 후 저울 실측 필요. Stage 1 동역학은 이 값을 안 쓴다
 Jxx: 0.005           # kg*m^2, PLACEHOLDER — Onshape 질량 속성(재질 지정 후) 계산 또는 바이필라 진자 실험으로 재산출
 Jyy: 0.005           # kg*m^2, PLACEHOLDER — 좌우 대칭 가정으로 Jxx와 동일하게 둠
 Jzz: 0.002           # kg*m^2, PLACEHOLDER — 세로축 관성모멘트, 가장 부정확할 가능성 높음
 
 # --- 형상 (실제 CAD 값 — cad/hopper_params.scad 2026-09-13 기준, PLACEHOLDER 아님) ---
-vane_arm_l: 0.048    # m, 롤/피치 모멘트암 = vane_ring_od/2 (96mm 링 반경 → 0.048m)
+# l = 무게중심 → 베인 피벗 세로 거리(modelling-notes-ch3.md §3). 링 반지름(48 mm)이 아니다(#21).
+#   피벗 z = -36 mm(hopper_params.scad의 vane_pivot_z), 무게중심 z ≈ 68 mm(01-avionics §8.4 계산값,
+#   목표 60~75 mm) → l ≈ 104 mm(목표 범위 96~111 mm). 마스터 §5.3의 CG 140~180 mm는 01번 §8.4가
+#   "도달 불가"로 정정했다. #26의 CAD 무게중심 추정과 조립 후 실측(01번 §8.3)으로 교체할 것.
+vane_arm_l: 0.104    # m, PLACEHOLDER — 위 계산값
 vane_arm_r: 0.048    # m, 요 모멘트암 — l과 동일값으로 근사 (TODO: 베인 코드라인 오프셋 반영해 정밀화)
 
-# --- 베인 공력 계수 (PLACEHOLDER — Jacobsen(2021) 논문 저자 하드웨어 값, 우리 베인 아님!) ---
-CLalpha: 0.008905    # PLACEHOLDER — 실험 A 추력데이터 + 실제 베인(25x45x2.5mm) 치수로 반드시 재산출
-CD0: 0.001054        # PLACEHOLDER — 위와 동일
+# --- 베인 공력 (modelling-notes-ch3.md §2.2의 (B) 기하 기반) ---
+# 베인 1장 측력 F = Ft · CL · alpha,  CL = CLalpha · A_fin / (2 · A_duct)   (논문 식 3.16)
+# hopper_aviary.py가 CL을 계산한다. 예전 CLalpha 0.008905는 원저자 MATLAB의 "뭉쳐진 CL"이었는데
+# 코드가 기하 인자 없이 그대로 써서 제어력이 과소 추정됐다(#21).
+#
+# CLalpha: 유한 날개 양력 기울기(1/rad).
+#   2D 기울기 a0 = 0.1081/deg = 6.194/rad (논문 부록 B.3, Joukovsky 익형 XFoil 회귀)
+#   종횡비 AR = 잠긴 스팬 28 mm / 시위 25 mm = 1.12 (스팬 = 제트 반지름 32 - vane_inner_r 4)
+#   Helmbold 저종횡비 보정 a = a0 / (sqrt(1 + (a0/(pi·AR))^2) + a0/(pi·AR)) = 1.637/rad
+#   베인을 고립된 날개로 본 값이다. 덕트 벽의 끝판 효과는 넣지 않았다(넣으면 커진다).
+CLalpha: 1.637       # 1/rad, PLACEHOLDER — TC-2(베인각별 복원 모멘트) 실측 회귀로 교체
+# A_fin: 제트 안에 잠긴 베인 면적. CAD 베인은 반경 4~41 mm(37 mm) × 시위 25 mm인데,
+#   제트 반지름 32 mm 바깥 부분은 제트 밖이라 뺐다 → 28 mm × 25 mm.
+A_fin: 7.0e-4        # m^2, PLACEHOLDER — 배기 내경 실측 후 다시 계산
+# A_duct: 배기 단면적. 64 mm급 EDF 공칭 지름으로 원 전체 넓이를 잡았다(pi·0.032^2).
+#   모터 꼬리 원뿔 단면을 빼면 A_duct가 작아지고 CL이 커진다 — 실측 전에는 작은 쪽 CL을 쓴다.
+A_duct: 3.217e-3     # m^2, PLACEHOLDER — EDF 배기 내경·꼬리 원뿔 지름 실측 필요
+# 상한: 한 축 베인 2장의 측력 합 2·CL·alpha_max·Ft는 Ft·sin(alpha_max)를 넘지 못한다(제트 운동량).
+#   지금 값: 0.0621·Ft, 상한 0.1736·Ft의 36%. hopper_aviary.py가 넘으면 ValueError를 낸다.
+CD0: 0.001054        # PLACEHOLDER — 원저자 MATLAB의 뭉쳐진 값(raw는 부록 B.3의 0.0145). 지금 동역학 코드는 안 쓴다
 alpha_max_deg: 10    # 선형 근사 유효 범위 (논문 명시값, 서보 물리적 최대각과는 별개)
 
 # --- 모터/추력 모델 (PLACEHOLDER — 실험 A 전까지 임시 스케일, 절대값 의미 없음) ---
@@ -37,4 +58,6 @@ domain_rand:
   Jzz_range: 0.3
   vane_arm_range: 0.15  # ±15%, l·r을 같은 비율로 같이 스케일 (치수·조립 오차 근사)
   Kf_range: 0.2         # ±20%, 모터 개체차·배터리 전압 편차 근사
-  cg_offset_mm: 3.0     # 무게중심-추력축 어긋남 근사(mm) — 이 범위 안에서 잔류 토크로 반영
+  # 무게중심-추력축 어긋남(축당 mm). 근거: 01-avionics §8.2 횡 CG 목표 ≤ 3 mm(설계 잔차 1.9 mm).
+  # 베인 최대 제어력의 등가 오프셋은 2·CL·alpha_max·l = 6.5 mm(l 최소 -15%에서 5.5 mm)라 그 안쪽이다.
+  cg_offset_mm: 3.0

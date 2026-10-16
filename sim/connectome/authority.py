@@ -35,6 +35,8 @@ import numpy as np
 import yaml
 
 PARAMS = Path(__file__).resolve().parents[1] / "sim_stage1" / "params.yaml"
+sys.path.insert(0, str(PARAMS.parent))
+from hopper_aviary import vane_lift_gain  # noqa: E402  (gymnasium만 딸려 온다, torch는 안 온다)
 
 # reset()의 초기 교란 범위(rad)와 에피소드 길이(s) — hopper_aviary.py 와 맞춰둔 값.
 # 저기를 고치면 여기도 고쳐야 한다. 자동으로 읽지 않는 이유는 env를 만들면 SB3/torch까지
@@ -47,7 +49,7 @@ def authority(params_path: Path = PARAMS, throttle: float = 1.0) -> dict:
     p = yaml.safe_load(params_path.read_text(encoding="utf-8"))
     alpha_max = np.deg2rad(p["alpha_max_deg"])
     thrust = p["Kf"] * (throttle * 3000.0) ** 2
-    vane_force = p["CLalpha"] * thrust * alpha_max
+    vane_force = vane_lift_gain(p) * thrust * alpha_max
     torque = 2.0 * vane_force * p["vane_arm_l"]      # 한 축당 베인 2장
     ang_acc = torque / p["Jxx"]
     reachable = 0.5 * ang_acc * EPISODE_S ** 2        # 계속 최대토크를 걸었을 때

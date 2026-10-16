@@ -93,9 +93,28 @@ F1, F2, F3, F4 = self.CLalpha * Ft * alpha
   (EDF 배기 단면적, `cad/hopper_params.scad`의 `edf_clamp_id` 근처 값으로 근사 가능)를 따로 구해서
   식 3.16대로 곱한다 → 코드에 `A_fin/(2*A_duct)` 항을 추가해야 함.
 
+**결정 (2026-10-16, #27): (B)를 택했다.** 실측 전이라 (A)는 아직 못 한다.
+
+- 확인한 사실: 원저자 MATLAB(`SolidGeek/SingleRotorUAV`의 `MATLAB/NonlinearSimulation/nonlinear_dynamics.m`)은
+  `CL = 0.008905`를 `F = Ft·CL·α`에 바로 넣는다. 즉 0.008905는 raw `CLα`가 아니라 **뭉쳐진 CL**이다.
+  논문 부록 B.3의 raw 기울기는 `CLα = 0.1081`(1/deg, Joukovsky 익형 XFoil)이다. 본문 §3.2.2의
+  "CLα = 0.008905"는 이 둘을 섞어 쓴 표기다.
+- 추론(미확인): 0.1081 × A_fin/(2·A_duct) = 0.008905이면 저자 기체의 A_fin/A_duct ≈ 0.165로 그럴듯하다.
+  그렇다면 0.008905는 1/deg 단위인데, 저자 펌웨어는 베인각을 rad로 쓴다(`control.cpp`의 `10 * DEG_TO_RAD`).
+  저자 기체 치수가 없어서 확인하지 못했다.
+- 우리 값: `CL = CLα·A_fin/(2·A_duct)`를 `hopper_aviary.py`의 `vane_lift_gain()`이 계산한다.
+  CLα는 2D 6.194/rad에 Helmbold 저종횡비 보정(AR 1.12)을 한 1.637/rad, A_fin = 28 × 25 mm(제트 안에 잠긴 부분),
+  A_duct = π·32² mm²(64 mm 공칭). → CL = 0.178/rad. 계산 근거는 `params.yaml` 주석.
+- 상한: 한 축 측력 2·CL·α_max·Ft = 0.062·Ft로, 제트 운동량 상한 Ft·sin(10°) = 0.174·Ft의 36 %다.
+  `vane_lift_gain()`은 상한을 넘는 값이 들어오면 ValueError를 낸다.
+- 민감도(#27 PR): CL이 이 추정의 0.5배면 PD 합격 기준(중앙값 ≤ 5°)을 겨우 넘지 못한다(5.65°).
+  실측 CL이 추정보다 작게 나오면 `domain_rand.cg_offset_mm`부터 다시 볼 것.
+
 ## 3. 회전 동역학 (§3.3)
 
-**바디 프레임 토크** (Fig 3.7, l=COM~베인 조인트 거리, r=z축~베인 중심 거리):
+**바디 프레임 토크** (Fig 3.7, l=COM~베인 조인트 거리, r=z축~베인 중심 거리). 원저자 MATLAB의 값도
+`l = 0.0947 m`(세로 거리), `r = 0.04 m`다. 우리 `vane_arm_l`은 #27에서 링 반지름 48 mm를
+세로 거리 104 mm(`01-avionics-integration-final.md` §8.4)로 고쳤다:
 
 ```
 τx = (F1+F3)·l
@@ -151,9 +170,12 @@ Ch.4에서 LQR 게인을 설계한다. **우리 Stage 1은 이 선형화를 안 
 | `ωt` | `omega_t_equiv = throttle*3000` | **근사 — 실제 RPM 아님, 실험 A 후 교체 필요** |
 | `Kf` | `params.yaml: Kf` | PLACEHOLDER |
 | `Jxx,Jyy,Jzz` | `params.yaml: Jxx,Jyy,Jzz` | PLACEHOLDER |
-| `l, r` | `params.yaml: vane_arm_l, vane_arm_r` | **실측 아님 표시돼 있었으나 실제로는 `cad/hopper_params.scad`(베인링 반경 96mm) 기반값 — PLACEHOLDER 아님** |
-| `CLα, CD0` (raw) | `params.yaml: CLalpha, CD0` | PLACEHOLDER, **§2의 lumped-CL 이슈 있음 — 교체 시 위 (A)/(B) 중 택1 명시할 것** |
-| `Cn = CLα·A_fin/(2A_duct)` (lumped) | 코드에 없음(위와 동일 취급 중) | 위 참고 |
+| `l` | `params.yaml: vane_arm_l` | PLACEHOLDER 0.104 m(CG 추정 68 mm + 피벗 36 mm). 예전 0.048은 링 반지름이라 정의와 달랐다(#21) |
+| `r` | `params.yaml: vane_arm_r` | 0.048 m, 링 반지름 근사 그대로 |
+| `CLα` (raw, 유한 날개) | `params.yaml: CLalpha` | PLACEHOLDER 1.637/rad, §2.2 결정 참고 |
+| `A_fin, A_duct` | `params.yaml: A_fin, A_duct` | PLACEHOLDER, 배기 내경 실측 필요 |
+| `CL = CLα·A_fin/(2A_duct)` (lumped) | `hopper_aviary.py: vane_lift_gain()` → `self.CL` | 일치(#27), 제트 운동량 상한 검사 포함 |
+| `CD0` | `params.yaml: CD0` | 원저자 뭉쳐진 값, 동역학 코드에서 안 씀 |
 | `τx,τy,τz` | `tau_x,tau_y,tau_z` | 일치 |
 | Tait-Bryan 변환 W_η | `phi_dot,theta_dot,psi_dot` 계산부 | 일치(특이점 클리핑은 코드가 더 방어적) |
 | 무게중심 오프셋 | `cg_offset_x/y` | **논문에 없음, 우리 자체 추가**(도메인 랜덤화용) |
