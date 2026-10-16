@@ -15,7 +15,7 @@ AGENTS.md의 "PID vs RL 비교 실험 프로토콜"에서 baseline 자리다. �
 환경은 이렇게 토크를 만든다:
     tau_x = (F1 + F3) * l
     tau_y = -(F2 + F4) * l
-    tau_z = (F1 - F2 - F3 + F4) * r          (F_i = CLalpha * Ft * alpha_i)
+    tau_z = (F1 - F2 - F3 + F4) * r          (F_i = CL * Ft * alpha_i)
 
 그래서 롤/피치/요를 따로 잡으려면 베인각을 이렇게 섞어야 한다:
     a1 = u_roll + u_yaw      a3 = u_roll - u_yaw

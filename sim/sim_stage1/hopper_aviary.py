@@ -6,7 +6,7 @@ Week 2 물리 실험의 "구속 스탠드"(M1, 만능조인트로 위치를 고�
 우리 기체 구조·좌표계·베인 4개짜리 토크 방정식을 그대로 쓰는 "진짜" 첫 RL 환경.
 
 ⚠️ 아직 실험 A(EDF 추력곡선)·구속 스탠드 실측 전이라 params.yaml의 물리 상수
-   (Jxx/Jyy/Jzz, CLalpha, CD0, Kf)는 PLACEHOLDER 상태. 지금 단계 목표는:
+   (Jxx/Jyy/Jzz, CLalpha, A_fin, A_duct, Kf, vane_arm_l)는 PLACEHOLDER 상태. 지금 단계 목표는:
      "RL 학습 파이프라인이 우리 기체의 실제 상태/액션 구조에 맞춰 정상적으로 도는가"
    를 확인하는 것 — 절대적인 학습 성능 숫자 자체는 아직 의미 없음.
    Week 2에서 실측값이 나오는 대로 params.yaml만 교체하면 이 코드는 그대로 재사용됨.
@@ -31,6 +31,23 @@ import yaml
 from gymnasium import spaces
 
 
+def vane_lift_gain(p: dict) -> float:
+    """베인 1장의 측력/추력 비율 기울기 CL(1/rad). F = Ft · CL · alpha (논문 식 3.16).
+
+    CL = CLalpha · A_fin / (2 · A_duct). 한 축 베인 2장의 최대 측력 2·CL·alpha_max·Ft가
+    제트 운동량 상한 Ft·sin(alpha_max)를 넘으면 과대 추정이므로 ValueError를 낸다
+    (docs/design/rl-open-source-survey.md §2).
+    """
+    CL = p["CLalpha"] * p["A_fin"] / (2.0 * p["A_duct"])
+    alpha_max = np.deg2rad(p["alpha_max_deg"])
+    if 2.0 * CL * alpha_max > np.sin(alpha_max):
+        raise ValueError(
+            f"베인 측력 과대 추정: 축당 2·CL·alpha_max = {2.0 * CL * alpha_max:.4f}·Ft > "
+            f"sin(alpha_max) = {np.sin(alpha_max):.4f}·Ft. params.yaml의 CLalpha/A_fin/A_duct를 확인할 것."
+        )
+    return float(CL)
+
+
 class HopperAttitudeEnv(gym.Env):
     """Stage 1: 위치 구속(만능조인트) 상태에서 자세(roll/pitch/yaw)만 제어하는 환경."""
 
@@ -50,7 +67,7 @@ class HopperAttitudeEnv(gym.Env):
         self.nominal_l = p["vane_arm_l"]
         self.nominal_r = p["vane_arm_r"]
         self.nominal_Kf = p["Kf"]
-        self.CLalpha = p["CLalpha"]
+        self.CL = vane_lift_gain(p)
         self.CD0 = p["CD0"]
         self.alpha_max = np.deg2rad(p["alpha_max_deg"])
 
@@ -125,8 +142,8 @@ class HopperAttitudeEnv(gym.Env):
         omega_t_equiv = throttle * 3000.0
         Ft = self.Kf * omega_t_equiv**2
 
-        # 베인 선형 공력 근사 (modelling-notes-ch3.md §5)
-        F1, F2, F3, F4 = self.CLalpha * Ft * alpha
+        # 베인 선형 공력 근사 (modelling-notes-ch3.md §2.2, 식 3.16)
+        F1, F2, F3, F4 = self.CL * Ft * alpha
 
         phi, theta, psi, wx, wy, wz = self.state
 
