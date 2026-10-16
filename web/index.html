@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COSMOS 호퍼 뷰어</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header>
+      <strong>COSMOS 호퍼 뷰어</strong>
+      <label class="file">CSV 열기 <input id="file" type="file" accept=".csv" /></label>
+      <select id="sample" aria-label="예제 CSV">
+        <option value="">예제 선택</option>
+        <option value="samples/sim-pd-nodr-s0.csv">시뮬레이션 PD (랜덤화 끔, seed 0)</option>
+        <option value="samples/axis-test.csv">축 변환 확인용</option>
+      </select>
+      <span id="status">CSV를 열거나 예제를 고른다</span>
+    </header>
+    <main>
+      <div id="view"></div>
+      <aside id="readout">
+        <div>t <b id="t">-</b> ms</div>
+        <div>mode <b id="mode">-</b></div>
+        <div>Roll φ <b id="phi">-</b>°</div>
+        <div>Pitch θ <b id="theta">-</b>°</div>
+        <div>Yaw ψ <b id="psi">-</b>°</div>
+        <div>throttle <b id="throttle">-</b></div>
+      </aside>
+    </main>
+    <footer>
+      <button id="play" disabled>재생</button>
+      <input id="seek" type="range" min="0" max="0" value="0" disabled aria-label="시간" />
+      <!-- TODO(#29 작업 5): 배속 선택(1x, 0.25x) -->
+    </footer>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

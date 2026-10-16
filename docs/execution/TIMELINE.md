@@ -6,6 +6,8 @@
 
 **기준일: 2026-09-20(일).** 주차는 월~일. Week 1 = 9/14~9/20(오늘로 끝), Week 2 = 9/21 시작.
 
+> **2026-10-16 현황:** 간트차트 날짜는 9/20 계획 그대로이고 실제 진행은 약 3주 늦다. 현재 병목은 아래 §4(10/16 갱신), 각자 할 일은 [학습 안내의 지금 할 일 표](../learning/README.md#지금-할-일-2026-10-16-기준)를 본다.
+
 ---
 
 ## 1. 전체 간트차트
@@ -108,7 +110,18 @@ gantt
 
 ---
 
-## 4. 지금 당장의 병목 3개
+## 4. 지금 당장의 병목 (2026-10-16 갱신)
+
+1. **실험 A(추력곡선) 미실시.** 그대로 최우선이다. `Kf`가 실측이 아니다.
+2. **시뮬레이션 베인 제어력 버그(#21).** 도메인 랜덤화를 켜면 어떤 정책도 1초 안에 넘어진다. 고치기 전에는 RL 결과를 PID와 비교할 수 없다. 합격 기준: 랜덤화 켠 상태에서 PD 안정화. 10/16에 PR #35가 CL과 `vane_arm_l`을 고쳐 합격 판정을 받았다(리뷰 대기). 남은 일은 [`../tasks/27-sim-vane-authority.md`](../tasks/27-sim-vane-authority.md).
+3. **3D프린트 외주.** 10/14 기준 미발주다. 조립 일정 전체가 여기에 걸려 있다.
+4. **DShot 실물 ESC 시험(#24).** 안전 펌웨어는 머지됐고 팬 분리 상태 시험이 남았다.
+
+해결됨: 실험 B(IMU) 실물 업로드. 10/15에 Teensy 업로드와 BNO085 인식 성공(`firmware/cosmos/imu_test_i2c`). 원인은 충전 전용 USB 케이블이었다.
+
+아래는 9/20 당시 기록이다.
+
+### 9/20 당시 병목 3개
 
 1. **실험 A(추력곡선)를 아직 못 했다** — `sim/params.yaml`의 `Kf`가 실측이 아니라서, 지금 RL을 아무리
    학습시켜도 **결과를 읽으면 안 된다**(베인 제어권한이 실제보다 37배 작게 잡혀 있음, `README.md` 경고
@@ -130,7 +143,7 @@ gantt
 | 알고 싶은 것 | 문서 |
 |---|---|
 | 이번 주 팀별로 뭘 하나 (세션 A/B 단위) | [`semester-roadmap.md`](semester-roadmap.md) |
-| 이번 주 **내 이름**으로 뭐가 배정됐나 | [`member-weekly-tasks.md`](member-weekly-tasks.md) |
+| 지금 **내 이름**으로 뭐가 배정됐나 | [`../learning/README.md`](../learning/README.md) "지금 할 일" 표, PRD 이슈, [`../tasks/`](../tasks/README.md) (`member-weekly-tasks.md`는 9월 계획 기록) |
 | Week 1–2 원본 실행계획·부품 리스트 | [`week-01-kickoff.md`](week-01-kickoff.md) |
 | 시험 카드(TC-0~TC-7) 합격 기준 | [`../design/00-hopper-master-design.md`](../design/00-hopper-master-design.md) §11 |
 | 배선·핀맵 | [`../design/01-avionics-integration-final.md`](../design/01-avionics-integration-final.md) |

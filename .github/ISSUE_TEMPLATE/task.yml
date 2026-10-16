@@ -1,0 +1,53 @@
+name: 작업 이슈
+description: 코드·문서·CAD·회로 작업 하나. PR 하나 이상으로 끝나는 크기로 쓴다.
+title: "[태그] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        이 이슈는 `ste-ko` 스킬(`.claude/skills/ste-ko/SKILL.md`)을 불러온 뒤 쓴다. 제목 태그는 `cad`/`fw`/`sim`/`web`/`kicad`/`data`/`docs`/`infra` 중 하나다.
+        작업 순서는 `AGENTS.md` §작업 순서를 따른다. 팀별 PRD는 이 양식 대신 `AGENTS.md` §일하는 방식의 PRD 형식으로 쓴다.
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 목적
+      description: 이 작업이 끝나면 무엇이 달라지는지 1-3문장.
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: 배경
+      description: 현재 상태와 숫자, 관련 이슈·PR·파일 경로. 확인한 사실과 추측을 나눠 쓴다.
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
+    attributes:
+      label: 할 일
+      description: 체크박스 목록. 한 줄에 동작 하나.
+      value: |
+        - [ ] 
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 판정 기준
+      description: 끝났는지 누가 봐도 판정할 수 있는 조건. 명령과 기대 결과, 수치로 쓴다.
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: 제외
+      description: 이 이슈에서 하지 않는 것.
+  - type: checkboxes
+    id: humans-only
+    attributes:
+      label: 사람만 하는 일
+      description: 하나라도 해당하면 AI는 그 단계에서 멈춘다(AGENTS.md §핵심 규칙 8).
+      options:
+        - label: 돈을 쓴다(부품 구매 등)
+        - label: 외부 계정이나 비밀 키가 필요하다
+        - label: 물리 동작이 있다(EDF·ESC 전원 인가, 실물 업로드, LiPo 충전)
