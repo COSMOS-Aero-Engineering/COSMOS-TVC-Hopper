@@ -20,6 +20,17 @@ Claude Code, Codex, OpenCode 등 어떤 도구를 쓰든 이 규칙을 먼저 �
 6. 이슈, PR, 커밋 메시지는 `ste-ko` 스킬(`.claude/skills/ste-ko/SKILL.md`)을 불러온 뒤 쓴다. 스킬 목록에 `ste-ko`가 없는 도구(예: Codex는 `.agents/skills`만 읽는다)는 그 파일을 직접 읽는다. `ship-issue` 스킬(`.claude/skills/ship-issue/SKILL.md`)도 같다.
 7. force push, `git reset --hard`, 푸시한 커밋 amend, 여러 파일 삭제를 하지 않는다. `.env`와 비밀 키를 읽지 않는다.
 8. **사람만 하는 일**을 만나면 AI는 멈추고 라벨 `agent physically incapable` 이슈를 연다: 돈 쓰기(부품 구매), 외부 계정, 비밀 키, 물리 동작(EDF·ESC 전원 인가, 실물 업로드, LiPo 충전). 이슈 본문은 "풀 방법 / 선택지 / 근거"로 쓴다.
+9. **이슈를 만들면 담당자(assignee)를 지정한다.** 이슈의 태그·라벨과 바뀌는 파일 경로로 아래 표에서 담당 부원을 고르고 `gh issue create --assignee <아이디>`로 지정한다. 여러 영역에 걸치면 여러 명을 지정한다. 정확하지 않아도 된다. 고를 수 없으면 차장 `junwonkim07`을 지정한다. 표의 영역은 `docs/execution/member-weekly-tasks.md` §0 홈 레인을 줄인 것이다.
+
+   | 영역(태그·경로) | 담당 | GitHub 아이디 |
+   |---|---|---|
+   | `sim`, `sim/`, RL, 문서·인프라(`docs`·`infra`) | 김준원(차장) | `junwonkim07` |
+   | `fw`, `firmware/` | 권재후 | `kwon6789` |
+   | 전자 브링업(IMU·ESC·수신기 실물 시험) | 김시우 | `siwoo090804-web` |
+   | `web`, `web/`, 대시보드·CSV 계약 | 김민지 | `iammji9` |
+   | `kicad`, `kicad/`, 배선·납땜 | 이민우 | `kanedesu` |
+   | `cad`, `cad/` 실측·3D프린트, `data/` 실측값 | 박지훈 | `qkrwlgns7275` |
+   | CAD 정본, 발주·예산, 안전, 총괄 | 김민찬(부장) | `MINBBBB1201` |
 
 ## 2. 작업 순서: 이슈에서 PR까지 (ship-issue 방식, 2026-10-16)
 
