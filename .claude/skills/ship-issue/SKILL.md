@@ -20,4 +20,4 @@ description: COSMOS 저장소에서 GitHub 이슈 하나를 맡아 PR까지 끝�
 6. **PR.** `git push -u origin HEAD` 후 `gh pr create --base main`. 본문은 `.github/pull_request_template.md`를 채우고 `Closes #<n>`을 넣는다. 실제로 해 본 확인만 체크한다. 작성자가 김민찬·김준원이 아니면 `--reviewer junwonkim07`을 붙인다. 본문을 쓰기 전에 `ste-ko` 스킬을 불러온다.
 7. **교차 리뷰.** `python ship.py review --author <지금 쓰는 모델>`. 맞는 지적은 고쳐서 푸시하고, 받아들이지 않는 지적은 이유를 한 줄 남긴다. 결과를 PR 본문 "교차 리뷰"에 쓴다.
 8. **CI.** `gh pr checks --watch`. 실패하면 `gh run view --log-failed`로 로그를 읽고 고친다.
-9. **마무리.** PR 본문 "알게 된 것"을 채운다. 모든 에이전트가 알아야 할 교훈이면 `AGENTS.md` §교훈에 한 줄 추가한다. PR 링크를 알리고 멈춘다. 머지하지 않는다.
+9. **마무리.** 남은 일, 확인하지 못한 항목, 미룬 결정을 하나씩 `gh issue create`로 만든다. 사람만 확인할 수 있으면 라벨 `agent physically incapable`을 단다. 번호를 PR 본문 "후속 이슈"에 적는다. PR 본문 "알게 된 것"을 채운다. 모든 에이전트가 알아야 할 교훈이면 `AGENTS.md` §교훈에 한 줄 추가한다. PR 링크를 알리고 멈춘다. 머지하지 않는다.
