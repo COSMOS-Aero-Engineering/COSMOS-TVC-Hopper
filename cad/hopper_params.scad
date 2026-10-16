@@ -544,62 +544,6 @@ module foot_pads() {
 }
 
 
-// ---------- 상부 페어링 (외형, 선택 부품, #59) ----------
-// 선반 구간(배터리·아비오닉스)을 감싸는 얇은 원통 외피. 구조 부품이 아니고 발표용 외형이다.
-// - 질량 약 45 g(PETG 0.9 mm 외피 + 위아래 테 + 팔 4개). 850 mAh 배터리를 쓰면 TWR 약 1.73,
-//   1300 mAh면 약 1.62(홉 기준 1.6 경계). 좌우 대칭이라 옆 무게중심은 바꾸지 않고 z_cg를 약 6 mm 올린다.
-// - 흡입구(상판 Ø78)와 선반 아래 옆 틈은 막지 않는다. ±Y에 창을 내서 배터리·XT60·Teensy USB에 손이 닿는다.
-// - 프린터 베드(220 mm)에 맞게 y>0 / y<0 반쪽 2개로 나눈다. 각 반쪽은 기둥 2개에 C클립으로 끼운다.
-fair_r      = 107;    // 외피 바깥 반경. 아비오닉스 선반 모서리(r≈104)와 3 mm 여유
-fair_t      = 0.9;    // 외피 두께(노즐 0.4 기준 2라인 이상)
-fair_z0     = 143;    // 외피 아래 끝 (선반 판 아래 147보다 낮게)
-fair_z1     = 188;    // 외피 위 끝 (상판 윗면 182 위로 6 mm)
-fair_band   = 3;      // 위아래 보강 테 두께(반경 방향)·높이
-fair_win_deg = 70;    // ±Y 창 폭(각도)
-fair_win_z  = [151, 180];
-fair_arm_z  = 168;    // 기둥 C클립 높이 (새들 링 위 163, 상판 아래 178 사이)
-fair_arm_h  = 8;
-
-module upper_fairing_half(side = 1) {   // side = 1: y>0 반쪽, -1: y<0 반쪽
-    intersection() {
-        union() {
-            difference() {
-                union() {
-                    translate([0, 0, fair_z0]) cylinder(h = fair_z1 - fair_z0, r = fair_r, $fn = 160);
-                }
-                translate([0, 0, fair_z0 - 1]) cylinder(h = fair_z1 - fair_z0 + 2, r = fair_r - fair_t, $fn = 160);
-                // 창 (배터리 +Y / 아비오닉스 −Y)
-                for (a = [90, 270]) rotate([0, 0, a])
-                    translate([0, 0, fair_win_z[0]])
-                        rotate_extrude(angle = fair_win_deg, $fn = 160)
-                            translate([fair_r - 5, 0]) square([10, fair_win_z[1] - fair_win_z[0]]);
-            }
-            // 위아래 보강 테
-            for (z = [fair_z0, fair_z1 - fair_band])
-                translate([0, 0, z]) difference() {
-                    cylinder(h = fair_band, r = fair_r, $fn = 160);
-                    translate([0, 0, -1]) cylinder(h = fair_band + 2, r = fair_r - fair_band, $fn = 160);
-                }
-            // 팔 + C클립 (기둥 45° 계열)
-            for (i = [0 : n_cols - 1]) {
-                a = i * 360 / n_cols + 45;
-                rotate([0, 0, a]) translate([col_mount_r, 0, fair_arm_z]) difference() {
-                    union() {
-                        translate([0, -3, 0]) cube([fair_r - col_mount_r - fair_t / 2, 6, fair_arm_h]);
-                        cylinder(h = fair_arm_h, r = col_od / 2 + tube_clearance + 2.4, $fn = 32);
-                    }
-                    translate([0, 0, -1]) cylinder(h = fair_arm_h + 2, r = col_od / 2 + tube_clearance, $fn = 32);
-                    // 안쪽(중심 방향)으로 연 C클립 입구: 기둥에 옆에서 눌러 끼운다
-                    translate([-10, -2.2, -1]) cube([10, 4.4, fair_arm_h + 2]);
-                }
-            }
-        }
-        // 반쪽 자르기
-        translate([-fair_r - 5, side > 0 ? 0 : -fair_r - 5, fair_z0 - 5])
-            cube([2 * fair_r + 10, fair_r + 5, fair_z1 - fair_z0 + 10]);
-    }
-}
-
 // ---------- 조립 ----------
 // render_mode = "preview": 조립 미리보기 (기둥/다리를 실봉으로, 부품을 색블록으로 시각화 — 실제 프린트 대상 아님)
 // render_mode = "print"  : 진짜 프린트해서 외주 넣을 대상만 (상판·베인링엔 D1/D2 탄소관용 소켓 구멍만 뚫려있음)

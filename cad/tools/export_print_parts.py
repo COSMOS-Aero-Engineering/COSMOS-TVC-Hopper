@@ -42,9 +42,6 @@ PARTS = {
     # 혼 실측 전 발주용: 슬롯 두께·폭 +0.4 mm. 맞는 세트를 쓴다.
     "vane_couplers_x4_slack0.4": COUPLERS.format("0.4"),
     "foot_pads_x4": "foot_pads();",
-    # 선택 부품(외형): 상부 페어링 반쪽 2개. 발주할지는 부장이 정한다(#59).
-    "upper_fairing_half_pos_y": "upper_fairing_half(1);",
-    "upper_fairing_half_neg_y": "upper_fairing_half(-1);",
 }
 
 
