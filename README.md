@@ -7,12 +7,11 @@
 
 ## 시작점
 
-- **[처음 참여하는 부원용 학습 안내](docs/learning/README.md)** — 프로젝트 설명, 담당별 첫 실습, 글·그림·영상 자료실. 프린트 없이 진행하는 [2주차 활동표](docs/learning/week-02.md)부터 바로 사용할 수 있다.
-- **[`AGENTS.md`](AGENTS.md)** — 정본 컨텍스트 문서: 설계 의도·확정 방향·현재 상태·문서 맵·다음 액션·안전 원칙. AI 세션이든 사람이든 기술적인 걸 파악하려면 이거 먼저. (`CLAUDE.md`는 이 파일로 가는 한 줄짜리 안내판)
+- **[처음 참여하는 부원용 학습 안내](docs/learning/README.md)**: **"지금 내가 뭘 해야 하나"는 이 문서의 [지금 할 일 표](docs/learning/README.md#지금-할-일-2026-10-16-기준) 하나만 본다.** 프로젝트 설명, 담당별 첫 실습, 글·그림·영상 자료실도 여기 있다.
+- **[`AGENTS.md`](AGENTS.md)** — 정본 컨텍스트 문서: 프로젝트 한눈에(숫자·좌표계·전체 흐름·팀), 현재 상태, 작업 규칙, 안전 원칙, 문서 맵. AI 세션이든 사람이든 기술적인 걸 파악하려면 이거 먼저. (`CLAUDE.md`는 이 파일로 가는 한 줄짜리 안내판)
 - **[`docs/design/00-hopper-master-design.md`](docs/design/00-hopper-master-design.md)** — 마스터 설계도 (rev C)
-- **[`docs/execution/TIMELINE.md`](docs/execution/TIMELINE.md)** — ⭐ **전체 타임라인 한 장** (간트차트로 한 것/남은 것/현재 병목). 진행 상황이 궁금하면 여기부터
-- **[`docs/execution/week-01-kickoff.md`](docs/execution/week-01-kickoff.md)** — 1–2주차 실행 계획
-- **[`docs/execution/member-weekly-tasks.md`](docs/execution/member-weekly-tasks.md)** — 부원 7명 개인별 주간 할 일
+- **[`docs/tasks/`](docs/tasks/README.md)**: PRD 이슈(#26~#29)별 착수 초안. 실행되는 뼈대 코드, 기록 양식, 첫 30분 절차가 있다.
+- **[`docs/execution/TIMELINE.md`](docs/execution/TIMELINE.md)** — 전체 타임라인 한 장과 지금 병목. 9월에 만든 주차별 계획(`week-01-kickoff.md`, `member-weekly-tasks.md`)은 기록으로만 남아 있다.
 
 지금 당장 개발환경만 세팅하고 싶다면 바로 아래 "부원 퀵스타트"로.
 
@@ -97,15 +96,15 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
 
 ### 엔지니어링팀
 
-캘리퍼스로 잰 부품 실측값은 `cad/measurements.md`에 기록하고(없으면 새로 만들 것), CAD 파라미터(`cad/hopper_params.scad`)에 반영한 뒤 커밋한다. 배선 참고는 `docs/execution/bench-wiring.svg`.
+캘리퍼스로 잰 부품 실측값은 `cad/measurements.md`에 기록하고, CAD 파라미터(`cad/hopper_params.scad`)에 반영한 뒤 커밋한다. 무게중심 추정은 `python cad/cg/cg_estimate.py`. 배선은 [`docs/design/01-avionics-integration-final.md`](docs/design/01-avionics-integration-final.md) §2·§4가 기준이다(`docs/execution/bench-wiring.svg`는 구버전).
 
-작업 폴더: `cad/`(파라메트릭 CAD), `data/`(실험 로그 — 없으면 새로 만들 것).
+작업 폴더: `cad/`(파라메트릭 CAD), `kicad/`(회로도), `data/`(실험 로그).
 
 핵심 배선 3갈래:
 
 | 연결 | 비고 |
 |---|---|
-| Teensy ↔ BNO085 | **SPI 확정** — CS=10, MOSI=11, MISO=12, SCK=13, RST=20, INT=21, WAK/PS0=22, PS1=3.3V. 전부 3.3V 로직 |
+| Teensy ↔ BNO085 | **SPI 확정** — CS=10, MOSI=11, MISO=12, SCK=13, RST=20, INT=21, WAK/PS0=22, PS1=3.3V. 전부 3.3V 로직. 지금 벤치 시험은 4선 I2C(3V·G·18·19, `imu_test_i2c`) |
 | Teensy ↔ 수신기 | **레벨 시프터 필수** — 수신기 5V, Teensy 3.3V 전용 |
 | Teensy → ESC | DShot 신호선 + 공통 접지. ESC의 BEC 5V는 Teensy에 물리지 않음 |
 
@@ -113,8 +112,10 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
 
 ## 협업 규칙
 
-정본은 [`AGENTS.md`](AGENTS.md)의 **"작업 규칙 — 브랜치·PR"**이다. 아래는 부원이 실제 작업할 때
-따르는 절차다.
+정본은 [`AGENTS.md`](AGENTS.md)의 **"핵심 규칙"**과 **"작업 순서 — 이슈에서 PR까지"**다. 작업은 이슈에서
+시작하고, 이슈 번호를 브랜치 이름과 PR 본문(`Closes #번호`)에 넣는다. 처음 한 번 `python ship.py tools`로
+도구를 확인한다(Windows·Mac의 gh와 Node.js가 있는 PC의 opencode는 자동 설치, 그 밖에는 설치 방법을 출력). 이슈를 맡으면 `python ship.py wt <이슈 번호>`로 작업 폴더와
+브랜치를 만든다. 아래는 부원이 실제 작업할 때 따르는 절차다.
 
 1. **한 작업 폴더에서는 한 번에 한 세션만 Git을 조작한다.** Claude·Codex·사람 터미널이 같은 폴더에서
    동시에 브랜치를 바꾸거나 커밋하면 서로의 작업 트리를 덮어쓸 수 있다. 다른 세션이 작업 중이면 먼저
@@ -125,19 +126,19 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
    김준원(`junwonkim07`) 두 명뿐이다. CODEOWNERS는 자동 리뷰 알림이 너무 많이 생겨 삭제됐다(PR #12).
    작성자가 두 사람 외의 부원이면 둘 중 한 명을 직접 리뷰어로 지정한다.
 4. **로컬 검사와 CI가 모두 통과해야 승인 대상이다.** PR 전에 `python tasks.py check`를 실행하고,
-   GitHub의 sim 스모크 1개와 PlatformIO 펌웨어 빌드 2개가 모두 초록불인지 확인한다.
+   GitHub의 sim 검사와 PlatformIO 펌웨어 빌드 3개가 모두 초록불인지 확인한다.
 5. **리뷰와 머지 권한은 김민찬·김준원 두 사람에게만 있다.** 두 사람은 CI가 초록불인 것을 확인하고
    변경사항을 직접 검토한 뒤 본인이 올린 PR도 스스로 머지할 수 있다. 그 외 부원은 두 사람 중 한 명의
    승인(Approve)을 받아야 하며 직접 머지하지 않는다. 승인 뒤 새 커밋을 push했다면 다시 확인받는다.
 6. **머지는 squash 방식만 쓴다.** 권한자가 `gh pr merge --squash --delete-branch`로 머지한다.
    미병합 브랜치는 GitHub 룰셋이 삭제를 제한하므로 임의로 지우지 않는다.
-7. **충돌(conflict)이 뜨면 혼자 풀지 말고 부장에게 알린다.** 특히 다른 사람의 PR 브랜치에 직접
-   커밋하거나 push하지 않는다.
+7. **충돌(conflict)이 뜨면 혼자 풀지 말고 부장에게 알린다.** 다른 사람의 PR 브랜치에는 권한자가
+   요청했을 때만 커밋한다. 이때도 새 커밋만 더하고, push 전에 원격 브랜치의 최신 커밋을 확인한다.
 
 추가 원칙:
 
-- **남의 폴더는 건드리지 않는다.** 소프트웨어팀은 `sim/`·`firmware/cosmos/`, 엔지니어링팀은
-  `cad/`·`data/`를 맡는다.
+- **남의 폴더는 건드리지 않는다.** 소프트웨어팀은 `sim/`·`firmware/cosmos/`·`web/`, 엔지니어링팀은
+  `cad/`·`kicad/`·`data/`를 맡는다.
 - PLACEHOLDER 값(예: `sim/params.yaml`의 추력 상수)을 실측값으로 바꿀 땐 커밋 메시지에 출처를 남긴다.
 - AI 에이전트는 브랜치 생성·검사·PR 생성까지 진행할 수 있지만 머지 권한자는 아니다. **머지는 김민찬
   또는 김준원이 변경사항과 CI를 직접 확인한 뒤 실행한다.**
@@ -149,14 +150,16 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
 | 태그 | 범위 | 예시 |
 |---|---|---|
 | `[cad]` | 기구 설계 | 상판 EDF 홀 실측값 반영 |
+| `[kicad]` | 회로도 | BNO085 SPI 넷 대조와 ERC 결과 |
+| `[web]` | 웹 뷰어 | CSV 재생 배속 추가 |
 | `[fw]` | 펌웨어 | BNO085 쿼터니언 출력 추가 |
 | `[sim]` | 시뮬 · RL | params.yaml 추력 상수 교체 |
 | `[data]` | 실험 로그 | 9/19 실험 A 추력곡선 |
 | `[docs]` | 문서 | README 트러블슈팅 추가 |
 
 ```bash
-git switch main && git pull              # 항상 최신 main에서 시작
-git switch -c sim/thrust-const-실측반영    # 브랜치부터 만든다
+python ship.py wt 21                     # 이슈 #21용 폴더와 브랜치(sim/21)를 최신 main에서 만든다
+cd ../COSMOS-TVC-Hopper-wt/issue-21      # 위 명령이 출력한 폴더로 이동
 # ... 작업 ...
 python tasks.py check                    # CI가 볼 걸 미리 확인
 git add -A
@@ -167,8 +170,8 @@ gh pr create --base main --reviewer junwonkim07
 # 일반 부원은 CI 통과 + 김민찬 또는 김준원의 Approve를 기다린다.
 ```
 
-브랜치 이름은 `<커밋 태그>/<짧은 설명>` 형태다. 예: `fw/imu-test-spi-mode`,
-`docs/timeline-overview`. 머지와 원격 브랜치 삭제는 김민찬 또는 김준원이 처리한다.
+브랜치 이름은 `ship.py wt`가 만드는 `<커밋 태그>/<이슈 번호>` 형태다. 예: `fw/24`, `docs/30`.
+태그는 이슈 제목의 `[태그]`에서 정한다. 머지와 원격 브랜치 삭제는 김민찬 또는 김준원이 처리한다.
 
 ---
 
@@ -182,6 +185,8 @@ gh pr create --base main --reviewer junwonkim07
 | `.venv\Scripts\activate` 실행 시 오류(실행 정책) | Windows 기본 PowerShell 스크립트 실행 제한 | PowerShell을 관리자로 열고 `Set-ExecutionPolicy RemoteSigned` 후 재시도, 또는 명령 프롬프트(cmd)에서 `.venv\Scripts\activate.bat` 사용. 애초에 활성화 없이 `python tasks.py <작업>`만 써도 된다 |
 | `sanity_check.py` 실행 시 `ModuleNotFoundError` | 활성화가 안 된 상태로 직접 실행 | `python tasks.py sanity` 로 실행하면 uv가 알아서 맞춰준다. 직접 실행하려면 프롬프트 앞에 `(.venv)`가 보이는지 확인 |
 | `git push` 시 로그인 창이 반복됨 | Git Credential Manager 인증 만료 | 뜨는 브라우저 창에서 GitHub 로그인 재시도. 안 뜨면 Settings → Developer settings → Personal access tokens에서 토큰 생성 후 비밀번호 칸에 붙여넣기 |
+| Teensy가 USB에 아예 안 잡힘(장치 관리자에 안 뜸, 빨간 LED만 깜빡임) | 충전 전용 USB 케이블 | 데이터 전송이 되는 케이블로 바꾼다. 다른 보드를 같은 케이블에 꽂아 PC가 인식하는지 먼저 본다(2026-10-15 실제 원인) |
+| PowerShell에서 `cd 폴더 && pio run`이 오류 | Windows PowerShell 5.1은 `&&`를 지원하지 않음 | `;`로 잇는다: `cd 폴더; pio run` |
 | Teensy 업로드 시 보드가 안 잡힘 | USB 드라이버 미인식 또는 프로그램 버튼 타이밍 | PlatformIO가 필요한 툴체인은 자동 설치하지만 Windows에서 드라이버가 안 잡히면 [PJRC Teensy Loader](https://www.pjrc.com/teensy/loader_win10.html) 드라이버만 별도 설치, 업로드 시작 직후 보드의 프로그램 버튼 눌러주기(버튼 손상 시 접점 순간 단락으로 대체 가능) |
 | BNO085 값이 안 뜸 | SPI 배선 또는 PS0/PS1 모드 설정 문제 | CS=10, MOSI=11, MISO=12, SCK=13, RST=20, INT=21, WAK/PS0=22 확인. PS1은 3.3V에 묶고 전원도 3.3V만 사용. 모듈 실크가 다르면 `firmware/cosmos/imu_test/src/imu_test.ino` 상단 배선표와 실물 후면 표기를 대조 |
 | `pip install` 중 `OSError: [Errno 2] No such file or directory: ...torch\include\...` | Windows 경로 길이 260자 제한 (torch는 경로가 아주 깊다) | 저장소를 더 짧은 경로로 옮기거나(예: `C:\dev\COSMOS-TVC-Hopper`), [긴 경로 지원 활성화](https://pip.pypa.io/warnings/enable-long-paths) |
@@ -197,14 +202,16 @@ gh pr create --base main --reviewer junwonkim07
 | `docs/execution/` | 주차별 계획 · 조달 · 배선도 |
 | `docs/presentation/` | 동아리 설명회 발표자료 |
 | `firmware/` | 펌웨어 — `reference/SingleRotorUAV/`는 [SolidGeek/SingleRotorUAV](https://github.com/SolidGeek/SingleRotorUAV) (MIT) vendor-copy, `cosmos/`는 우리 코드 |
-| `cad/` | 자체 파라메트릭 CAD (대안 — 주 경로는 SolidGeek Onshape 포크) |
+| `cad/` | 파라메트릭 CAD 정본(`hopper_params.scad`), 무게중심 추정(`cg/`) |
 | `kicad/` | Teensy·IMU·서보·RC·ESC 전원/신호 계통 스키매틱과 생성·검증 도구 |
-| `sim/sim_stage1/` | 시뮬레이션 · RL — Stage 1 환경 + PPO 학습 1회 성공 완료 |
+| `sim/sim_stage1/` | 시뮬레이션 · RL — Stage 1 환경, PPO 학습, CSV 내보내기. 베인 제어력 버그(#21) 수정 전 |
+| `web/` | CSV 재생 3D 뷰어 (Vite + Three.js) |
+| `docs/tasks/` | PRD별 착수 초안 |
 | `sim/connectome/` | 커넥톰 제약 정책망 (확장 트랙 A, B와 택1): 초파리 배선을 정책망 구조로 |
 | `data/` | 실험 로그 (CSV) |
 | `tasks.py` | 작업 실행기 — 작업 순서와 입력 해시 캐시. 인자 없이 실행하면 목록 |
 | `pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 고정본 (`sim/pyproject.toml`이 sim 의존성 정본) |
-| `.github/workflows/` | CI — PR마다 sim 환경/SB3 스모크 + PlatformIO 펌웨어 2종 빌드 자동 확인 |
+| `.github/workflows/` | CI — PR마다 sim 검사 + PlatformIO 펌웨어 3종 빌드 |
 
 ## 라이선스 / 출처
 

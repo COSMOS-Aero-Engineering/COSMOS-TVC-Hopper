@@ -419,7 +419,7 @@ TASKS = {t.name: t for t in [
     Task("setup", "uv.lock 그대로 .venv 구성", task_setup, inputs=DEPS_IN, cacheable=False),
     Task("lock", "의존성 재해석 - uv.lock + sim/requirements.txt 갱신", task_lock, cacheable=False),
     Task("compile", "파이썬 문법 체크", task_compile,
-         inputs=["sim/**/*.py", "test_*.py", *DEPS_IN], uses_env=True),
+         inputs=["sim/**/*.py", "test_*.py", "ship.py", *DEPS_IN], uses_env=True),
     Task("sanity", "환경이 살아 있는지 20스텝 확인", task_sanity, inputs=SIM_IN, uses_env=True),
     Task("smoke", "SB3-환경 연결 확인 (256스텝, 학습 아님)", task_smoke, inputs=SIM_IN,
          uses_env=True),
