@@ -16,7 +16,7 @@
 |---|---|---|---|
 | 시우 | Teensy 업로드, IMU 4선 I2C 인식(0x4B) | IMU를 평평하게 둔 기준값과 FWD·LEFT 쪽 기울임, 좌우 90° 회전 때 Roll·Pitch·Yaw 부호를 측정해 `data/`에 기록하고 기체 좌표계와 일치 여부 판정. 그다음 재후와 DShot 실물 시험 | PRD #28, #24 · [28-imu-axis](../tasks/28-imu-axis.md) |
 | 재후 | DShot 안전 펌웨어(arm·상한·램프·워치독) 머지 | **팬 분리 상태에서** 실물 ESC 시험 8개 항목 진행(시우와 2인 1조). 이후 펌웨어 출력 형식을 [CSV 계약](../design/02-web-dashboard-design.md) §4와 대조 | PRD #28, #24 · [28-dshot-bench](../tasks/28-dshot-bench.md) |
-| 준원 | Stage 1 PPO 파이프라인 | 시뮬레이션 베인 제어력 버그 수정(`CLalpha` 기하 인자, `vane_arm_l` 정의). **도메인 랜덤화를 켠 상태에서 PD가 안정화**하는지가 RL 재학습 전 합격 기준 | PRD #27, #21 · [27-sim-vane-authority](../tasks/27-sim-vane-authority.md) |
+| 준원 | Stage 1 PPO 파이프라인, PR #35(베인 제어력 정정, 합격 판정, PPO 재학습) | PR #35 리뷰 반영과 머지, #26 무게중심 값으로 `vane_arm_l` 교체, 요 팔(#34) | PRD #27, #21 · [27-sim-vane-authority](../tasks/27-sim-vane-authority.md) |
 | 민지 | 로컬 3D 모형 실습 | `web/` 뼈대에서 축 변환 판정, 세 시각 대조, 배속·베인 움직임 추가(CSV는 `export_episode.py --policy pd --no-dr`) | PRD #29 · [29-web-viewer](../tasks/29-web-viewer.md) |
 | 민찬·지훈 | 서보·배터리·Teensy 실측 CAD 반영 | `cad/cg/` 초안(z_cg 65.7 mm, 토크 팔 약 102 mm)의 추정 행을 CAD·저울 실측으로 바꾸고 결과를 준원에게 전달(#21의 `vane_arm_l`). 남은 서보·커플러 치수 실측 | PRD #26 · [26-cad-cg](../tasks/26-cad-cg.md) |
 | 민우 | KiCad 스키매틱 1차 | 회로도의 BNO085 SPI 연결을 정정된 핀맵과 대조: **ADDR/MOSI → 11, SDA/MISO → 12, SCL/SCK → 13**. ERC 실행 | PRD #26 · [26-kicad-imu-nets](../tasks/26-kicad-imu-nets.md) |

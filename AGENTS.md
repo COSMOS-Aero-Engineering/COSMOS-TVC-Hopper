@@ -65,7 +65,7 @@ CAD(cad/) ──질량·치수──▶ 시뮬레이션 상수(sim/sim_stage1/pa
 
 **막혀 있는 것**
 1. **실험 A(EDF 추력곡선) 미실시.** `Kf`(추력 상수)가 잠정값 `1.1e-6`(10 N 역산)이다.
-2. **시뮬레이션 베인 제어력 버그(#21).** 도메인 랜덤화를 켜면 어떤 정책도 1초 안에 넘어진다. 유력 원인: `CLalpha`가 논문에서 **도(deg)당** 값인데 코드는 라디안 각도에 곱한다(57.3배 작음, 추정). `vane_arm_l`도 48 mm로 잘못 들어가 있다(≈104 mm여야 함). 고치기 전에는 **RL 결과를 성능으로 해석하지 않는다.** 근거와 후보 시험: [`docs/tasks/27-sim-vane-authority.md`](docs/tasks/27-sim-vane-authority.md).
+2. **시뮬레이션 베인 제어력 버그(#21).** main에서는 도메인 랜덤화를 켜면 어떤 정책도 1초 안에 넘어진다. **PR #35**가 CL을 논문 식 3.16으로 다시 계산하고 `vane_arm_l`을 0.104 m로 바꿔 합격 판정(PD 넘어짐 0 %)을 받았다. 리뷰와 머지가 남았다. 머지 전에는 **RL 결과를 성능으로 해석하지 않는다.** 머지 뒤에도 CL·팔 길이는 추정값이다. 남은 일: [`docs/tasks/27-sim-vane-authority.md`](docs/tasks/27-sim-vane-authority.md).
 3. **3D프린트 외주 미발주**(10/14 기준). 조립 일정 전체가 여기에 걸려 있다.
 4. **IMU Yaw**가 돌린 만큼 안 변한다. 스케치가 지자기를 쓰는 Rotation Vector 모드인데 설계는 자력계를 안 쓰기로 했다. Game Rotation Vector로 비교 예정(#28).
 
@@ -151,7 +151,7 @@ AI가 지킬 선:
 | `docs/design/01-avionics-integration-final.md` | 아비오닉스·배선·기계 통합 rev C.1: 좌표계, Teensy 핀맵, 전원, 빵판·만능기판 배치, z 배치, 질량·CG 재계산, 조립·브링업 절차. 마스터와 충돌하면 이 문서가 최신(§12) | 현행 |
 | `docs/design/02-web-dashboard-design.md` | 웹 대시보드·3D 뷰어 설계, **CSV 데이터 계약(§4)**, 개발 단계 W-A부터 W-F, 기술 스택 | 현행 |
 | `docs/design/03-control-pipeline-design.md` | PID/RL 구조, 3D 물리엔진 전환(Stage 2), State/Action, 도메인 랜덤화, 온보드 배포. **PID vs RL의 단일 정본** | 현행 |
-| `docs/design/modelling-notes-ch3.md` | 논문 3장 수식과 `hopper_aviary.py` 대응표, 코드와 다른 지점 | 현행. CLalpha 단위 의심은 `docs/tasks/27` |
+| `docs/design/modelling-notes-ch3.md` | 논문 3장 수식과 `hopper_aviary.py` 대응표, 코드와 다른 지점 | 현행. CL 결정은 PR #35 |
 | `docs/design/rl-open-source-survey.md` | 오픈소스 RL 환경 조사(PyFlyt 등), 가져올 물리 모델 | 10/15 |
 | `docs/design/research-open-source-references.md` | rev C 근거 리서치 | 완료 |
 | `docs/design/connectome-control.md` | 확장 트랙 A(커넥톰) 설계와 한계 | 9/18 |
@@ -170,7 +170,7 @@ AI가 지킬 선:
 | `firmware/cosmos/throttle_serial/` | DShot 벤치 펌웨어 | ESC 없이 확인 |
 | `firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 원본(MIT). 통합 펌웨어의 출발점 | 손대지 않음 |
 | `firmware/singlecopter.param.md` | ArduPilot SingleCopter 대안 경로 | 보존 |
-| `sim/sim_stage1/` | Stage 1 환경(`hopper_aviary.py`, 관측 6·행동 5), `params.yaml`, `train.py`, `export_episode.py`, `check_issue21.py` | #21 버그 있음 |
+| `sim/sim_stage1/` | Stage 1 환경(`hopper_aviary.py`, 관측 6·행동 5), `params.yaml`, `train.py`, `export_episode.py` | #21 버그 있음(PR #35에서 수정 중) |
 | `sim/connectome/` | 확장 트랙 A: 커넥톰 제약 정책망 | 파이프라인 검증 |
 | `kicad/` | 회로도(생성물)와 생성·검증 스크립트(`_tools/`) | ERC 미실행 |
 | `web/` | CSV 재생 3D 뷰어(W-A 뼈대) | 신규, 10/16 |
@@ -217,7 +217,7 @@ AI가 지킬 선:
 
 - 3D프린트 외주업체와 발주 시점(#26).
 - 실험 A 일정·장소·장비와 지도교사 서명 확인(#26).
-- `CLalpha` 단위 해석과 우리 베인 기하로 다시 계산한 값, 측력 상한 처리 방식(#27).
+- CL·`A_duct`·`vane_arm_l` 실측 교체(TC-2, 배기 내경, CG), 요 팔 `vane_arm_r`(#34), PPO가 PD보다 못한 원인.
 - `web/` 폴더 위치와 웹 CI 추가 여부(#29).
 - 확장 트랙 A/B 선택: 실험 A 이후. A는 셔플 대조군과 차이가 없으면 접는다.
 - 최종 자유비행(구속 해제) 도전 여부: STAGE 3 결과를 본 뒤.
