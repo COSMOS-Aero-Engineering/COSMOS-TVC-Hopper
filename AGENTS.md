@@ -70,7 +70,8 @@ AI는 머지 권한자가 아니므로 **직접 머지하지 않는다**. 머지
 | `docs/execution/bench-wiring.svg` | 벤치 배선도(구버전 — `01-avionics-integration-final.md` §4로 대체됨) | — |
 | `kicad/` | Teensy·IMU·서보·RC·ESC 전원/신호 계통 KiCad 스키매틱 + 코드 기반 생성·검증 도구 | 생성 완료, ERC 확인 대기 |
 | `firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 원본 vendor-copy(MIT, `ORIGIN.md`에 수정 계획) — **컴파일 성공 확인**(2026-09-13) | 원본, 손대지 않음 |
-| `firmware/cosmos/imu_test/` | BNO085 브링업 스케치(실험 B용) — 원본 드라이버 복사, 실물 업로드는 아직 | 작성 완료 |
+| `firmware/cosmos/imu_test/` | BNO085 SPI 스케치(최종 핀맵). 배선 주석은 10/15 실물 실크 기준으로 정정 | 작성 완료, SPI 실물 미검증 |
+| `firmware/cosmos/imu_test_i2c/` | BNO085 4선 I2C 브링업 스케치(3V·G·18·19). I2C 스캔 후 0x4A/0x4B 자동 연결 | 2026-10-15 실물 확인 |
 | `firmware/cosmos/throttle_serial/` | DShot 스로틀 시리얼 테스트 스케치(실험 A·C용, 2초 무입력 자동0% 페일세이프 포함) | 작성 완료 |
 | `firmware/singlecopter.param.md` | ArduPilot SingleCopter 파라미터 — **대안 경로**(rev C가 막힐 때) | 보존 |
 | `cad/hopper_params.scad` | **CAD 정본.** EDF 실측(하우징 외경 72mm, 볼트 플랜지 없음 → 클램프 마운트) 반영, 구조버그 2건 수정 완료 | 2026-09-13 |
@@ -105,11 +106,28 @@ AI는 머지 권한자가 아니므로 **직접 머지하지 않는다**. 머지
 | "시뮬레이션 3D랑 웹 3D 뷰어랑 뭐가 다르지?" | 둘 다 — `03-control-pipeline-design.md` §1.1 과 `02-web-dashboard-design.md` §1.1에 **같은 표**가 있음(어느 쪽을 먼저 읽어도 됨) |
 | "지금 전체적으로 어디까지 왔지? 뭐가 남았지?" | `docs/execution/TIMELINE.md` — **한 장 요약(간트차트)** |
 | "이번 주 동아리 시간에 뭘 하나?" | `docs/execution/semester-roadmap.md` (1–2주차는 `week-01-kickoff.md`) — **팀 단위** |
-| "이번 주에 (내 이름)이 뭘 해야 하나?" | `docs/execution/member-weekly-tasks.md` — **개인별** |
+| "이번 주에 (내 이름)이 뭘 해야 하나?" | `docs/learning/README.md`의 **"지금 할 일" 표**(현재 과제의 유일한 기준). `member-weekly-tasks.md`는 9월 기준 원래 계획이라 실제보다 약 3주 앞서 있다 |
 | "전자 배선·핀맵이 정확히 어떻게 되나?" | `01-avionics-integration-final.md` (마스터 설계도 §6.5·§7보다 이 문서가 최신) |
 | "기구 형상·치수·질량예산은?" | `00-hopper-master-design.md` §3~§7 |
 
-## 현재 상태 (최신 항목: 2026-09-22)
+## 부원이 AI에게 자기 과제를 물을 때
+
+부원이 "내 과제를 이해하게 도와줘", "이거 같이 해줘"라고 하면 AI는 이 순서를 따른다.
+
+1. **이름부터 확인한다.** 모르면 묻는다. `docs/learning/README.md`의 "지금 할 일" 표에서 그 사람의 행을 찾는다. 표의 날짜가 오래됐거나 이 절의 현재 상태와 다르면 그 사실을 먼저 말하고 부장·차장에게 확인하라고 한다.
+2. **그 행의 근거(이슈 번호, 파일)를 직접 연다.** 이슈는 `gh issue view <번호> -R COSMOS-Aero-Engineering/COSMOS-TVC-Hopper`, 파일은 저장소에서 읽는다. 기억이나 일반 지식으로 대신하지 않는다.
+3. **설명은 그 사람 담당 안내서(`docs/learning/tracks/`) 수준에서 시작한다.** 입력·출력·정상 결과를 먼저 보여주고, 부원이 자기 말로 다시 설명하게 한다. 처음 하는 사람에게 범위가 큰 지시("PID 구현")를 그대로 넘기지 않는다.
+4. **실행은 작은 단위로, 결과를 기록하게 한다.** 측정값·로그는 `data/`, 코드·문서 변경은 브랜치와 PR로(위 작업 규칙). AI는 머지하지 않는다.
+
+AI가 지켜야 할 선:
+- **EDF·ESC에 배터리 전원을 넣는 단계는 안내만 하고, 부장 입회와 아래 §안전 원칙 확인 전에는 진행하라고 하지 않는다.** 첫 회전 시험은 팬을 분리하거나 스탠드에 볼트로 고정한 상태에서만 한다(#24).
+- 실물에서 확인하지 않은 것을 "된다"고 말하지 않는다. 배선은 실물 모듈의 실크 표기와 `01-avionics-integration-final.md`를 대조한다.
+- `sim/sim_stage1`은 도메인 랜덤화를 켜면 어떤 정책도 안정화하지 못하는 버그(#21)가 있다. 고치기 전에는 RL 학습 결과를 성능으로 해석하지 않는다.
+- Windows PowerShell 5.1에서는 `&&`가 안 된다. 명령을 이어 쓸 때는 `;`를 쓴다. Teensy가 안 잡히면 먼저 데이터 전송용 USB 케이블인지 확인한다(충전 전용 케이블이 실제 원인이었다).
+
+## 현재 상태 (최신 항목: 2026-10-16)
+
+- **2026-10-15~16 (실물 브링업, 시뮬레이션 점검)**: Teensy가 안 잡히던 원인은 충전 전용 USB 케이블이었다. 데이터 케이블로 업로드 성공, BNO085를 4선 I2C로 0x4B에서 인식하고 자세값 출력 확인(#18, `imu_test_i2c`). `imu_test`(SPI) 배선 주석의 MOSI/MISO 짝을 실물 실크 기준으로 정정. DShot 벤치 펌웨어를 arm 게이트·DShot 600 상한·램프·워치독·비상정지로 재작성(#19), 실물 ESC 시험은 #24. 시뮬레이션 점검에서 도메인 랜덤화의 CG 오프셋이 베인 최대 제어력의 약 20배라 어떤 정책도 안정화 못 하는 버그와 `vane_arm_l` 정의 불일치를 발견(#21). 에피소드를 웹 CSV 계약으로 내보내는 `export_episode.py` 추가(#23), 오픈소스 RL 환경 조사(#22, `docs/design/rl-open-source-survey.md`). 확장 트랙은 A(커넥톰)/B(리버스 엔지니어링) 택1로 정리(#20). 부원별 현재 과제는 `docs/learning/README.md`의 "지금 할 일" 표로 통일.
 
 - **CAD**: EDF 실측 완료(9/13) — 볼트 플랜지 없는 제품이라 클램프 마운트로 설계 변경. rev C.1에서
   장비 선반·서보 보스·스파 커플러·다리 방위 등 구조 대폭 보강(`01-avionics-integration-final.md` §12
@@ -124,7 +142,7 @@ AI는 머지 권한자가 아니므로 **직접 머지하지 않는다**. 머지
   버그 발견·수정(`BNO080` 기본 생성자 없음 — `firmware/cosmos/README.md` 참고). 통합 펌웨어는 아직.
   이어 PR #13에서 BNO085 연결을 I2C(핀 18/19)에서 확정 핀맵의 SPI(CS=10, MOSI=11, MISO=12,
   SCK=13, RST=20, INT=21, WAK/PS0=22)로 전환해 RC CH1·CH2와의 핀 충돌을 제거했다. Teensy 4.0
-  핀헤더 납땜·USB 연결 완료(2026-09-18~19), 실물 업로드는 아직(컴파일까지만 검증됨).
+  핀헤더 납땜·USB 연결 완료(2026-09-18~19). 실물 업로드는 2026-10-15 성공(위 최신 항목).
 - **소프트웨어(RL)**: SB3 CartPole-v1/Pendulum-v1 완료. `sim/sim_stage1/hopper_aviary.py` — 논문
   3장 운동방정식을 numpy로 직접 적분하는 순수 `gymnasium.Env`(gym-pybullet-drones 포기 이유는
   아래 §소프트웨어 스택). 도메인 랜덤화 포함, PPO 1회 학습 성공(파이프라인 검증 목적, 물리값이
@@ -159,6 +177,8 @@ AI는 머지 권한자가 아니므로 **직접 머지하지 않는다**. 머지
   맞았음)를 03번 문서로 흡수·삭제, "문서 경계" 섹션(아래) 신설.
 
 ## 다음 액션 (부장)
+
+> 아래는 9월 기준 목록이다. 지금 부장 과제는 `docs/learning/README.md`의 "지금 할 일" 표(3D프린트 외주 발주, 실험 A 안전 계획)를 본다.
 
 1. **9/18(금) 1h + 9/19(토) 2h — 첫 세션.** 상세 진행은 `docs/execution/week-01-kickoff.md`. 요약:
    금요일은 팀 확정+착수, 토요일은 실험 A(EDF 추력곡선)·B(IMU 브링업)·C(DShot 모터제어).
