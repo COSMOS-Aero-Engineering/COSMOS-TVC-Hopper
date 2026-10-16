@@ -4,12 +4,18 @@ PRJ-01 TVC 호퍼 — Stage 1 (자세 안정화) PPO 학습 스크립트
 실행: (sim/ 폴더 안에서) python train.py
 필요 패키지: gymnasium, stable-baselines3, pyyaml (CartPole/Pendulum 연습 때 이미 설치했으면
              pyyaml만 추가로 설치: pip install pyyaml)
+
+학습 seed(TRAIN_SEED)는 pd_gate.py의 평가 seed(0~199)와 겹치지 않게 둔다. 학습 후 PD와 같은
+조건으로 비교하려면: python pd_gate.py --model hopper_attitude_ppo.zip
 """
 from hopper_aviary import HopperAttitudeEnv
 from stable_baselines3 import PPO
 
+TRAIN_SEED = 10_000
+
 env = HopperAttitudeEnv()
-model = PPO("MlpPolicy", env, verbose=1)
+env.reset(seed=TRAIN_SEED)
+model = PPO("MlpPolicy", env, verbose=1, seed=TRAIN_SEED)
 model.learn(total_timesteps=200_000)
 model.save("hopper_attitude_ppo")
 
