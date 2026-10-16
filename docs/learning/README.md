@@ -10,25 +10,25 @@
 
 ## 지금 할 일 (2026-10-16 기준)
 
-처음 온 부원은 먼저 아래 [처음 20분](#처음-20분)과 [첫 과제](#내가-볼-안내서)부터 한다. 첫 과제를 마친 사람은 이 표를 따른다. 이 표가 바뀌면 날짜도 같이 고친다.
+처음 온 부원은 먼저 아래 [처음 20분](#처음-20분)과 [첫 과제](#내가-볼-안내서)부터 한다. 첫 과제를 마친 사람은 이 표를 따른다. **자세한 작업 지시(목표·판정 기준·단계·결과물)는 각 행의 PRD 이슈에 있다.** 기한은 10/24(토), 중간 점검은 10/17(토). 이 표가 바뀌면 날짜도 같이 고친다.
 
 | 담당 | 끝난 것 | 지금 할 일 | 근거 |
 |---|---|---|---|
-| 시우 | Teensy 업로드, IMU 4선 I2C 인식(0x4B) | IMU를 평평하게 둔 기준값과 앞·오른쪽 기울임, 시계방향 회전 때 Roll·Pitch·Yaw 부호를 측정해 `data/`에 기록. 그다음 재후와 DShot 실물 시험 | `firmware/cosmos/imu_test_i2c/`, #24 |
-| 재후 | DShot 안전 펌웨어(arm·상한·램프·워치독) 머지 | **팬 분리 상태에서** 실물 ESC 시험 8개 항목 진행(시우와 2인 1조). 이후 펌웨어 출력 형식을 [CSV 계약](../design/02-web-dashboard-design.md) §4와 대조 | #24, `firmware/cosmos/throttle_serial/` |
-| 준원 | Stage 1 PPO 파이프라인 | 시뮬레이션 베인 제어력 버그 수정(`CLalpha` 기하 인자, `vane_arm_l` 정의). **도메인 랜덤화를 켠 상태에서 PD가 안정화**하는지가 RL 재학습 전 합격 기준 | #21, [오픈소스 조사](../design/rl-open-source-survey.md) §6 |
-| 민지 | 로컬 3D 모형 실습 | `python export_episode.py --policy pd --no-dr`로 만든 CSV를 3D 뷰어에서 시간에 맞춰 재생(쿼터니언 사용) | `sim/sim_stage1/export_episode.py`, [웹 설계](../design/02-web-dashboard-design.md) §4·§5 |
-| 민찬·지훈 | 서보·배터리·Teensy 실측 CAD 반영 | CAD에서 무게중심 높이를 추정해 베인 피벗까지의 세로 거리를 준원에게 전달(#21의 `vane_arm_l`). 서보 장착 치수·커넥터 공간 실측 계속 | #21, `cad/hopper_params.scad` |
-| 민우 | KiCad 스키매틱 1차 | 회로도의 BNO085 SPI 연결을 정정된 핀맵과 대조: **ADDR/MOSI → 11, SDA/MISO → 12, SCL/SCK → 13**. ERC 실행 | `firmware/cosmos/imu_test/src/imu_test.ino` 배선 주석 |
-| 민찬 (부장) | PR 정리, 확장 트랙 A/B 택1 원칙 확정 | 3D프린트 외주 발주(조립 일정의 병목), 실험 A(EDF 추력곡선) 안전 진행 계획 | [타임라인](../execution/TIMELINE.md) §4 |
+| 시우 | Teensy 업로드, IMU 4선 I2C 인식(0x4B) | IMU를 평평하게 둔 기준값과 FWD·LEFT 쪽 기울임, 좌우 90° 회전 때 Roll·Pitch·Yaw 부호를 측정해 `data/`에 기록하고 기체 좌표계와 일치 여부 판정. 그다음 재후와 DShot 실물 시험 | PRD #28, #24 |
+| 재후 | DShot 안전 펌웨어(arm·상한·램프·워치독) 머지 | **팬 분리 상태에서** 실물 ESC 시험 8개 항목 진행(시우와 2인 1조). 이후 펌웨어 출력 형식을 [CSV 계약](../design/02-web-dashboard-design.md) §4와 대조 | PRD #28, #24 |
+| 준원 | Stage 1 PPO 파이프라인 | 시뮬레이션 베인 제어력 버그 수정(`CLalpha` 기하 인자, `vane_arm_l` 정의). **도메인 랜덤화를 켠 상태에서 PD가 안정화**하는지가 RL 재학습 전 합격 기준 | PRD #27, #21 |
+| 민지 | 로컬 3D 모형 실습 | `python export_episode.py --policy pd --no-dr`로 만든 CSV를 3D 뷰어에서 시간에 맞춰 재생(쿼터니언 사용) | PRD #29 |
+| 민찬·지훈 | 서보·배터리·Teensy 실측 CAD 반영 | CAD에서 무게중심 높이를 추정해 베인 피벗까지의 세로 거리를 준원에게 전달(#21의 `vane_arm_l`). 서보 장착 치수·커넥터 공간 실측 계속 | PRD #26 |
+| 민우 | KiCad 스키매틱 1차 | 회로도의 BNO085 SPI 연결을 정정된 핀맵과 대조: **ADDR/MOSI → 11, SDA/MISO → 12, SCL/SCK → 13**. ERC 실행 | PRD #26 |
+| 민찬 (부장) | PR 정리, 확장 트랙 A/B 택1 원칙 확정 | 3D프린트 외주 발주(조립 일정의 병목), 실험 A(EDF 추력곡선) 안전 진행 계획 | PRD #26 |
 
 ### AI에게 내 과제를 물어볼 때
 
 Claude Code나 Codex를 이 저장소 폴더에서 열고 아래 문장을 그대로 붙여 넣는다. `(이름)`만 바꾼다. AI는 [`AGENTS.md`](../../AGENTS.md)의 "부원이 AI에게 자기 과제를 물을 때" 절차를 따른다.
 
 ```
-나는 COSMOS의 (이름)이야. docs/learning/README.md의 "지금 할 일" 표에서 내 행을 찾아서,
-근거로 적힌 이슈와 파일을 직접 열어 읽고 다음을 해줘.
+나는 COSMOS의 (이름)이야. docs/learning/README.md의 "지금 할 일" 표에서 내 행을 찾고,
+거기 적힌 PRD 이슈를 gh로 직접 열어 내 담당 절을 읽은 다음 이걸 해줘.
 1) 내가 지금 할 일이 무엇이고 왜 필요한지, 프로젝트 전체에서 어디에 연결되는지 쉬운 말로 설명
 2) 처음 30분 안에 할 수 있는 첫 단계와, 성공했을 때 보이는 정상 결과
 3) 내가 이해했는지 확인할 질문 3개 (내가 내 말로 답할게)
