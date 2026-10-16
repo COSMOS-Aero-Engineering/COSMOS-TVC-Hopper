@@ -8,6 +8,9 @@ venv/
 # Node (pptx 생성기)
 node_modules/
 package-lock.json
+# 웹 뷰어는 lock 파일로 버전을 고정한다
+!/web/package-lock.json
+/web/dist/
 
 # AI 에이전트 도구가 만드는 로컬 상태 (커밋 대상 아님)
 .omc/
@@ -34,6 +37,8 @@ Thumbs.db
 .pio/
 .pioenvs/
 .piolibdeps/
+# pio device monitor --filter log2file 출력. 남길 로그는 data/로 옮겨 커밋한다
+/firmware/cosmos/*/logs/
 
 # 예외: 외주 업체에 실제로 보낸 STL은 기록으로 남긴다
 # (출력물이 이상할 때 "우리가 보낸 파일이 이거였나"를 확인할 유일한 근거)

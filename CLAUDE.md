@@ -1,7 +1,13 @@
 # COSMOS — TVC 착륙 호퍼 + 강화학습 프로젝트
 
-**정본 컨텍스트 문서는 [`AGENTS.md`](AGENTS.md)다.** 프로젝트 배경·확정 방향·현재 상태·문서 맵·
-다음 액션·안전 원칙 전부 거기 있다. Claude Code 세션은 이 파일 대신 `AGENTS.md`를 읽을 것.
+**정본 컨텍스트 문서는 [`AGENTS.md`](AGENTS.md)다.** 프로젝트 배경·확정 방향·다음 액션·안전 원칙이
+거기 있고, 현재 상태와 문서 맵은 거기서 링크한다. 아래 `@AGENTS.md` 한 줄이 Claude Code 세션에 그 파일을 불러온다.
+
+@AGENTS.md
+
+`@AGENTS.md` 줄을 지우지 말 것: Claude Code는 이 `CLAUDE.md`가 있으면 `AGENTS.md`를 자동으로 읽지 않는다
+([공식 문서](https://code.claude.com/docs/en/memory#agents-md)). 2026-10-16까지는 이 줄이 없어서 Claude Code 세션이
+`AGENTS.md`의 규칙을 모른 채 시작했다.
 
 이 파일을 따로 둔 이유: Claude Code가 `CLAUDE.md`를 관례적으로 찾기 때문에 진입점만 남겨둔 것 —
 **내용을 여기 복사해서 따로 관리하지 않는다.** 예전엔 `CLAUDE.md`와 `AGENTS.md`를 각각 손으로
