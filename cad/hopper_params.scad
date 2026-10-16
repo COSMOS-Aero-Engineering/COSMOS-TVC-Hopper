@@ -67,8 +67,8 @@ saddle_h      = 16;    // 기둥을 감싸는 새들 링 높이
 saddle_wall   = 2.9;   // 새들 링 두께
 tie_slot_w    = 3.2;   // 케이블타이 슬롯 폭 (2.5mm 타이 기준)
 tie_slot_l    = 8;     // 케이블타이 슬롯 길이
-wire_slot_x0 = 40; wire_slot_x1 = 50;      // 아비오닉스 선반 배선 통로(로컬 x, 반경 방향)
-wire_slot_y0 = 23; wire_slot_y1 = 30.5;    // 로컬 |y|. ESC 브래킷 플랜지(|y| ≤ 22) 바깥
+wire_slot_x0 = 62; wire_slot_x1 = 74;      // 아비오닉스 선반 배선 통로(로컬 x, 반경 방향). ESC 플랜지(x ≤ 60) 바깥
+wire_slot_y0 = 8;  wire_slot_y1 = 18;      // 로컬 |y|. 만능기판 인서트 보스(x 45.7-54.3, 83.8-92.4)와 겹치지 않는 자리
 
 // 만능기판(5x7cm) 장착 — 01-avionics-integration-final.md §5.1 의 확공 좌표와 1:1
 perf_hole_dx  = 53.34; // C2↔C23 = 21홀 × 2.54
@@ -470,9 +470,10 @@ module equip_shelf_avionics() {
             tie_slot(shelf_r_inner + 34, sy, shelf_top_z - shelf_t);
         }
         // 배선 통로 슬롯 2개 (서보선·3상선이 아래로 빠지는 길)
-        // 2026-10-16(#59): 예전 슬롯(x 43-49, y ±12.5-27.5)은 바로 아래 ESC 브래킷 플랜지(y ±(esc_l+8)/2 = ±22)에
-        // 절반 넘게 가려져 약 6x5.5 mm만 열려 있었다. 플랜지 바깥(y 23-30.5)으로 옮기고 x를 넓혔다(10x7.5 mm).
-        // 바깥 끝 30.5는 새들 타이 슬롯(y 32.3부터)과 1.8 mm 벽을 남긴다.
+        // 2026-10-16(#59): 예전 슬롯(x 43-49, y ±12.5-27.5)은 바로 아래 ESC 브래킷 플랜지(x 44-60, |y| ≤ 22)에
+        // 절반 넘게 가려졌다. 플랜지 바깥이면서 만능기판 인서트 보스와 새들 타이 슬롯을 모두 피하는
+        // x 62-74, |y| 8-18(12x10 mm)로 옮겼다. 선은 기판 밑(스탠드오프 높이)으로 나와 기판 가장자리로 간다.
+        // 겹침은 아래 검증 echo가 확인한다.
         for (s = [-1, 1])
             translate([wire_slot_x0, s > 0 ? wire_slot_y0 : -wire_slot_y1, shelf_top_z - shelf_t - 1])
                 cube([wire_slot_x1 - wire_slot_x0, wire_slot_y1 - wire_slot_y0, shelf_t + 2]);
@@ -608,8 +609,23 @@ echo(str("Ø3 CF 스파 재단 길이 = ", vane_spar_len, " mm  (베인 안쪽 �
 echo(str("상판 상단 z = ", top_plate_top_z, " mm"));
 echo(str("베인 피벗 z = ", vane_pivot_z, " mm — 마스터 §4 의 '배기면→피벗 ", vane_gap_below_exit,
          "mm'는 실제로는 '배기면→링 상단'. 제어 모멘트암은 |z_cg - ", vane_pivot_z, "| 로 계산할 것"));
-echo(str("배선 슬롯 |y| ", wire_slot_y0, "~", wire_slot_y1, "mm vs ESC 브래킷 플랜지 |y| ≤ ", (esc_l + 8)/2,
-         "mm → ", wire_slot_y0 > (esc_l + 8)/2 ? "정상(슬롯이 안 가려짐)" : "!! 플랜지가 슬롯을 가림 !!"));
+// 배선 슬롯 겹침 검사: ESC 플랜지(x shelf_r_inner+2 ~ +18, |y| ≤ (esc_l+8)/2), 만능기판 인서트 보스, 새들 타이 슬롯
+function rect_gap(ax0, ax1, ay0, ay1, bx0, bx1, by0, by1) =
+    max(max(bx0 - ax1, ax0 - bx1), max(by0 - ay1, ay0 - by1));   // > 0 이면 떨어져 있음
+function circ_gap(x0, x1, y0, y1, cx, cy, r) =
+    norm([max(x0 - cx, 0, cx - x1), max(y0 - cy, 0, cy - y1)]) - r;
+wire_slot_px0 = shelf_r_inner + (54 - perf_hole_dy)/2;
+wire_slot_gaps = [
+    rect_gap(wire_slot_x0, wire_slot_x1, wire_slot_y0, wire_slot_y1,
+             shelf_r_inner + 2, shelf_r_inner + 18, -(esc_l + 8)/2, (esc_l + 8)/2),
+    min([for (hx = [wire_slot_px0, wire_slot_px0 + perf_hole_dy])
+         circ_gap(wire_slot_x0, wire_slot_x1, wire_slot_y0, wire_slot_y1, hx, perf_hole_dx/2, insert_d/2 + 2.2)]),
+    rect_gap(wire_slot_x0, wire_slot_x1, wire_slot_y0, wire_slot_y1,
+             col_mount_r*cos(45) + 7 - tie_slot_l/2, col_mount_r*cos(45) + 7 + tie_slot_l/2,
+             col_mount_r*sin(45) - tie_slot_w/2, col_mount_r*sin(45) + tie_slot_w/2)];
+echo(str("배선 슬롯 간격(mm): ESC 플랜지 ", wire_slot_gaps[0], ", 인서트 보스 ", wire_slot_gaps[1],
+         ", 새들 타이 슬롯 ", wire_slot_gaps[2], " → ",
+         min(wire_slot_gaps) >= 1 ? "정상(모두 1 mm 이상 떨어짐)" : "!! 겹치거나 1 mm 미만 !!"));
 echo(str("서보 귀 슬롯: 가까운 쪽 ", servo_slot_near, "mm, 먼 쪽 ", servo_slot_far,
          "mm → 구멍 간격 ", servo_slot_near[0] + servo_slot_far[0], "-", servo_slot_near[1] + servo_slot_far[1],
          "mm 범위를 받음 (MG90S 실물 미측정, #59)"));

@@ -107,6 +107,18 @@ def main():
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
 
+    # 먼저 원본 전체의 검증 echo를 본다. "!!"로 시작하는 경고(간섭·범위 밖)가 있으면 STL을 뽑지 않는다.
+    with tempfile.TemporaryDirectory() as tmp:
+        r = subprocess.run([exe, "-o", str(Path(tmp) / "check.csg"), str(SCAD)],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+    echoes = [l for l in r.stderr.splitlines() if l.startswith("ECHO")]
+    alarms = [l for l in echoes if "!!" in l]
+    print(f"CAD 검증 echo {len(echoes)}줄, 경고 {len(alarms)}건")
+    for l in alarms:
+        print("  " + l)
+    if r.returncode != 0 or alarms:
+        sys.exit("CAD 검증에서 경고가 나왔다. hopper_params.scad를 고친 뒤 다시 실행한다.")
+
     bad = 0
     print(f"| 부품 | 크기 (mm) | 부피 (cm3) | 열린 모서리 |")
     print(f"|---|---|---|---|")
