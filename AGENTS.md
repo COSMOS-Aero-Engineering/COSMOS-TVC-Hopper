@@ -23,7 +23,7 @@ README.md = 지금 당장 뭘 타이핑해야 하는지.
 
 Claude Code, Codex, OpenCode 등 어떤 도구를 쓰든 이 규칙을 먼저 지킨다. 자세한 순서는 바로 아래 §작업 순서에 있다.
 
-1. 작업은 GitHub 이슈에서 시작한다. 이슈가 없으면 먼저 만든다.
+1. 작업은 GitHub 이슈에서 시작한다. 이슈가 없으면 먼저 만든다. 필요한 도구는 `python ship.py tools`가 확인하고 없으면 설치한다.
 2. `main`에 직접 커밋하거나 푸시하지 않는다. AI는 머지하지 않는다.
 3. 구현하기 전에 Best practice를 조사한다: 공식 문서, 데이터시트, 라이브러리가 권장하는 방식, 잘 관리된 참고 프로젝트, 이 저장소의 기존 코드와 문서. 조사한 출처는 PR의 "근거"에 적는다.
 4. 추측하지 않는다. 실행한 명령과 출력이 없으면 "완료"라고 쓰지 않는다.
@@ -39,11 +39,11 @@ Claude Code, Codex, OpenCode 등 어떤 도구를 쓰든 이 규칙을 먼저 �
 사람이든 AI 에이전트든 이 저장소에서 작업할 땐 예외 없이 아래 순서를 따른다. AI는 사람이 막는 단계(§핵심 규칙 8)가 아니면 단계 사이에 멈추지 않고 진행한다.
 
 1. **이슈를 읽고 선점한다.** `gh issue view <번호> --comments`로 본문과 댓글을 전부 읽는다. 다른 사람이 이미 `claimed by ...`를 남겼거나 이슈가 닫혔으면 멈추고 알린다. 아니면 댓글 `claimed by <브랜치 이름>`을 남긴다.
-2. **최신 `main`에서 브랜치를 만든다.** `git switch -c <태그>/<이슈 번호>-<짧은-설명>`. 태그는 `cad`/`fw`/`sim`/`web`/`kicad`/`data`/`docs`, 그 외 인프라성 작업은 `infra`. 예: `sim/21-vane-force-fix`.
+2. **이슈 전용 worktree와 브랜치를 만든다.** `python ship.py wt <이슈 번호>`가 최신 `origin/main`에서 `../<저장소>-wt/issue-<번호>` 폴더와 브랜치 `<태그>/<이슈 번호>`를 만든다. 태그는 이슈 제목의 `[태그]`나 라벨에서 정하고, 없으면 `--tag`로 준다. 태그는 `cad`/`fw`/`sim`/`web`/`kicad`/`data`/`docs`/`infra`. 그 폴더로 이동해서 작업한다. 같은 폴더를 다른 세션과 같이 쓰지 않는다.
 3. **조사한 뒤 구현한다.** §핵심 규칙 3대로 Best practice를 먼저 조사한다. 부원은 §일하는 방식의 "이해 먼저"도 함께 한다. 구현은 이슈 범위만 한다.
-4. **검사를 통과시킨다.** 바꾼 영역의 검사를 직접 돌린다: `python tasks.py check`(sim), `pio run`(펌웨어), KiCad ERC, 문서 링크 확인. 실패하면 고칠 때까지 반복한다. 커밋은 작게 나누고 제목은 `[태그] 무엇을 바꿨는지`로 쓴다.
+4. **검사를 통과시킨다.** 바꾼 영역의 검사를 직접 돌린다: `python tasks.py check`(sim), `pio run`(펌웨어), KiCad ERC, 문서 링크 확인. 학습처럼 메모리를 많이 쓰는 명령은 `python ship.py capped 8G -- <명령>`으로 상한을 건다. 실패하면 고칠 때까지 반복한다. 커밋은 작게 나누고 제목은 `[태그] 무엇을 바꿨는지`로 쓴다.
 5. **PR을 연다.** `.github/pull_request_template.md`를 채운다. 본문에 `Closes #<이슈 번호>`를 쓴다. **실제로 해 본 확인만 체크**하고 범위를 "빌드만 확인", "ESC 없이 Teensy에서만 확인"처럼 쓴다. 확인 못 한 값은 `확인 필요`로 적는다. 작성자가 아래 권한자가 아니면 권한자 한 명을 리뷰어로 지정한다(`gh pr create --base main --reviewer junwonkim07`).
-6. **다른 회사의 모델로 교차 리뷰한다.** 예: Claude로 썼으면 Codex로, Codex로 썼으면 Claude로 리뷰한다. 리뷰 요청에는 범위(브랜치나 PR 번호)만 쓰고 의심 가는 점이나 체크리스트를 넣지 않는다. 맞는 지적은 고쳐서 푸시하고, 받아들이지 않는 지적은 이유를 한 줄 남긴다. 결과는 PR 템플릿의 "교차 리뷰"에 쓴다. 다른 회사의 모델을 쓸 수 없으면 그렇다고 쓴다.
+6. **다른 회사의 모델로 교차 리뷰한다.** `python ship.py review --author <작성한 모델>`이 작성자와 다른 계열의 리뷰어를 고른다: Codex, Claude Code 순서로 로그인된 것을 쓰고, 둘 다 없으면 OpenCode 무료 모델(로그인 불필요)을 쓴다. 리뷰 요청에는 범위(브랜치나 PR 번호)만 쓰고 의심 가는 점이나 체크리스트를 넣지 않는다. 맞는 지적은 고쳐서 푸시하고, 받아들이지 않는 지적은 이유를 한 줄 남긴다. 결과는 PR 템플릿의 "교차 리뷰"에 쓴다.
 7. **CI를 통과시킨다.** `gh pr checks --watch`. 실패하면 `gh run view --log-failed`로 로그를 읽고 고친다.
 8. **마무리하고 멈춘다.** PR 템플릿의 "알게 된 것"에 새로 알게 된 사실과 틀렸던 가정을 쓴다. 모든 에이전트가 알아야 할 교훈이면 이 PR에서 아래 §교훈에 한 줄 추가한다. 그다음 PR 링크를 알리고 멈춘다.
 
@@ -117,6 +117,8 @@ Claude Code, Codex, OpenCode 등 어떤 도구를 쓰든 이 규칙을 먼저 �
 | `data/` | 실험 로그(CSV) | 착수 전 |
 | `pyproject.toml` · `sim/pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 **버전 고정본**(uv) — 부원마다 다른 버전이 깔려 결과가 재현 안 되는 걸 막는 용도. `sim/pyproject.toml`이 sim 의존성 정본, `uv.lock`이 실제 고정본 | 2026-09-18 추가 |
 | `sim/requirements.txt` | 위 lock에서 생성되는 **사본**(`python tasks.py lock`) — uv 없이 pip만 쓸 때용. 손으로 고치지 않는다 | 2026-09-18 생성물로 전환 |
+| `ship.py` | ship-issue 도구(`tools`/`wt`/`capped`/`review`) — §작업 순서의 명령을 모든 PC에 준다. 없는 도구(gh, opencode)는 처음 쓸 때 설치한다. 표준 라이브러리만 쓴다 | 2026-10-16 추가 |
+| `.claude/skills/ship-issue/`, `.claude/skills/ste-ko/` | AI 도구용 스킬. Claude Code와 OpenCode가 읽는다 | 2026-10-16 추가 |
 | `tasks.py` | 작업 실행기(`setup`/`lock`/`compile`/`sanity`/`smoke`/`check`/`train`/`deck`/`graph`/`clean`) — 작업 간 순서와 입력 해시 캐시를 갖는다. Windows에 `make`가 없어서 파이썬 stdlib로 구현. CI도 `python tasks.py check`를 그대로 호출한다 | 2026-09-18 추가 |
 | `.github/workflows/ci.yml` | CI — PR마다 sim 문법·sanity·PPO 스모크 + PlatformIO 펌웨어 2종 빌드. 학습은 돌리지 않는다 | 2026-09-19 갱신 |
 | `docs/presentation/` | 동아리 설명회 발표자료(.pptx) + 대본 | 발표 완료(9/5) |
@@ -381,4 +383,5 @@ rev C 결정 이후에도 이 파일에 그대로 남아있어서 **실제 상�
 에이전트가 틀렸다가 바로잡힌 것을 한 줄씩 남긴다. 같은 실수를 다음 세션이 반복하지 않게 하는 용도다.
 
 - (2026-10-16) "X 방식을 원한다"는 요청은 X를 직접 실행하라는 뜻이 아니라 저장소 규칙과 템플릿에 X를 넣으라는 뜻일 수 있다. 둘 중 무엇인지 모호하면 먼저 묻는다.
+- (2026-10-16) 부원 PC에 없는 도구라고 작업 단계를 빼지 않는다. 저장소가 그 도구를 주거나(`ship.py`) 없으면 자동으로 설치하게 한다.
 - (2026-10-16) Claude Code는 같은 폴더나 상위 폴더에 `CLAUDE.md`가 있으면 `AGENTS.md`를 자동으로 읽지 않는다([공식 문서](https://code.claude.com/docs/en/memory#agents-md)). 그래서 `CLAUDE.md` 첫 줄에 `@AGENTS.md`를 둔다.
