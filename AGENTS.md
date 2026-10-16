@@ -8,7 +8,41 @@
 
 ---
 
-## 1. 프로젝트 한눈에
+## 1. 핵심 규칙 (사람과 모든 AI 도구 공통, 2026-10-16)
+
+Claude Code, Codex, OpenCode 등 어떤 도구를 쓰든 이 규칙을 먼저 지킨다. 자세한 순서는 바로 아래 §작업 순서에 있다.
+
+1. 작업은 GitHub 이슈에서 시작한다. 이슈가 없으면 먼저 만든다. 필요한 도구는 `python ship.py tools`가 확인한다. 설치할 수 있으면 설치하고, 못 하면 설치 방법을 출력한다.
+2. `main`에 직접 커밋하거나 푸시하지 않는다. AI는 머지하지 않는다.
+3. 구현하기 전에 Best practice를 조사한다: 공식 문서, 데이터시트, 라이브러리가 권장하는 방식, 잘 관리된 참고 프로젝트, 이 저장소의 기존 코드와 문서. 조사한 출처는 PR의 "근거"에 적는다.
+4. 추측하지 않는다. 실행한 명령과 출력이 없으면 "완료"라고 쓰지 않는다.
+5. 이슈 범위 밖의 문제는 고치지 않고 새 이슈로 남긴다.
+6. 이슈, PR, 커밋 메시지는 `ste-ko` 스킬(`.claude/skills/ste-ko/SKILL.md`)을 불러온 뒤 쓴다. 스킬 목록에 `ste-ko`가 없는 도구(예: Codex는 `.agents/skills`만 읽는다)는 그 파일을 직접 읽는다. `ship-issue` 스킬(`.claude/skills/ship-issue/SKILL.md`)도 같다.
+7. force push, `git reset --hard`, 푸시한 커밋 amend, 여러 파일 삭제를 하지 않는다. `.env`와 비밀 키를 읽지 않는다.
+8. **사람만 하는 일**을 만나면 AI는 멈추고 라벨 `agent physically incapable` 이슈를 연다: 돈 쓰기(부품 구매), 외부 계정, 비밀 키, 물리 동작(EDF·ESC 전원 인가, 실물 업로드, LiPo 충전). 이슈 본문은 "풀 방법 / 선택지 / 근거"로 쓴다.
+
+## 2. 작업 순서: 이슈에서 PR까지 (ship-issue 방식, 2026-10-16)
+
+사람이든 AI 에이전트든 이 저장소에서 작업할 땐 예외 없이 아래 순서를 따른다. AI는 사람이 막는 단계(§핵심 규칙 8)가 아니면 단계 사이에 멈추지 않고 진행한다.
+
+1. **이슈를 읽고 선점한다.** `gh issue view <번호> --comments`로 본문과 댓글을 전부 읽는다. 다른 사람이 이미 `claimed by ...`를 남겼거나 이슈가 닫혔으면 멈추고 알린다. 아니면 2단계에서 브랜치를 만든 뒤 댓글 `claimed by <브랜치 이름>`을 남긴다.
+2. **이슈 전용 worktree와 브랜치를 만든다.** `python ship.py wt <이슈 번호>`가 최신 `origin/main`에서 `../<저장소>-wt/issue-<번호>` 폴더와 브랜치 `<태그>/<이슈 번호>`를 만든다. 태그는 이슈 제목의 `[태그]`나 라벨에서 정하고, 없으면 `--tag`로 준다. 태그는 `cad`/`fw`/`sim`/`web`/`kicad`/`data`/`docs`/`infra`. 그 폴더로 이동해서 작업한다. 같은 폴더를 다른 세션과 같이 쓰지 않는다.
+3. **조사한 뒤 구현한다.** §핵심 규칙 3대로 Best practice를 먼저 조사한다. 부원은 §일하는 방식의 "이해 먼저"도 함께 한다. 구현은 이슈 범위만 한다.
+4. **검사를 통과시킨다.** 바꾼 영역의 검사를 직접 돌린다: `python tasks.py check`(sim), `pio run`(펌웨어), KiCad ERC, 문서 링크 확인. 학습처럼 메모리를 많이 쓰는 명령은 `python ship.py capped 8G -- <명령>`으로 상한을 건다(Windows에서는 상한이 걸리지 않고 경고만 나온다). 실패하면 고칠 때까지 반복한다. 커밋은 작게 나누고 제목은 `[태그] 무엇을 바꿨는지`로 쓴다.
+5. **PR을 연다.** `.github/pull_request_template.md`를 채운다. 본문에 `Closes #<이슈 번호>`를 쓴다. **실제로 해 본 확인만 체크**하고 범위를 "빌드만 확인", "ESC 없이 Teensy에서만 확인"처럼 쓴다. 확인 못 한 값은 `확인 필요`로 적는다. 작성자가 아래 권한자가 아니면 권한자 한 명을 리뷰어로 지정한다(`gh pr create --base main --reviewer junwonkim07`).
+6. **다른 회사의 모델로 교차 리뷰한다.** `python ship.py review --author <작성한 모델>`이 작성자와 다른 계열의 리뷰어를 고른다: Codex, Claude Code 순서로 로그인된 것을 쓰고, 둘 다 없으면 OpenCode 무료 모델(로그인 불필요)을 쓴다. 리뷰 요청에는 범위(브랜치나 PR 번호)만 쓰고 의심 가는 점이나 체크리스트를 넣지 않는다. 맞는 지적은 고쳐서 푸시하고, 받아들이지 않는 지적은 이유를 한 줄 남긴다. 결과는 PR 템플릿의 "교차 리뷰"에 쓴다.
+7. **CI를 통과시킨다.** `gh pr checks --watch`. 실패하면 `gh run view --log-failed`로 로그를 읽고 고친다.
+8. **마무리하고 멈춘다.** 남은 일, 확인하지 못한 항목, 미룬 결정은 하나씩 후속 이슈로 만든다. 사람만 확인할 수 있는 것(Windows 실행, 실물 동작 등)은 라벨 `agent physically incapable`을 단다. 이슈 번호는 PR 템플릿의 "후속 이슈"에 적는다. 이슈 없이 대화나 PR 본문에만 "남은 것"을 남기지 않는다. PR 템플릿의 "알게 된 것"에 새로 알게 된 사실과 틀렸던 가정을 쓴다. 모든 에이전트가 알아야 할 교훈이면 이 PR에서 아래 §교훈에 한 줄 추가한다. 그다음 PR 링크를 알리고 멈춘다.
+
+**리뷰·머지 권한**: 부장 김민찬(`MINBBBB1201`)과 차장 김준원(`junwonkim07`) 두 명뿐이다. 두 사람은 CI(`.github/workflows/ci.yml`)가 초록불인 것을 확인하고 변경사항을 직접 검토한 뒤, 본인이 올린 PR도 스스로 머지할 수 있다. 그 외 사람은 두 사람 중 한 명의 승인(Approve)을 받아야 하며 직접 머지하지 않는다. 머지는 squash 방식이다: `gh pr merge --squash --delete-branch`.
+
+**남의 브랜치**: 권한자가 요청하면 다른 사람의 브랜치나 PR에도 커밋을 더할 수 있다. 새 커밋만 더하고, 푸시 전에 원격 브랜치의 최신 커밋을 확인해서 남이 먼저 푸시한 커밋을 덮지 않는다.
+
+**CI**(`.github/workflows/ci.yml`): sim 검사(`python tasks.py check`)·학습 자료 링크 검사, 펌웨어 3종(`imu_test`, `imu_test_i2c`, `throttle_serial`) PlatformIO 빌드. 웹은 아직 CI에 없다.
+
+PR을 거치는 이유는 [`docs/decisions.md`](docs/decisions.md#왜-pr을-거치나-2026-09-18)에 있다.
+
+## 3. 프로젝트 한눈에
 
 **무엇을 만드나.** 전기 덕티드팬(EDF) 하나의 추력으로 뜨고, 배기 아래 베인(제어핀) 4개를 서보로 꺾어 자세를 잡는 소형 수직이착륙 호퍼다. SpaceX식 착륙 로켓의 자세 제어를 안전한 크기로 재현한다.
 
@@ -53,66 +87,16 @@ CAD(cad/) ──질량·치수──▶ 시뮬레이션 상수(sim/sim_stage1/pa
 | 권재후 | `kwon6789` | 펌웨어(DShot·로그 형식) |
 | 김민지 | `iammji9` | 웹·3D·데이터 |
 
-## 2. 현재 상태 (2026-10-16)
+## 4. 현재 상태
 
-**된 것 (확인 범위 포함)**
-- CAD 정본 `cad/hopper_params.scad`, 외주용 STL 9종 export(9/18, 검증 `echo()` 통과). STL은 `.gitignore` 대상이라 저장소에는 없다.
-- Teensy 업로드 성공(10/15). 안 되던 원인은 **충전 전용 USB 케이블**이었다. BNO085를 4선 I2C로 0x4B에서 인식하고 자세값 출력 확인(`firmware/cosmos/imu_test_i2c`). SPI 스케치(`imu_test`)는 빌드만 확인.
-- DShot 벤치 펌웨어(`throttle_serial`): arm 게이트, 상한 DShot 600, 램프, 워치독, 비상정지. **ESC 없이 Teensy에서만 확인**(#19). 실물 시험은 #24.
-- Stage 1 시뮬레이션(`sim/sim_stage1`)과 PPO 파이프라인, 에피소드를 웹 CSV로 내보내는 `export_episode.py`(#23).
-- KiCad 회로도 생성(20부품, 30넷). 실제 ERC는 아직 못 돌림.
-- 웹 뷰어 뼈대 `web/`(Vite + Three.js, 빌드 통과, 10/16). 축 변환은 판정 전.
+날짜별 상태(된 것, 막혀 있는 것)는 [`docs/execution/STATUS.md`](docs/execution/STATUS.md)에 있다. 작업 전에 읽는다.
 
-**막혀 있는 것**
-1. **실험 A(EDF 추력곡선) 미실시.** `Kf`(추력 상수)가 잠정값 `1.1e-6`(10 N 역산)이다.
-2. **시뮬레이션 베인 제어력 버그(#21).** main에서는 도메인 랜덤화를 켜면 어떤 정책도 1초 안에 넘어진다. **PR #35**가 CL을 논문 식 3.16으로 다시 계산하고 `vane_arm_l`을 0.104 m로 바꿔 합격 판정(PD 넘어짐 0 %)을 받았다. 리뷰와 머지가 남았다. 머지 전에는 **RL 결과를 성능으로 해석하지 않는다.** 머지 뒤에도 CL·팔 길이는 추정값이다. 남은 일: [`docs/tasks/27-sim-vane-authority.md`](docs/tasks/27-sim-vane-authority.md).
-3. **3D프린트 외주 미발주**(10/14 기준). 조립 일정 전체가 여기에 걸려 있다.
-4. **IMU Yaw**가 돌린 만큼 안 변한다. 스케치가 지자기를 쓰는 Rotation Vector 모드인데 설계는 자력계를 안 쓰기로 했다. Game Rotation Vector로 비교 예정(#28).
-
-## 3. 지금 할 일
+## 5. 지금 할 일
 
 - **사람별 현재 과제의 단일 기준**: [`docs/learning/README.md`](docs/learning/README.md)의 "지금 할 일" 표.
 - **자세한 지시**: 팀별 PRD 이슈 #26(CAD·KiCad), #27(시뮬레이션), #28(펌웨어), #29(웹). 기한 10/24, 중간 점검 10/17.
 - **어디서부터 손댈지**: [`docs/tasks/`](docs/tasks/README.md)의 착수 초안. 실행되는 뼈대 코드, 기록 양식, 미리 돌려 본 결과가 있다.
 - 처음 온 부원은 학습 안내의 "처음 20분"과 첫 과제부터.
-
-## 4. 핵심 규칙 (사람과 모든 AI 도구 공통, 2026-10-16)
-
-Claude Code, Codex, OpenCode 등 어떤 도구를 쓰든 이 규칙을 먼저 지킨다. 자세한 순서는 바로 아래 §작업 순서에 있다.
-
-1. 작업은 GitHub 이슈에서 시작한다. 이슈가 없으면 먼저 만든다. 필요한 도구는 `python ship.py tools`가 확인한다. 설치할 수 있으면 설치하고, 못 하면 설치 방법을 출력한다.
-2. `main`에 직접 커밋하거나 푸시하지 않는다. AI는 머지하지 않는다.
-3. 구현하기 전에 Best practice를 조사한다: 공식 문서, 데이터시트, 라이브러리가 권장하는 방식, 잘 관리된 참고 프로젝트, 이 저장소의 기존 코드와 문서. 조사한 출처는 PR의 "근거"에 적는다.
-4. 추측하지 않는다. 실행한 명령과 출력이 없으면 "완료"라고 쓰지 않는다.
-5. 이슈 범위 밖의 문제는 고치지 않고 새 이슈로 남긴다.
-6. 이슈, PR, 커밋 메시지는 `ste-ko` 스킬(`.claude/skills/ste-ko/SKILL.md`)을 불러온 뒤 쓴다. 스킬 목록에 `ste-ko`가 없는 도구(예: Codex는 `.agents/skills`만 읽는다)는 그 파일을 직접 읽는다. `ship-issue` 스킬(`.claude/skills/ship-issue/SKILL.md`)도 같다.
-7. force push, `git reset --hard`, 푸시한 커밋 amend, 여러 파일 삭제를 하지 않는다. `.env`와 비밀 키를 읽지 않는다.
-8. **사람만 하는 일**을 만나면 AI는 멈추고 라벨 `agent physically incapable` 이슈를 연다: 돈 쓰기(부품 구매), 외부 계정, 비밀 키, 물리 동작(EDF·ESC 전원 인가, 실물 업로드, LiPo 충전). 이슈 본문은 "풀 방법 / 선택지 / 근거"로 쓴다.
-
-## 5. 작업 순서: 이슈에서 PR까지 (ship-issue 방식, 2026-10-16)
-
-사람이든 AI 에이전트든 이 저장소에서 작업할 땐 예외 없이 아래 순서를 따른다. AI는 사람이 막는 단계(§핵심 규칙 8)가 아니면 단계 사이에 멈추지 않고 진행한다.
-
-1. **이슈를 읽고 선점한다.** `gh issue view <번호> --comments`로 본문과 댓글을 전부 읽는다. 다른 사람이 이미 `claimed by ...`를 남겼거나 이슈가 닫혔으면 멈추고 알린다. 아니면 2단계에서 브랜치를 만든 뒤 댓글 `claimed by <브랜치 이름>`을 남긴다.
-2. **이슈 전용 worktree와 브랜치를 만든다.** `python ship.py wt <이슈 번호>`가 최신 `origin/main`에서 `../<저장소>-wt/issue-<번호>` 폴더와 브랜치 `<태그>/<이슈 번호>`를 만든다. 태그는 이슈 제목의 `[태그]`나 라벨에서 정하고, 없으면 `--tag`로 준다. 태그는 `cad`/`fw`/`sim`/`web`/`kicad`/`data`/`docs`/`infra`. 그 폴더로 이동해서 작업한다. 같은 폴더를 다른 세션과 같이 쓰지 않는다.
-3. **조사한 뒤 구현한다.** §핵심 규칙 3대로 Best practice를 먼저 조사한다. 부원은 §일하는 방식의 "이해 먼저"도 함께 한다. 구현은 이슈 범위만 한다.
-4. **검사를 통과시킨다.** 바꾼 영역의 검사를 직접 돌린다: `python tasks.py check`(sim), `pio run`(펌웨어), KiCad ERC, 문서 링크 확인. 학습처럼 메모리를 많이 쓰는 명령은 `python ship.py capped 8G -- <명령>`으로 상한을 건다(Windows에서는 상한이 걸리지 않고 경고만 나온다). 실패하면 고칠 때까지 반복한다. 커밋은 작게 나누고 제목은 `[태그] 무엇을 바꿨는지`로 쓴다.
-5. **PR을 연다.** `.github/pull_request_template.md`를 채운다. 본문에 `Closes #<이슈 번호>`를 쓴다. **실제로 해 본 확인만 체크**하고 범위를 "빌드만 확인", "ESC 없이 Teensy에서만 확인"처럼 쓴다. 확인 못 한 값은 `확인 필요`로 적는다. 작성자가 아래 권한자가 아니면 권한자 한 명을 리뷰어로 지정한다(`gh pr create --base main --reviewer junwonkim07`).
-6. **다른 회사의 모델로 교차 리뷰한다.** `python ship.py review --author <작성한 모델>`이 작성자와 다른 계열의 리뷰어를 고른다: Codex, Claude Code 순서로 로그인된 것을 쓰고, 둘 다 없으면 OpenCode 무료 모델(로그인 불필요)을 쓴다. 리뷰 요청에는 범위(브랜치나 PR 번호)만 쓰고 의심 가는 점이나 체크리스트를 넣지 않는다. 맞는 지적은 고쳐서 푸시하고, 받아들이지 않는 지적은 이유를 한 줄 남긴다. 결과는 PR 템플릿의 "교차 리뷰"에 쓴다.
-7. **CI를 통과시킨다.** `gh pr checks --watch`. 실패하면 `gh run view --log-failed`로 로그를 읽고 고친다.
-8. **마무리하고 멈춘다.** 남은 일, 확인하지 못한 항목, 미룬 결정은 하나씩 후속 이슈로 만든다. 사람만 확인할 수 있는 것(Windows 실행, 실물 동작 등)은 라벨 `agent physically incapable`을 단다. 이슈 번호는 PR 템플릿의 "후속 이슈"에 적는다. 이슈 없이 대화나 PR 본문에만 "남은 것"을 남기지 않는다. PR 템플릿의 "알게 된 것"에 새로 알게 된 사실과 틀렸던 가정을 쓴다. 모든 에이전트가 알아야 할 교훈이면 이 PR에서 아래 §교훈에 한 줄 추가한다. 그다음 PR 링크를 알리고 멈춘다.
-
-**리뷰·머지 권한**: 부장 김민찬(`MINBBBB1201`)과 차장 김준원(`junwonkim07`) 두 명뿐이다. 두 사람은 CI(`.github/workflows/ci.yml`)가 초록불인 것을 확인하고 변경사항을 직접 검토한 뒤, 본인이 올린 PR도 스스로 머지할 수 있다. 그 외 사람은 두 사람 중 한 명의 승인(Approve)을 받아야 하며 직접 머지하지 않는다. 머지는 squash 방식이다: `gh pr merge --squash --delete-branch`.
-
-**남의 브랜치**: 권한자가 요청하면 다른 사람의 브랜치나 PR에도 커밋을 더할 수 있다. 새 커밋만 더하고, 푸시 전에 원격 브랜치의 최신 커밋을 확인해서 남이 먼저 푸시한 커밋을 덮지 않는다.
-
-**CI**(`.github/workflows/ci.yml`): sim 검사(`python tasks.py check`)·학습 자료 링크 검사, 펌웨어 3종(`imu_test`, `imu_test_i2c`, `throttle_serial`) PlatformIO 빌드. 웹은 아직 CI에 없다.
-
-왜 PR을 거치나(2026-09-18): 이전 규칙은 "작업 폴더가 팀별로 나뉘어 있으니 `main`에 직접 커밋"이었다. 충돌은 확실히
-줄지만, 그 규칙의 진짜 비용은 충돌이 아니라 **깨진 코드가 곧바로 모두의 `git pull`에 실려 간다**는
-점이다. 부원이 자기 작업을 시작하고 나서야 남의 실수를 발견하면 "내가 뭘 잘못했나"와 구분이 안 되고,
-되돌릴 단위도 불분명해진다. PR은 (a) CI가 사람보다 먼저 깨진 걸 잡고, (b) 부장이 머지 전에 한 번 보고,
-(c) 문제가 생겼을 때 되돌릴 단위가 PR 하나로 명확하다 — 이 셋을 동시에 준다.
 
 ## 6. 일하는 방식: 팀별 PRD와 이해 먼저 (2026-10-16)
 
@@ -124,13 +108,13 @@ Claude Code, Codex, OpenCode 등 어떤 도구를 쓰든 이 규칙을 먼저 �
 
 ## 7. 부원이 AI에게 자기 과제를 물을 때
 
-1. **이름부터 확인한다.** "지금 할 일" 표에서 그 사람 행을 찾고, 그 행의 PRD 이슈에서 담당 절을 읽는다. 표 날짜가 오래됐거나 2절 현재 상태와 다르면 먼저 말하고 부장·차장에게 확인하라고 한다.
+1. **이름부터 확인한다.** "지금 할 일" 표에서 그 사람 행을 찾고, 그 행의 PRD 이슈에서 담당 절을 읽는다. 표 날짜가 오래됐거나 §현재 상태와 다르면 먼저 말하고 부장·차장에게 확인하라고 한다.
 2. **근거를 직접 연다.** `gh issue view <번호> -R COSMOS-Aero-Engineering/COSMOS-TVC-Hopper`, 그리고 `docs/tasks/`의 착수 문서와 거기 연결된 파일. 기억이나 일반 지식으로 대신하지 않는다.
 3. **설명은 쉬운 한국어로**, 담당 안내서(`docs/learning/tracks/`) 수준에서 시작한다. 전문 용어는 처음 나올 때 풀어서. 입력·출력·정상 결과를 먼저 보여 주고 부원이 자기 말로 다시 설명하게 한다. 범위가 큰 지시("PID 구현")를 그대로 넘기지 않는다.
-4. **작은 단위로 실행하고 기록하게 한다.** 측정값·로그는 `data/`, 코드·문서는 이슈, 브랜치, PR 순서로(5절 작업 순서). Git 명령은 대신 실행하되 명령마다 한 줄로 설명한다. `main` push, force push, `reset --hard`, 여러 파일 삭제는 하지 않는다.
+4. **작은 단위로 실행하고 기록하게 한다.** 측정값·로그는 `data/`, 코드·문서는 이슈, 브랜치, PR 순서로(§작업 순서). Git 명령은 대신 실행하되 명령마다 한 줄로 설명한다. `main` push, force push, `reset --hard`, 여러 파일 삭제는 하지 않는다.
 
 AI가 지킬 선:
-- EDF·ESC에 배터리 전원을 넣는 단계는 안내만 한다. 부장 입회와 8절 안전 원칙 확인 전에는 진행하라고 하지 않는다. 첫 회전 시험은 팬 분리 또는 스탠드 볼트 고정 상태에서만(#24).
+- EDF·ESC에 배터리 전원을 넣는 단계는 안내만 한다. 부장 입회와 §안전 원칙 확인 전에는 진행하라고 하지 않는다. 첫 회전 시험은 팬 분리 또는 스탠드 볼트 고정 상태에서만(#24).
 - 배선은 실물 모듈 실크와 01 문서를 대조한다. GY-BNO08X 모듈은 한 핀에 이름이 여러 개다: SDA/MISO/TX = MISO, ADDR/MOSI = MOSI, SCL/SCK/RX = SCK.
 - Windows PowerShell 5.1에서는 `&&`가 안 된다. `;`를 쓴다. Teensy가 안 잡히면 데이터 전송용 USB 케이블인지부터 본다.
 
@@ -141,47 +125,7 @@ AI가 지킬 선:
 - 회전체: 흡배기구 그릴, 초기 시험은 반드시 구속 상태(케이지/텐서), 보안경, RC 수신기로 수동 킬스위치 별도 확보. 사람은 배기 축선 밖.
 - 시험 순서: ① 구속 + 스로틀만 → ② 구속 + 베인 동작 확인 → ③ 구속 + baseline 안정화 → ④ 구속 + RL 비교 → ⑤ (확장) 구속 서서히 해제. 첫 전원 절차는 01 문서 §10(P1-P8).
 
-## 9. 문서 맵
-
-| 경로 | 내용 | 상태 |
-|---|---|---|
-| `docs/learning/README.md` | 부원 입구: "지금 할 일" 표, 담당별 첫 실습, 자료실(글·영상 64개), AI 질문 문장 | 현행, 10/16 |
-| `docs/tasks/` | PRD별 착수 초안(현재 상태·첫 30분·이어서 할 일·확인 못 한 것) | 신규, 10/16 |
-| `docs/design/00-hopper-master-design.md` | 마스터 설계 rev C: 아키텍처·치수·질량 예산·시험 카드(§11)·리스크. **CG 목표와 질량 합계는 01 문서가 정정함** | 현행(일부 01로 대체) |
-| `docs/design/01-avionics-integration-final.md` | 아비오닉스·배선·기계 통합 rev C.1: 좌표계, Teensy 핀맵, 전원, 빵판·만능기판 배치, z 배치, 질량·CG 재계산, 조립·브링업 절차. 마스터와 충돌하면 이 문서가 최신(§12) | 현행 |
-| `docs/design/02-web-dashboard-design.md` | 웹 대시보드·3D 뷰어 설계, **CSV 데이터 계약(§4)**, 개발 단계 W-A부터 W-F, 기술 스택 | 현행 |
-| `docs/design/03-control-pipeline-design.md` | PID/RL 구조, 3D 물리엔진 전환(Stage 2), State/Action, 도메인 랜덤화, 온보드 배포. **PID vs RL의 단일 정본** | 현행 |
-| `docs/design/modelling-notes-ch3.md` | 논문 3장 수식과 `hopper_aviary.py` 대응표, 코드와 다른 지점 | 현행. CL 결정은 PR #35 |
-| `docs/design/rl-open-source-survey.md` | 오픈소스 RL 환경 조사(PyFlyt 등), 가져올 물리 모델 | 10/15 |
-| `docs/design/research-open-source-references.md` | rev C 근거 리서치 | 완료 |
-| `docs/design/connectome-control.md` | 확장 트랙 A(커넥톰) 설계와 한계 | 9/18 |
-| `docs/design/BOM-revC-teensy.md`, `BOM.md` | 구매 리스트(현행) / rev B(기구 항목만 유효) | |
-| `docs/design/*.svg`, `docs/design/tools/` | 배치도·배선도와 그 생성 스크립트 | |
-| `docs/design/references/Jacobsen2021_*.pdf` | SolidGeek/Jacobsen 논문 전문(제작·제어의 1차 자료) | |
-| `docs/execution/TIMELINE.md` | 한 장 타임라인, 현재 병목 | 10/16 갱신 |
-| `docs/execution/semester-roadmap.md`, `week-01-kickoff.md`, `member-weekly-tasks.md` | 9월 기준 원래 계획. 실제보다 약 3주 앞서 있음 | 기록 |
-| `docs/execution/procurement-review.md`, `bench-wiring.svg` | 구매 시트 검토 / 구버전 배선도(01 문서 §4로 대체) | 기록 |
-| `cad/hopper_params.scad` | **CAD 정본** | 현행 |
-| `cad/cg/` | 무게중심·토크 팔 추정 표와 스크립트(#26) | 초안, 10/16 |
-| `cad/measurements.md`, `cad/print_parts/`, `cad/renders/` | 실측 기록, 외주 STL 안내, 렌더 | |
-| `cad/legacy/` | rev B 스크립트, 안 씀 | 보존 |
-| `firmware/cosmos/imu_test_i2c/` | BNO085 4선 I2C 브링업 | 10/15 실물 확인 |
-| `firmware/cosmos/imu_test/` | BNO085 SPI(최종 핀맵) | 빌드만 확인 |
-| `firmware/cosmos/throttle_serial/` | DShot 벤치 펌웨어 | ESC 없이 확인 |
-| `firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 원본(MIT). 통합 펌웨어의 출발점 | 손대지 않음 |
-| `firmware/singlecopter.param.md` | ArduPilot SingleCopter 대안 경로 | 보존 |
-| `sim/sim_stage1/` | Stage 1 환경(`hopper_aviary.py`, 관측 6·행동 5), `params.yaml`, `train.py`, `export_episode.py` | #21 버그 있음(PR #35에서 수정 중) |
-| `sim/connectome/` | 확장 트랙 A: 커넥톰 제약 정책망 | 파이프라인 검증 |
-| `kicad/` | 회로도(생성물)와 생성·검증 스크립트(`_tools/`) | ERC 미실행 |
-| `web/` | CSV 재생 3D 뷰어(W-A 뼈대) | 신규, 10/16 |
-| `data/` | 실험 로그. 파일명 `YYYYMMDD-TCx-런번호` | 비어 있음 |
-| `tasks.py`, `pyproject.toml`, `sim/pyproject.toml`, `uv.lock` | 작업 실행기와 파이썬 의존성 고정. `sim/requirements.txt`는 생성물 | |
-| `ship.py` | ship-issue 도구(`tools`/`wt`/`capped`/`review`). 5절 작업 순서의 명령을 모든 PC에 준다. 표준 라이브러리만 쓴다 | 10/16 |
-| `.claude/skills/ship-issue/`, `.claude/skills/ste-ko/` | AI 도구용 스킬. 이슈·PR·커밋 문장은 `ste-ko`를 따른다 | 10/16 |
-| `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/task.yml` | PR 본문 양식(결정·교차 리뷰·알게 된 것 포함), 작업 이슈 양식 | 10/16 |
-| `docs/presentation/`, `club promoting material/` | 설명회 발표(9/5 완료)·홍보 자료 | |
-
-## 10. 어디서 찾나
+## 9. 어디서 찾나
 
 | 질문 | 볼 곳 |
 |---|---|
@@ -195,25 +139,21 @@ AI가 지킬 선:
 | 전체 진행과 병목 | `docs/execution/TIMELINE.md` |
 | 시뮬레이션 수식이 논문과 어디서 다른가 | `modelling-notes-ch3.md` |
 
-## 11. 확정된 방향 (다시 논의하지 않는 골격)
+모든 문서와 폴더의 표는 [`docs/README.md`](docs/README.md)에 있다.
+
+## 10. 확정된 방향 (다시 논의하지 않는 골격)
 
 - **TVC 착륙 호퍼(VTVL), 베인 방식.** EDF를 고정하고 배기 흐름 속 베인 4개로 방향을 바꾼다. 짐벌(모터 자체를 기울이는) 방식보다 기구가 단순하다. 상승 전용 TVC 모델로켓이 아니라 이륙·호버·착륙 전 구간을 스로틀로 제어하는 쪽이다.
-- **사양은 rev C** (위 1절 표). 사양 표를 이 파일에 따로 옮겨 적지 않는다. 예전에 rev A 사양이 남아 모순이 생긴 적이 있다.
+- **사양은 rev C** (위 §프로젝트 한눈에 표). 사양 표를 이 파일에 따로 옮겨 적지 않는다. 예전에 rev A 사양이 남아 모순이 생긴 적이 있다.
 - **펌웨어**: Teensy 4.0에서 SolidGeek 코드를 포크한다(마스터 §8.1). RL은 `control_hover()`의 `output = K * error` 자리에 정책 추론을 끼우는 구조. 막히면 ArduPilot SingleCopter 대안.
 - **시뮬레이션**: Stage 1은 논문 3장 운동방정식을 numpy로 직접 적분하는 자체 `gymnasium.Env`(9/14 결정). gym-pybullet-drones는 모터 4개 대칭 믹싱이 하드코딩돼 기각. Stage 1은 파이프라인 검증용이고 3D 물리엔진 Stage 2는 03 문서 §2.
 - **웹**: 물리 계산 없이 `data/`·`sim/` 로그를 읽는 뷰어. 펌웨어와 웹은 02 문서 §4 CSV 계약으로만 연결된다.
 - **확장 트랙은 A 또는 B 중 하나만**(10/15). 메인(PID/LQR vs RL)을 대체하지 않는다. A는 커넥톰 제약 정책망(`sim/connectome/`), B는 공개 자료만 쓰는 리버스 엔지니어링(볼록최적화 착륙 유도 논문, BPS.space 등. 비공개 펌웨어·수출통제 자료 제외). 실험 A 이후 결정. 공개 시뮬레이터의 물리 모델(서보·모터 지연, 자이로 반작용, 베인 측력 상한)을 `sim_stage1`에 넣는 일은 확장이 아니라 메인의 선행 작업이다.
 - **축소 경로**(참고): PHASE 0 스로틀만으로 시소 균형 → PHASE 1 서보 1개 → PHASE 2 PID 자리에 RL.
 
-## 12. 검토했지만 채택 안 한 대안
+채택하지 않은 대안과 그 이유는 [`docs/decisions.md`](docs/decisions.md#검토했지만-채택-안-한-대안)에 있다.
 
-- Sparrow TVC Hopper(고체모터 2발): 에너지물질 규제, 튜토리얼 없음.
-- 하이브리드/액체로켓 VTVL: 동아리 규모 초과.
-- HAB(고고도 기구): 현지 발사 허가 문제로 보류.
-- fdiwth/tvc-drone: 다른 구동 방식, 비행 미검증, 제작자가 따라 하지 말라고 명시.
-- gym-pybullet-drones: 11절 참고.
-
-## 13. 아직 열려 있는 질문
+## 11. 아직 열려 있는 질문
 
 - 3D프린트 외주업체와 발주 시점(#26).
 - 실험 A 일정·장소·장비와 지도교사 서명 확인(#26).
@@ -223,7 +163,7 @@ AI가 지킬 선:
 - 최종 자유비행(구속 해제) 도전 여부: STAGE 3 결과를 본 뒤.
 - 안전스테이션 재고, FS-i6X 송신기 배터리 방식.
 
-## 14. 교훈
+## 12. 교훈
 
 - **충전 전용 USB 케이블**로 Teensy가 안 잡혀 하루를 썼다(10/15). 연결 문제는 케이블부터 의심한다.
 - **`Kf`가 실제의 1/37**이라 어떤 제어기도 못 버텼다(9/19, PR #10에서 잠정 보정). 상수는 단위와 크기를 실물 추정치와 비교한다.
@@ -231,11 +171,9 @@ AI가 지킬 선:
 - 존재하지 않는 파일을 "완료"로 적은 기록이 있었다(9/17). 완료는 경로를 확인하고 쓴다.
 - `CLAUDE.md`와 `AGENTS.md`를 손으로 동기화하다 링크가 깨졌다(9/17). 정본은 하나만 둔다.
 
-에이전트가 틀렸다가 바로잡힌 것도 한 줄씩 남긴다. 같은 실수를 다음 세션이 반복하지 않게 하는 용도다.
-
 에이전트가 틀렸다가 바로잡힌 것을 한 줄씩 남긴다. 같은 실수를 다음 세션이 반복하지 않게 하는 용도다.
 
 - (2026-10-16) "X 방식을 원한다"는 요청은 X를 직접 실행하라는 뜻이 아니라 저장소 규칙과 템플릿에 X를 넣으라는 뜻일 수 있다. 둘 중 무엇인지 모호하면 먼저 묻는다.
 - (2026-10-16) 부원 PC에 없는 도구라고 작업 단계를 빼지 않는다. 저장소가 그 도구를 주거나(`ship.py`) 없으면 자동으로 설치하게 한다.
 - (2026-10-16) 남은 일과 확인하지 못한 항목을 보고만 하고 끝내지 않는다. 후속 이슈로 만들어야 추적된다(#36-#39).
-- (2026-10-16) Claude Code는 같은 폴더나 상위 폴더에 `CLAUDE.md`가 있으면 `AGENTS.md`를 자동으로 읽지 않는다([공식 문서](https://code.claude.com/docs/en/memory#agents-md)). 그래서 `CLAUDE.md` 첫 줄에 `@AGENTS.md`를 둔다.
+- (2026-10-16) Claude Code는 같은 폴더나 상위 폴더에 `CLAUDE.md`가 있으면 `AGENTS.md`를 자동으로 읽지 않는다([공식 문서](https://code.claude.com/docs/en/memory#agents-md)). 그래서 `CLAUDE.md` 첫 줄에 `@AGENTS.md`를 둔다.- (2026-10-16) 다른 문서에서 이 파일을 가리킬 때는 "5절" 같은 번호가 아니라 "§작업 순서" 같은 절 이름을 쓴다. 절을 옮기면 번호 참조가 틀린 곳을 조용히 가리킨다(#38, #41). `@import`는 세션 시작 때 함께 읽혀 이 파일을 줄이지 못한다. 줄일 때는 일반 링크로 옮긴다.
