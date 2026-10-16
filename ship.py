@@ -138,10 +138,11 @@ def cmd_wt(a):
         n = a.issue
         die(f"이슈 #{n}은 PRD(라벨 prd)다. PRD 번호로는 worktree와 브랜치를 만들지 않는다.\n"
             "     한 PRD를 여러 명이 맡으면 브랜치 이름이 겹친다. AGENTS.md §작업 순서 1단계대로 한다.\n"
-            f"     1. PRD #{n}에 본인의 \"이해 먼저\"(§0) 댓글이 있는지 본다. 없으면 먼저 쓴다.\n"
-            "     2. 본인의 작업 이슈를 만든다. 본문은 .github/ISSUE_TEMPLATE/task.yml 항목으로 쓰고, "
+            f"     1. PRD #{n}에 담당 부원의 \"이해 먼저\"(§0) 댓글이 있는지 본다. 없으면 담당 부원이 직접 쓴다. AI는 대신 쓰지 않는다.\n"
+            "     2. 담당 부원의 작업 이슈를 만든다. 본문은 .github/ISSUE_TEMPLATE/task.yml 항목으로 쓰고, "
             f"배경 첫 줄에 `PRD: #{n}`을 쓴다.\n"
-            f"          gh issue create --title \"[태그] ...\" --parent {n} --assignee @me\n"
+            f"          gh issue create --title \"[태그] ...\" --parent {n} --assignee <담당 아이디>\n"
+            "          (gh가 --parent를 모르면 빼고 만든다. 담당 아이디는 AGENTS.md 담당 표)\n"
             "     3. python ship.py wt <새 작업 이슈 번호>")
     if path.exists():
         branch = call(["git", "-C", path, "branch", "--show-current"], capture=True).stdout.strip()
