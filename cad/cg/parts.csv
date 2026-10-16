@@ -1,14 +1,27 @@
-part,mass_g,mass_source,z_mm,z_source,z_uncertainty_mm
-64mm EDF fan+motor,160,budget (master 5.1),46,01-avionics 8.4 (z~46),10
-60A ESC,40,budget (master 5.1),127,01-avionics 7.6/7.7 (bracket z 110~145 mid),18
-4S 1300mAh LiPo,150,budget (master 5.1),162,01-avionics 7.7 (shelf z 150~175 mid),12
-Teensy 4.0,5,budget (master 5.1),162,01-avionics 7.7 (avionics shelf),12
-BNO085 breakout,3,budget (master 5.1),162,01-avionics 7.7 (avionics shelf),12
-ESP32 dev board,10,budget (master 5.1) - check if still used,162,assumed avionics shelf - check,20
-RC receiver,6,budget (master 5.1),162,01-avionics 7.7 (avionics shelf),12
-4x servo,55,budget (master 5.1),-36,01-avionics 7.7 (vane pivot = servo axis),5
-vane ring+4 vanes+linkage,70,budget (master 5.1),-36,01-avionics 7.7 (ring -22~-50 mid),8
-top plate+bail+4 columns+tray,90,budget (master 5.1),110,ESTIMATE - plate z 178~182 + columns -22~178; split by CAD,40
-4 landing legs,70,budget (master 5.1),-95,01-avionics 7.7 (ring bottom -50 to foot -140 mid),15
-wiring+straps+ties+epoxy,50,budget (master 5.1),100,ESTIMATE - spread over frame,40
-2 shelves+ESC bracket (PETG),25,01-avionics 8.1,155,01-avionics 7.7 (shelf ~150~175),12
+part,mass_g,mass_source,shape,x,y,z,p1,p2,p3,position_source
+EDF fan unit (housing+rotor+lip),43,"listing: HobbyKing 64mm 12-blade unit w/ lip 43 g (our unit not confirmed, weigh)",ring,0,0,46,33.5,36,92,hopper_params.scad edf_housing_od 72 / edf_body_len 92
+EDF motor 2836,85,"listing: Freewing 2836-3300Kv 85 g (KV of our motor not confirmed, weigh)",box,0,0,40,28,28,36,motor at hub centre (estimate)
+ESC 60A single + cap,45,"ESTIMATE 30-63 g (single 60A ESCs; 4-in-1 boards 15-27 g). Weigh",box,0,-48,127,24,36,8,01-avionics 7.6 (270 deg bracket z 110-145)
+LiPo 4S 850mAh 75C,107,"listing: Tattu 850 4S 75C XT60 107 g, 60x30x30.5 mm (BOM A4 recommends 850)",box,0,62.25,165.25,60,30,30.5,battery shelf +Y; z = shelf top 150 + h/2
+Teensy 4.0 with pins,10,"listing: Teensy 4.0 with pins 10 g (8 g bare)",box,0,-75,166,17,35,4,mock_avionics position
+BNO085 GY module,3,ESTIMATE (weigh),box,-22,-77,165,16,18,3,mock_avionics position
+FS-iA6B receiver,14.9,"manual: FS-iA6B 47x26.2x15 mm 14.9 g",box,22,-70,168,26.2,47,15,avionics shelf
+UBEC 5V 3A,11,"listing: Hobbywing 3A UBEC 43x17x7 mm 11 g",box,0,-60,140,17,43,7,under avionics shelf (01-avionics 7.3)
+perfboard 5x7 + headers + level shifters,12,ESTIMATE (weigh),box,0,-67,162,70,50,4,mock_avionics position
+4x MG90S servo,53.6,"official: TowerPro MG90S 13.4 g each",servo4,0,0,-36,82,0,0,servo body centre r = 64+4+14
+vane ring (printed),116.5,"STL 131.0 cm3 x PETG 1.27 x 0.70 fill (estimate)",ring,0,0,-36,38,66,33,STL bbox
+4 vanes (printed),9.5,"STL 10.7 cm3 x 1.27 x 0.70",ring,0,0,-36,4,41,25,hopper_params.scad vanes
+4 couplers (printed),6.3,"STL 7.1 cm3 x 1.27 x 0.70",servo4,0,0,-36,57,0,0,coupler in servo cavity
+4 CF spars 3 mm x 60 mm,2,ESTIMATE,servo4,0,0,-36,34,0,0,vane spar
+top plate (printed),26.8,"STL 30.1 cm3 x 1.27 x 0.70",ring,0,0,192,39,63,4,top_plate_bot_z 190 + t/2
+EDF clamp (printed),13.4,"STL 15.1 cm3 x 1.27 x 0.70",ring,0,0,76,37.5,54,12,edf_clamp_z 70 + h/2
+battery shelf (printed),15.1,"STL 17.0 cm3 x 1.27 x 0.70",box,0,62,150,80,70,6,shelf +Y
+avionics shelf (printed),16.4,"STL 18.4 cm3 x 1.27 x 0.70",box,0,-66,150,80,74,6,shelf -Y
+ESC bracket (printed),6.3,"STL 7.1 cm3 x 1.27 x 0.70",box,0,-46,125,44,16,44,esc_bracket
+foot pads (printed),5.7,"STL 6.4 cm3 x 1.27 x 0.70",rods4,0,0,-144,180,180,-144,feet at r 180
+4 CF columns 6x4 x 212 mm,37,"listing: 6x4 mm pultruded CF about 44 g/m (177 g / 4 m)",rods4,0,0,-22,48,48,190,col_mount_r 48 z -22..190 (col_len 212)
+4 CF legs 6x4 x 160 mm,28,"44 g/m x 0.16 m x 4",rods4,0,0,-50,48,180,-140,leg_top r48 z-50 -> foot r180 z-140
+steel bail 3 mm,5.5,"steel 7.85 g/cm3 x pi 1.5^2 mm2 x 100 mm",box,0,0,212,58,3,30,bail over top plate
+servo extensions + XT60 + main wires + ties,55,ESTIMATE (servo ext 4x5 g + XT60/14AWG 20 g + misc 15 g),ring,0,0,100,40,60,140,spread over frame
+kill switch,10,ESTIMATE (BOM B6 not chosen),box,0,59,196,22,14,10,showcase.scad kill switch on top plate
+fasteners M2/M3 + inserts,8,ESTIMATE,ring,0,0,40,30,60,120,spread
