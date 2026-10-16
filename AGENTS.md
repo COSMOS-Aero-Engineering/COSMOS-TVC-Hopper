@@ -87,7 +87,7 @@ AI는 머지 권한자가 아니므로 **직접 머지하지 않는다**. 머지
 | `pyproject.toml` · `sim/pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 **버전 고정본**(uv) — 부원마다 다른 버전이 깔려 결과가 재현 안 되는 걸 막는 용도. `sim/pyproject.toml`이 sim 의존성 정본, `uv.lock`이 실제 고정본 | 2026-09-18 추가 |
 | `sim/requirements.txt` | 위 lock에서 생성되는 **사본**(`python tasks.py lock`) — uv 없이 pip만 쓸 때용. 손으로 고치지 않는다 | 2026-09-18 생성물로 전환 |
 | `tasks.py` | 작업 실행기(`setup`/`lock`/`compile`/`sanity`/`smoke`/`check`/`train`/`deck`/`graph`/`clean`) — 작업 간 순서와 입력 해시 캐시를 갖는다. Windows에 `make`가 없어서 파이썬 stdlib로 구현. CI도 `python tasks.py check`를 그대로 호출한다 | 2026-09-18 추가 |
-| `.github/workflows/ci.yml` | CI — PR마다 sim 문법·sanity·PPO 스모크 + PlatformIO 펌웨어 2종 빌드. 학습은 돌리지 않는다 | 2026-09-19 갱신 |
+| `.github/workflows/ci.yml` | CI — PR마다 sim 문법·sanity·PPO 스모크 + PlatformIO 펌웨어 3종 빌드(`imu_test`·`imu_test_i2c`·`throttle_serial`). 학습은 돌리지 않는다 | 2026-10-16 갱신 |
 | `docs/presentation/` | 동아리 설명회 발표자료(.pptx) + 대본 | 발표 완료(9/5) |
 | `club promoting material/` | 홍보용 PDF/PPTX | — |
 

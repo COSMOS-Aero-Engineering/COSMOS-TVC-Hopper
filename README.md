@@ -125,7 +125,8 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
    김준원(`junwonkim07`) 두 명뿐이다. CODEOWNERS는 자동 리뷰 알림이 너무 많이 생겨 삭제됐다(PR #12).
    작성자가 두 사람 외의 부원이면 둘 중 한 명을 직접 리뷰어로 지정한다.
 4. **로컬 검사와 CI가 모두 통과해야 승인 대상이다.** PR 전에 `python tasks.py check`를 실행하고,
-   GitHub의 sim 스모크 1개와 PlatformIO 펌웨어 빌드 2개가 모두 초록불인지 확인한다.
+   GitHub의 sim 스모크 1개와 PlatformIO 펌웨어 빌드 3개(`imu_test`, `imu_test_i2c`, `throttle_serial`)가
+   모두 초록불인지 확인한다. 펌웨어 빌드 목록의 정본은 `.github/workflows/ci.yml`의 `matrix.project`다.
 5. **리뷰와 머지 권한은 김민찬·김준원 두 사람에게만 있다.** 두 사람은 CI가 초록불인 것을 확인하고
    변경사항을 직접 검토한 뒤 본인이 올린 PR도 스스로 머지할 수 있다. 그 외 부원은 두 사람 중 한 명의
    승인(Approve)을 받아야 하며 직접 머지하지 않는다. 승인 뒤 새 커밋을 push했다면 다시 확인받는다.
@@ -204,7 +205,7 @@ gh pr create --base main --reviewer junwonkim07
 | `data/` | 실험 로그 (CSV) |
 | `tasks.py` | 작업 실행기 — 작업 순서와 입력 해시 캐시. 인자 없이 실행하면 목록 |
 | `pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 고정본 (`sim/pyproject.toml`이 sim 의존성 정본) |
-| `.github/workflows/` | CI — PR마다 sim 환경/SB3 스모크 + PlatformIO 펌웨어 2종 빌드 자동 확인 |
+| `.github/workflows/` | CI — PR마다 sim 환경/SB3 스모크 + PlatformIO 펌웨어 3종 빌드 자동 확인 |
 
 ## 라이선스 / 출처
 
