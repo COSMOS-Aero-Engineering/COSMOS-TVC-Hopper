@@ -174,3 +174,16 @@ battery_detail();
 esc_detail();
 servo_leads();
 kill_switch();
+// 상부 페어링(선택 부품): 흰 외피 + 검은 띠 + 앞면(FWD) 글자
+show_fairing = true;
+if (show_fairing) {
+    color(C_PRINT) for (sd = [1, -1]) upper_fairing_half(sd);
+    color([0.08, 0.08, 0.09]) translate([0, 0, fair_z1 - 9]) difference() {
+        cylinder(h = 5, r = fair_r + 0.15, $fn = 160);
+        translate([0, 0, -1]) cylinder(h = 7, r = fair_r - 0.5, $fn = 160);
+        for (a = [90, 270]) rotate([0, 0, a]) rotate_extrude(angle = fair_win_deg, $fn = 160)
+            translate([fair_r - 5, -2]) square([10, 10]);
+    }
+    color([0.08, 0.08, 0.09]) for (k = [0 : 5])   // 글자 대신 쓰는 장식 줄 (앞면)
+        rotate([0, 0, -10 + k * 4]) translate([fair_r + 0.1, -0.6, 156]) cube([0.4, 1.2, 14]);
+}

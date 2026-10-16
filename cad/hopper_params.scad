@@ -86,7 +86,15 @@ servo_ear_pitch = 33;         // 이어 홀 간격 — 실측 확정(3.3cm). 조
 servo_ear_to_shaft = 3;       // 출력축 ↔ 가까운 쪽 이어 홀 거리 — 실측 확정(0.3cm). 조사자료(9.9)보다 훨씬 짧음
                               // → 이어 홀이 비대칭 배치가 돼서 servo_boss_solid()의 boss_y 계산을
                               //   아래에서 "양쪪 홀을 다 덮는 최소폭" 방식으로 고쳤음(2026-09-19)
-servo_screw_d = 1.7;         // M2 셀프탭 하부 구멍
+servo_screw_d = 1.7;         // M2 셀프탭 하부 구멍 (커플러 혼 고정용)
+// 2026-10-16(#59): 서보 귀 나사 구멍을 슬롯으로 바꿨다. TowerPro 공식 MG90S 치수는 귀 끝-끝 전체 길이 32.1 mm
+// (https://towerpro.com.tw/product/mg90s-3/ 의 E)라서, 위 servo_ear_pitch 33(SG90 실측)은 구멍 간격일 수 없다
+// (귀 끝-끝을 잰 것으로 보임). 실물 MG90S를 아직 재지 못했으므로, 가까운 구멍은 축에서 2.5-10.5 mm,
+// 먼 구멍은 16.5-30.5 mm 범위를 덮는 슬롯으로 뚫는다(구멍 간격 27-33 mm, 축 위치 3-10 mm를 모두 덮음).
+// 슬롯 폭 2.2 mm = M2 볼트 관통, 너트는 캐비티 안쪽에서 조인다.
+servo_slot_w    = 2.2;
+servo_slot_near = [2.5, 10.5];   // 출력축에서 가까운 구멍까지 거리 범위(mm)
+servo_slot_far  = [16.5, 30.5];  // 먼 구멍까지 거리 범위(mm)
 servo_boss_t  = 4;           // 서보 장착판 두께(반경 방향)
 servo_standoff = 16;         // 링 바깥면 ↔ 장착판 사이 캐비티 깊이 (혼 + 스파 커플러가 들어감)
 
@@ -225,7 +233,7 @@ module servo_boss_solid() {
     //   servo_ear_to_shaft=3, servo_ear_pitch=33 → 홀이 y=-3, y=+30 에 위치, 중심에서 안 대칭).
     //   장착판은 y=0을 중심으로 대칭 프린트되므로, 양쪽 홀 중 더 먼 쪽까지의 거리를 기준으로
     //   폭을 잡아야 짧은 쪽 홀이 판 밖으로 안 나간다.
-    ear_reach = max(abs(-servo_ear_to_shaft), abs(servo_ear_pitch - servo_ear_to_shaft), 7);
+    ear_reach = max(servo_slot_near[1], servo_slot_far[1], 7);   // 슬롯 끝까지 덮는다(#59)
     boss_y = max(servo_body_l, 2*ear_reach + 8) + 8;   // 이어·출력축 구멍을 전부 덮는 접선 폭
     boss_z = servo_body_w + 10;
     union() {
@@ -244,11 +252,12 @@ module servo_boss_solid() {
 }
 
 module servo_boss_cuts() {
-    // 이어 홀 2개 (출력축 기준 −servo_ear_to_shaft / +(pitch − servo_ear_to_shaft))
-    for (dy = [-servo_ear_to_shaft, servo_ear_pitch - servo_ear_to_shaft])
-        translate([servo_plate_r - 2, dy, vane_pivot_z])
-            rotate([0,90,0])
-                cylinder(h = servo_boss_t + 6, r = servo_screw_d/2, center=false, $fn=20);
+    // 이어 슬롯 2개 (출력축 기준 가까운 쪽은 −y, 먼 쪽은 +y). 위 servo_slot_* 설명 참고(#59)
+    for (rng = [[-servo_slot_near[1], -servo_slot_near[0]], [servo_slot_far[0], servo_slot_far[1]]])
+        hull() for (dy = rng)
+            translate([servo_plate_r - 2, dy, vane_pivot_z])
+                rotate([0,90,0])
+                    cylinder(h = servo_boss_t + 6, r = servo_slot_w/2, center=false, $fn=20);
     // 출력축·혼 통과 구멍 (Ø14 — 혼이 판을 지나 캐비티로 들어갈 수 있게 넉넉히)
     translate([servo_plate_r - 2, 0, vane_pivot_z])
         rotate([0,90,0])
@@ -534,6 +543,63 @@ module foot_pads() {
     }
 }
 
+
+// ---------- 상부 페어링 (외형, 선택 부품, #59) ----------
+// 선반 구간(배터리·아비오닉스)을 감싸는 얇은 원통 외피. 구조 부품이 아니고 발표용 외형이다.
+// - 질량 약 45 g(PETG 0.9 mm 외피 + 위아래 테 + 팔 4개). 850 mAh 배터리를 쓰면 TWR 약 1.73,
+//   1300 mAh면 약 1.62(홉 기준 1.6 경계). 좌우 대칭이라 옆 무게중심은 바꾸지 않고 z_cg를 약 6 mm 올린다.
+// - 흡입구(상판 Ø78)와 선반 아래 옆 틈은 막지 않는다. ±Y에 창을 내서 배터리·XT60·Teensy USB에 손이 닿는다.
+// - 프린터 베드(220 mm)에 맞게 y>0 / y<0 반쪽 2개로 나눈다. 각 반쪽은 기둥 2개에 C클립으로 끼운다.
+fair_r      = 107;    // 외피 바깥 반경. 아비오닉스 선반 모서리(r≈104)와 3 mm 여유
+fair_t      = 0.9;    // 외피 두께(노즐 0.4 기준 2라인 이상)
+fair_z0     = 143;    // 외피 아래 끝 (선반 판 아래 147보다 낮게)
+fair_z1     = 188;    // 외피 위 끝 (상판 윗면 182 위로 6 mm)
+fair_band   = 3;      // 위아래 보강 테 두께(반경 방향)·높이
+fair_win_deg = 70;    // ±Y 창 폭(각도)
+fair_win_z  = [151, 180];
+fair_arm_z  = 168;    // 기둥 C클립 높이 (새들 링 위 163, 상판 아래 178 사이)
+fair_arm_h  = 8;
+
+module upper_fairing_half(side = 1) {   // side = 1: y>0 반쪽, -1: y<0 반쪽
+    intersection() {
+        union() {
+            difference() {
+                union() {
+                    translate([0, 0, fair_z0]) cylinder(h = fair_z1 - fair_z0, r = fair_r, $fn = 160);
+                }
+                translate([0, 0, fair_z0 - 1]) cylinder(h = fair_z1 - fair_z0 + 2, r = fair_r - fair_t, $fn = 160);
+                // 창 (배터리 +Y / 아비오닉스 −Y)
+                for (a = [90, 270]) rotate([0, 0, a])
+                    translate([0, 0, fair_win_z[0]])
+                        rotate_extrude(angle = fair_win_deg, $fn = 160)
+                            translate([fair_r - 5, 0]) square([10, fair_win_z[1] - fair_win_z[0]]);
+            }
+            // 위아래 보강 테
+            for (z = [fair_z0, fair_z1 - fair_band])
+                translate([0, 0, z]) difference() {
+                    cylinder(h = fair_band, r = fair_r, $fn = 160);
+                    translate([0, 0, -1]) cylinder(h = fair_band + 2, r = fair_r - fair_band, $fn = 160);
+                }
+            // 팔 + C클립 (기둥 45° 계열)
+            for (i = [0 : n_cols - 1]) {
+                a = i * 360 / n_cols + 45;
+                rotate([0, 0, a]) translate([col_mount_r, 0, fair_arm_z]) difference() {
+                    union() {
+                        translate([0, -3, 0]) cube([fair_r - col_mount_r - fair_t / 2, 6, fair_arm_h]);
+                        cylinder(h = fair_arm_h, r = col_od / 2 + tube_clearance + 2.4, $fn = 32);
+                    }
+                    translate([0, 0, -1]) cylinder(h = fair_arm_h + 2, r = col_od / 2 + tube_clearance, $fn = 32);
+                    // 안쪽(중심 방향)으로 연 C클립 입구: 기둥에 옆에서 눌러 끼운다
+                    translate([-10, -2.2, -1]) cube([10, 4.4, fair_arm_h + 2]);
+                }
+            }
+        }
+        // 반쪽 자르기
+        translate([-fair_r - 5, side > 0 ? 0 : -fair_r - 5, fair_z0 - 5])
+            cube([2 * fair_r + 10, fair_r + 5, fair_z1 - fair_z0 + 10]);
+    }
+}
+
 // ---------- 조립 ----------
 // render_mode = "preview": 조립 미리보기 (기둥/다리를 실봉으로, 부품을 색블록으로 시각화 — 실제 프린트 대상 아님)
 // render_mode = "print"  : 진짜 프린트해서 외주 넣을 대상만 (상판·베인링엔 D1/D2 탄소관용 소켓 구멍만 뚫려있음)
@@ -600,5 +666,8 @@ echo(str("베인 피벗 z = ", vane_pivot_z, " mm — 마스터 §4 의 '배기�
          "mm'는 실제로는 '배기면→링 상단'. 제어 모멘트암은 |z_cg - ", vane_pivot_z, "| 로 계산할 것"));
 echo(str("배선 슬롯 |y| ", wire_slot_y0, "~", wire_slot_y1, "mm vs ESC 브래킷 플랜지 |y| ≤ ", (esc_l + 8)/2,
          "mm → ", wire_slot_y0 > (esc_l + 8)/2 ? "정상(슬롯이 안 가려짐)" : "!! 플랜지가 슬롯을 가림 !!"));
+echo(str("서보 귀 슬롯: 가까운 쪽 ", servo_slot_near, "mm, 먼 쪽 ", servo_slot_far,
+         "mm → 구멍 간격 ", servo_slot_near[0] + servo_slot_far[0], "-", servo_slot_near[1] + servo_slot_far[1],
+         "mm 범위를 받음 (MG90S 실물 미측정, #59)"));
 echo(str("발 바닥 z = ", foot_z, " mm"));
 echo(str("상판top~발bottom 실제 전고 = ", top_plate_top_z - foot_z, " mm  (설계 H_total 참고값 = ", H_total, " mm)"));

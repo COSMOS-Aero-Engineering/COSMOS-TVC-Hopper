@@ -15,6 +15,7 @@
 | `esc_bracket.stl` | ESC 브래킷 |
 | `vane_couplers_x4.stl` | 서보혼↔스파 커플러 4개 |
 | `vane_couplers_x4_slack0.4.stl` | 같은 커플러, 혼 슬롯 두께·폭 +0.4 mm (혼 실측 전 발주용, #59) |
+| `upper_fairing_half_pos_y.stl`, `upper_fairing_half_neg_y.stl` | 선택: 상부 페어링 반쪽 2개 (외형, #59) |
 | `foot_pads_x4.stl` | 발 범퍼 4개 |
 
 ## 다시 뽑기 (2026-10-16부터 스크립트, #59)
@@ -31,6 +32,10 @@ python cad/tools/export_print_parts.py --out cad/print-orders/20261017   # 발�
 ### 커플러 두 크기
 
 서보 혼 슬롯(`coupler_horn_t` 2.2, `coupler_horn_w` 9.0 mm)은 실측값이 아니다. 재발주를 피하려고 슬롯을 0.4 mm 키운 `vane_couplers_x4_slack0.4.stl`을 같이 뽑는다. 두 세트를 함께 주문하고 실물 혼에 맞는 쪽을 쓴다. 두 세트를 합쳐도 약 15 cm³다.
+
+### 선택 부품: 상부 페어링
+
+`upper_fairing_half_pos_y.stl`, `upper_fairing_half_neg_y.stl`은 외형용 외피 반쪽 2개다(합쳐 약 41 cm³, 약 52 g). 구조에는 필요 없다. 850 mAh 배터리를 쓰면 TWR 약 1.73, 1300 mAh면 약 1.62가 된다. 지름 214 mm라 베드 220 mm 이상 프린터가 필요하다. 기둥에 C클립으로 옆에서 끼운다.
 
 ### 발주 메모 (한 번에 주문할 때)
 
