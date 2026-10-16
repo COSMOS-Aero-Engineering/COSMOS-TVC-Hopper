@@ -113,7 +113,7 @@ gantt
 ## 4. 지금 당장의 병목 (2026-10-16 갱신)
 
 1. **실험 A(추력곡선) 미실시.** 그대로 최우선이다. `Kf`가 실측이 아니다.
-2. **시뮬레이션 베인 제어력 버그(#21).** 도메인 랜덤화를 켜면 어떤 정책도 1초 안에 넘어진다. 고치기 전에는 RL 결과를 PID와 비교할 수 없다. 합격 기준: 랜덤화 켠 상태에서 PD 안정화.
+2. **시뮬레이션 베인 제어력 버그(#21).** 도메인 랜덤화를 켜면 어떤 정책도 1초 안에 넘어진다. 고치기 전에는 RL 결과를 PID와 비교할 수 없다. 합격 기준: 랜덤화 켠 상태에서 PD 안정화. 10/16에 유력 원인(`CLalpha` 도/라디안 단위)과 후보 시험 결과를 [`../tasks/27-sim-vane-authority.md`](../tasks/27-sim-vane-authority.md)에 정리했다.
 3. **3D프린트 외주.** 10/14 기준 미발주다. 조립 일정 전체가 여기에 걸려 있다.
 4. **DShot 실물 ESC 시험(#24).** 안전 펌웨어는 머지됐고 팬 분리 상태 시험이 남았다.
 
@@ -143,7 +143,7 @@ gantt
 | 알고 싶은 것 | 문서 |
 |---|---|
 | 이번 주 팀별로 뭘 하나 (세션 A/B 단위) | [`semester-roadmap.md`](semester-roadmap.md) |
-| 이번 주 **내 이름**으로 뭐가 배정됐나 | [`member-weekly-tasks.md`](member-weekly-tasks.md) |
+| 지금 **내 이름**으로 뭐가 배정됐나 | [`../learning/README.md`](../learning/README.md) "지금 할 일" 표, PRD 이슈, [`../tasks/`](../tasks/README.md) (`member-weekly-tasks.md`는 9월 계획 기록) |
 | Week 1–2 원본 실행계획·부품 리스트 | [`week-01-kickoff.md`](week-01-kickoff.md) |
 | 시험 카드(TC-0~TC-7) 합격 기준 | [`../design/00-hopper-master-design.md`](../design/00-hopper-master-design.md) §11 |
 | 배선·핀맵 | [`../design/01-avionics-integration-final.md`](../design/01-avionics-integration-final.md) |
