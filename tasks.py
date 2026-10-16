@@ -3,7 +3,7 @@
 
     python tasks.py                 작업 목록
     python tasks.py setup           uv.lock 그대로 .venv 구성
-    python tasks.py check           CI와 같은 검사 (compile → sanity → gate → smoke → conncheck)
+    python tasks.py check           CI와 같은 검사 (skills → compile → sanity → gate → smoke → conncheck)
     python tasks.py check --force   캐시 무시하고 전부 다시 실행
     python tasks.py graph           작업 그래프와 캐시 상태 보기
     python tasks.py lock            의존성 다시 풀고 uv.lock/requirements.txt 갱신
@@ -388,6 +388,15 @@ def task_conncheck():
     uv_run(["python", "check.py"], cwd=CONNECTOME)
 
 
+def task_skills():
+    """Codex용 스킬 복사본(.agents/skills)이 정본(.claude/skills)과 같은지 본다(#39).
+
+    비교 코드는 ship.py에 하나만 둔다. 어긋났을 때 맞추는 명령(`python ship.py skills`)과
+    같은 코드여야 검사와 수정이 서로 다른 판정을 내리지 않는다.
+    """
+    run([sys.executable, "ship.py", "skills", "--check"], cwd=ROOT)
+
+
 def task_check():
     print("\n전부 통과. PR 올려도 된다.")
 
@@ -436,8 +445,10 @@ TASKS = {t.name: t for t in [
          uses_env=True),
     Task("conncheck", "커넥톰 정책망 점검 (그래프/셔플/수치/SB3연결)", task_conncheck,
          inputs=CONN_IN, uses_env=True),
-    Task("check", "CI와 같은 검사 - compile + sanity + gate + smoke + conncheck", task_check,
-         deps=["compile", "sanity", "gate", "smoke", "conncheck"]),
+    Task("skills", "Codex용 스킬 복사본이 정본과 같은지 확인 (#39)", task_skills,
+         inputs=[".claude/skills/**/*", ".agents/skills/**/*", "ship.py"]),
+    Task("check", "CI와 같은 검사 - skills + compile + sanity + gate + smoke + conncheck", task_check,
+         deps=["skills", "compile", "sanity", "gate", "smoke", "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
