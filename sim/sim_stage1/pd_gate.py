@@ -32,6 +32,9 @@ def pd(obs, kp=8.0, kd=2.0):
 
 def evaluate(policy, seeds=EVAL_SEEDS):
     env = HopperAttitudeEnv()
+    if not env.dr.get("enabled", False):
+        # 랜덤화를 끄면 명목값 한 점만 재게 되어 기준의 의미가 없어진다.
+        raise ValueError("params.yaml의 domain_rand.enabled가 false다. 합격 기준은 랜덤화를 켠 상태에서만 잰다.")
     returns, lengths, crashes, tilts = [], [], [], []
     for s in seeds:
         obs, _ = env.reset(seed=s)
@@ -58,6 +61,10 @@ def row(name, m):
             f"| {m['median_tilt_deg']:.1f}° |")
 
 
+def gate_passes(m):
+    return m["crash"] <= MAX_CRASH and m["median_tilt_deg"] <= MAX_MEDIAN_TILT_DEG
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", help="같은 평가 seed로 비교할 SB3 PPO 모델(.zip)")
@@ -76,7 +83,7 @@ def main():
         print(row(name, m))
 
     m = results["PD (kp=8, kd=2)"]
-    ok = m["crash"] <= MAX_CRASH and m["median_tilt_deg"] <= MAX_MEDIAN_TILT_DEG
+    ok = gate_passes(m)
     print(f"\nPD 판정: {'합격' if ok else '불합격'} "
           f"(기준: 넘어짐 ≤ {MAX_CRASH * 100:.0f} %, 중앙값 ≤ {MAX_MEDIAN_TILT_DEG:.0f}°)")
     return 0 if ok else 1
