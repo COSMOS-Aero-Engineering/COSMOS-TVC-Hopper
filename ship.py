@@ -10,8 +10,8 @@
 왜 이 파일이 있나: 김준원의 서버에는 `wt`, `capped`, `codex`가 깔려 있지만 부원 PC(Windows 위주)에는
 없다. 없다고 그 단계를 빼면 사람마다 작업 순서가 달라진다. 그래서 같은 동작을 표준 라이브러리만으로
 여기 구현하고, 없는 외부 도구는 처음 쓸 때 설치한다. 설치할 수 없는 경우(Linux의 gh는 관리자 권한
-필요, Node.js가 없으면 opencode)는 설치 방법을 출력하고 멈춘다. Windows의 `capped`는 상한을 걸지
-못하고 경고만 낸다.
+필요, Node.js가 없으면 opencode)는 설치 방법을 출력하고 멈춘다. Windows의 `capped`는 Job Object로
+상한을 건다. 이 동작은 아직 Windows에서 확인하지 못했다(#37).
 
 사람만 할 수 있는 단계(로그인)는 설치해도 대신하지 못한다. 그때는 무엇을 입력하면 되는지 출력하고
 멈춘다. OpenCode의 무료 모델은 로그인 없이 쓸 수 있어서, 리뷰는 로그인이 없어도 돈다.
@@ -185,10 +185,81 @@ def cmd_capped(a):
             print("[주의] macOS는 RLIMIT_AS를 강제하지 않을 수 있다. 상한이 안 걸릴 수 있다.",
                   file=sys.stderr)
         sys.exit(subprocess.run([exe_of(cmd[0]), *cmd[1:]], preexec_fn=limit_as).returncode)
-    # Windows: Job Object로 걸 수 있지만 여기서는 시험하지 못해서 넣지 않았다.
-    print("[주의] Windows에서는 메모리 상한을 걸지 못한다. 상한 없이 실행한다. "
-          "작업 관리자로 메모리를 지켜본다.", file=sys.stderr)
+    try:
+        win_job_cap(limit)
+    except OSError as e:
+        die(f"Windows Job Object로 메모리 상한을 걸지 못했다: {e}")
     sys.exit(subprocess.run([exe_of(cmd[0]), *cmd[1:]]).returncode)
+
+
+def win_job_cap(limit):
+    """Windows: 이 프로세스(ship.py)를 커밋 메모리 상한이 걸린 Job Object에 넣는다.
+
+    자식을 먼저 띄우고 Job에 넣으면, 넣기 전에 자식이 할당하거나 손자 프로세스를 띄울 수 있다.
+    subprocess는 CREATE_SUSPENDED로 띄운 자식의 스레드 핸들을 닫아 버려서 ResumeThread를 못 쓴다.
+    그래서 ship.py 자신을 먼저 Job에 넣는다. 그 뒤 띄우는 자식과 손자는 Job에 자동으로 들어간다.
+    JOB_MEMORY는 Job 전체 합계 상한이다(Linux systemd-run의 MemoryMax처럼). ship.py 자신이 쓰는
+    메모리도 합계에 들어간다. KILL_ON_JOB_CLOSE: ship.py가 끝나 마지막 Job 핸들이 닫히면 남은
+    자식도 끝난다. Job 핸들은 일부러 닫지 않는다.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    JOB_OBJECT_LIMIT_JOB_MEMORY = 0x00000200
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
+    JobObjectExtendedLimitInformation = 9
+
+    class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
+        _fields_ = [("PerProcessUserTimeLimit", wintypes.LARGE_INTEGER),
+                    ("PerJobUserTimeLimit", wintypes.LARGE_INTEGER),
+                    ("LimitFlags", wintypes.DWORD),
+                    ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t),
+                    ("ActiveProcessLimit", wintypes.DWORD),
+                    ("Affinity", ctypes.c_size_t),  # ULONG_PTR: 포인터 크기의 부호 없는 정수
+                    ("PriorityClass", wintypes.DWORD),
+                    ("SchedulingClass", wintypes.DWORD)]
+
+    class IO_COUNTERS(ctypes.Structure):
+        _fields_ = [(name, ctypes.c_ulonglong) for name in (
+            "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
+            "ReadTransferCount", "WriteTransferCount", "OtherTransferCount")]
+
+    class JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
+        _fields_ = [("BasicLimitInformation", JOBOBJECT_BASIC_LIMIT_INFORMATION),
+                    ("IoInfo", IO_COUNTERS),
+                    ("ProcessMemoryLimit", ctypes.c_size_t),
+                    ("JobMemoryLimit", ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                    ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+    if limit >= 1 << (8 * ctypes.sizeof(ctypes.c_size_t)):
+        die(f"상한 {limit}바이트가 이 파이썬(32비트)의 SIZE_T 범위를 넘는다.")
+
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateJobObjectW.argtypes = (ctypes.c_void_p, wintypes.LPCWSTR)
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.SetInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p,
+                                            wintypes.DWORD)
+    k32.SetInformationJobObject.restype = wintypes.BOOL
+    k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    k32.AssignProcessToJobObject.restype = wintypes.BOOL
+    k32.GetCurrentProcess.argtypes = ()
+    k32.GetCurrentProcess.restype = wintypes.HANDLE
+
+    job = k32.CreateJobObjectW(None, None)
+    if not job:
+        raise ctypes.WinError(ctypes.get_last_error())
+    info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
+    info.BasicLimitInformation.LimitFlags = (JOB_OBJECT_LIMIT_JOB_MEMORY
+                                             | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)
+    info.JobMemoryLimit = limit
+    if not k32.SetInformationJobObject(job, JobObjectExtendedLimitInformation,
+                                       ctypes.byref(info), ctypes.sizeof(info)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    if not k32.AssignProcessToJobObject(job, k32.GetCurrentProcess()):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return job
 
 
 # ─────────────────────────────────────────────────────────────────────────────
