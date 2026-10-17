@@ -6,7 +6,7 @@ Week 2 물리 실험의 "구속 스탠드"(M1, 만능조인트로 위치를 고�
 우리 기체 구조·좌표계·베인 4개짜리 토크 방정식을 그대로 쓰는 "진짜" 첫 RL 환경.
 
 ⚠️ 아직 실험 A(EDF 추력곡선)·구속 스탠드 실측 전이라 params.yaml의 물리 상수
-   (Jxx/Jyy/Jzz, CLalpha, A_fin, A_duct, Kf, vane_arm_l)는 PLACEHOLDER 상태. 지금 단계 목표는:
+   (Jxx/Jyy/Jzz, CLalpha, vane_geometry, A_duct, Kf, vane_arm_l)는 PLACEHOLDER 상태. 지금 단계 목표는:
      "RL 학습 파이프라인이 우리 기체의 실제 상태/액션 구조에 맞춰 정상적으로 도는가"
    를 확인하는 것 — 절대적인 학습 성능 숫자 자체는 아직 의미 없음.
    Week 2에서 실측값이 나오는 대로 params.yaml만 교체하면 이 코드는 그대로 재사용됨.
@@ -31,19 +31,43 @@ import yaml
 from gymnasium import spaces
 
 
+def vane_geometry(p: dict) -> dict:
+    """베인 잠김 구간 하나(params.yaml의 vane_geometry)에서 요 팔 r, 잠긴 면적 A_fin, 종횡비 AR을 계산한다(#98).
+
+    잠김 구간은 반경 inner_r-outer_r, 시위는 chord다. 축방향 유속이 이 구간에서 균일하다고 본다.
+      r     = (inner_r + outer_r) / 2       z축 → 베인 압력중심 반경(m). 요 토크 팔이다
+      A_fin = (outer_r - inner_r) · chord   베인 1장이 제트에 잠긴 면적(m^2)
+      AR    = (outer_r - inner_r) / chord   종횡비. params.yaml의 CLalpha 주석에서 쓴다
+    mm 값을 1e3, 1e6으로 나눠서 m, m^2로 바꾼다. 곱하기(1e-3) 대신 나누기를 쓰면 명목값이
+    소수 리터럴 0.018, 7.0e-4와 비트 단위로 같다.
+    """
+    for old in ("A_fin", "vane_arm_r"):
+        if old in p:
+            raise ValueError(f"params.yaml에서 {old} 줄을 지울 것. 이 값은 vane_geometry에서 계산한다(#98). "
+                             "두 줄을 같이 두면 두 출처가 어긋날 수 있다.")
+    g = p["vane_geometry"]
+    inner, outer, chord = float(g["inner_r_mm"]), float(g["outer_r_mm"]), float(g["chord_mm"])
+    if not (0.0 <= inner < outer and chord > 0.0):
+        raise ValueError(f"vane_geometry가 잘못됐다: 0 ≤ inner_r_mm({inner}) < outer_r_mm({outer}), "
+                         f"chord_mm({chord}) > 0 이어야 한다.")
+    span = outer - inner
+    return {"r": (inner + outer) / 2.0 / 1e3, "A_fin": span * chord / 1e6, "AR": span / chord}
+
+
 def vane_lift_gain(p: dict) -> float:
     """베인 1장의 측력/추력 비율 기울기 CL(1/rad). F = Ft · CL · alpha (논문 식 3.16).
 
-    CL = CLalpha · A_fin / (2 · A_duct). 한 축 베인 2장의 최대 측력 2·CL·alpha_max·Ft가
+    CL = CLalpha · A_fin / (2 · A_duct). A_fin은 vane_geometry()에서 계산한다.
+    한 축 베인 2장의 최대 측력 2·CL·alpha_max·Ft가
     제트 운동량 상한 Ft·sin(alpha_max)를 넘으면 과대 추정이므로 ValueError를 낸다
     (docs/design/rl-open-source-survey.md §2).
     """
-    CL = p["CLalpha"] * p["A_fin"] / (2.0 * p["A_duct"])
+    CL = p["CLalpha"] * vane_geometry(p)["A_fin"] / (2.0 * p["A_duct"])
     alpha_max = np.deg2rad(p["alpha_max_deg"])
     if 2.0 * CL * alpha_max > np.sin(alpha_max):
         raise ValueError(
             f"베인 측력 과대 추정: 축당 2·CL·alpha_max = {2.0 * CL * alpha_max:.4f}·Ft > "
-            f"sin(alpha_max) = {np.sin(alpha_max):.4f}·Ft. params.yaml의 CLalpha/A_fin/A_duct를 확인할 것."
+            f"sin(alpha_max) = {np.sin(alpha_max):.4f}·Ft. params.yaml의 CLalpha/vane_geometry/A_duct를 확인할 것."
         )
     return float(CL)
 
@@ -65,7 +89,7 @@ class HopperAttitudeEnv(gym.Env):
         # domain_rand 범위 안에서 다시 뽑은 self.Jxx/self.Jyy/... 로 덮어씀
         self.nominal_Jxx, self.nominal_Jyy, self.nominal_Jzz = p["Jxx"], p["Jyy"], p["Jzz"]
         self.nominal_l = p["vane_arm_l"]
-        self.nominal_r = p["vane_arm_r"]
+        self.nominal_r = vane_geometry(p)["r"]
         self.nominal_Kf = p["Kf"]
         self.CL = vane_lift_gain(p)
         self.CD0 = p["CD0"]
