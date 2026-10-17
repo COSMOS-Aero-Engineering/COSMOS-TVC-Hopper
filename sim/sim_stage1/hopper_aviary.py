@@ -67,6 +67,7 @@ class HopperAttitudeEnv(gym.Env):
         self.nominal_l = p["vane_arm_l"]
         self.nominal_r = p["vane_arm_r"]
         self.nominal_Kf = p["Kf"]
+        self.omega_t_per_throttle = p["omega_t_per_throttle"]   # 랜덤화하지 않는다
         self.CL = vane_lift_gain(p)
         self.CD0 = p["CD0"]
         self.alpha_max = np.deg2rad(p["alpha_max_deg"])
@@ -139,8 +140,9 @@ class HopperAttitudeEnv(gym.Env):
         throttle = (throttle_norm + 1.0) / 2.0  # -1~1 -> 0~1
 
         # 스로틀 -> 추력 (PLACEHOLDER 스케일: omega_t_equiv는 실제 rpm이 아니라
-        # throttle을 상대적 회전수로 환산한 임시 값. 실험 A 이후 실제 DShot 값 기준으로 교체)
-        omega_t_equiv = throttle * 3000.0
+        # throttle을 상대적 회전수로 환산한 임시 값. 환산 상수는 params.yaml의 omega_t_per_throttle.
+        # 실험 A 이후 실제 DShot 값 기준으로 교체)
+        omega_t_equiv = throttle * self.omega_t_per_throttle
         Ft = self.Kf * omega_t_equiv**2
 
         # 베인 선형 공력 근사 (modelling-notes-ch3.md §2.2, 식 3.16)
