@@ -15,7 +15,7 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 | 파일 | 내용 |
 |---|---|
 | `hopper_aviary.py` | **`HopperAttitudeEnv`** — 위치 구속(만능조인트) 상태에서 자세만 제어하는 Stage 1 환경. 뉴턴-오일러 강체 회전방정식(자이로스코픽 교차항 포함) + ZYX 오일러각 운동학을 numpy로 직접 적분. `docs/design/references/`의 논문 3장(Modelling)을 그대로 코드화한 것 |
-| `params.yaml` | 물리 상수. **CLalpha/A_fin/A_duct/CD0/Kf/mass/Jxx·Jyy·Jzz/vane_arm_l은 PLACEHOLDER** — 실험 A(EDF 추력곡선)·TC-2·조립 후 실측 전까지는 추정값. 각 값의 계산 근거는 파일 주석에 있다(#27) |
+| `params.yaml` | 물리 상수. **CLalpha/A_fin/A_duct/CD0/Kf/mass/Jxx·Jyy·Jzz/vane_arm_l/vane_arm_r은 PLACEHOLDER** — 실험 A(EDF 추력곡선)·TC-2·조립 후 실측 전까지는 추정값. 각 값의 계산 근거는 파일 주석에 있다(#27) |
 | `pd_gate.py` | **RL 학습 전 합격 기준**(#27): 도메인 랜덤화 켠 상태에서 PD(kp=8, kd=2)가 평가 seed 0~199에서 넘어짐 ≤ 5 %, 최종 기울기 중앙값 ≤ 5°인지. `--model`로 PPO도 같은 seed로 비교. `tasks.py check`가 매번 돌린다 |
 | `sanity_check.py` | 환경이 안 깨졌는지 빠르게 확인(무작위 액션 20스텝) |
 | `train.py` | PPO(stable-baselines3) 학습 스크립트. 학습 seed 10000(평가 seed 0~199와 분리) |
