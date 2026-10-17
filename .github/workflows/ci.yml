@@ -1,8 +1,13 @@
-# COSMOS CI — PR이 main에 들어가기 전에 "시뮬이 아직 살아 있는가"만 자동으로 확인한다.
+# COSMOS CI — PR이 main에 들어가기 전에 sim 검사와 펌웨어 빌드를 자동으로 돌린다.
 #
-# 여기서 잡으려는 사고는 딱 하나: 누가 sim 코드를 고쳤는데 그게 깨진 채로 main에 들어가서,
+# 잡으려는 사고: 누가 코드를 고쳤는데 그게 깨진 채로 main에 들어가서,
 # 다음 사람이 git pull 받은 뒤에야 "내가 뭘 잘못했나?" 하고 헤매는 것.
-# 그래서 오래 걸리는 학습은 돌리지 않고, 환경 로딩 + SB3 연결만 빠르게 본다.
+# 오래 걸리는 PPO 본 학습(`train`)은 돌리지 않는다. job마다 돌리는 것:
+#   - sim: `python tasks.py check`, 그리고 학습 자료 목록·내부 링크 검사.
+#     check가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다. 여기에 옮겨 적지 않는다.
+#   - firmware: PlatformIO 빌드. 빌드할 프로젝트 목록은 아래 matrix.project가 정본이다.
+# sim job 이름("환경 로딩 + PPO 스모크")은 실제 검사 범위보다 좁다. 이 이름은 required
+# status check와 묶여 있어서 바꾸지 않는다. 바꾸는 순서는 sim job의 name 위 주석에 있다.
 #
 # 검사 내용 자체는 tasks.py가 갖고 있고 CI는 그걸 호출만 한다. 예전엔 PPO 스모크 코드가
 # tasks.py와 이 파일 양쪽에 복사돼 있어서 "한쪽만 고치지 말 것"이라는 주석으로 버텼는데,
