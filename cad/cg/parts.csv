@@ -1,14 +1,23 @@
 part,mass_g,mass_source,z_mm,z_source,z_uncertainty_mm
-64mm EDF fan+motor,160,budget (master 5.1),46,01-avionics 8.4 (z~46),10
-60A ESC,40,budget (master 5.1),127,01-avionics 7.6/7.7 (bracket z 110~145 mid),18
-4S 1300mAh LiPo,150,budget (master 5.1),162,01-avionics 7.7 (shelf z 150~175 mid),12
-Teensy 4.0,5,budget (master 5.1),162,01-avionics 7.7 (avionics shelf),12
-BNO085 breakout,3,budget (master 5.1),162,01-avionics 7.7 (avionics shelf),12
-ESP32 dev board,10,budget (master 5.1) - check if still used,162,assumed avionics shelf - check,20
-RC receiver,6,budget (master 5.1),162,01-avionics 7.7 (avionics shelf),12
-4x servo,55,budget (master 5.1),-36,01-avionics 7.7 (vane pivot = servo axis),5
-vane ring+4 vanes+linkage,70,budget (master 5.1),-36,01-avionics 7.7 (ring -22~-50 mid),8
-top plate+bail+4 columns+tray,90,budget (master 5.1),110,ESTIMATE - plate z 178~182 + columns -22~178; split by CAD,40
-4 landing legs,70,budget (master 5.1),-95,01-avionics 7.7 (ring bottom -50 to foot -140 mid),15
+64mm EDF fan+motor,169,"spec Freewing E7207 (169 g whole unit)",46,"01-avionics 8.4 (z~46)",10
+60A ESC+470uF cap,30,"spec single 60A BLHeli_32 board+leads+cap ~25-35 g",127,"01-avionics 7.6/7.7 (bracket z 110-145 mid)",18
+4S 1300mAh LiPo,166,"spec Turnigy Graphene 1300 4S 65C (166 g)",162,"01-avionics 7.7 (shelf z 150-175 mid)",12
+Teensy 4.0,3,"spec PJRC board 2.8-3 g (헤더 포함 시 ~5 g)",162,"01-avionics 7.7 (avionics shelf)",12
+BNO085 breakout,2.5,"spec Adafruit 4754 (2.5 g)",162,"01-avionics 7.7 (avionics shelf)",12
+RC receiver,6,"budget (Spektrum sat ~3 g / SBUS RX ~15 g)",162,"01-avionics 7.7 (avionics shelf)",12
+4x servo MG90S,53.6,"spec 13.4 g x4 (Tower Pro)",-36,"01-avionics 7.7 (vane pivot = servo axis)",5
+4x servo horn (alu),4,"est ~1 g each (미측정)",-36,"on servo = vane_pivot_z",5
+top plate (PETG),15.31,"calc OpenSCAD 30.13 cm3 x PETG 40% (print_mass.py)",180,"hopper_params.scad top_plate() z 178-182",2
+vane ring (PETG),66.52,"calc OpenSCAD 130.94 cm3 x PETG 40%",-36,"01-avionics 7.7 (ring -22 to -50 mid)",8
+vanes x4 (PETG),5.45,"calc OpenSCAD 10.72 cm3 x PETG 40%",-36,"01-avionics 7.7 (ring -22 to -50 mid)",8
+vane couplers x4 (PETG),3.79,"calc OpenSCAD 7.46 cm3 x PETG 40%",-36,"vane_pivot_z",5
+EDF clamp (PETG),6.20,"calc OpenSCAD 12.20 cm3 x PETG 40%",70,"hopper_params.scad edf_clamp_z=70",8
+battery shelf (PETG),8.61,"calc OpenSCAD 16.95 cm3 x PETG 40%",155,"01-avionics 7.7 (shelf ~150-175)",12
+avionics shelf (PETG),9.45,"calc OpenSCAD 18.60 cm3 x PETG 40%",155,"01-avionics 7.7 (shelf ~150-175)",12
+ESC bracket (PETG),3.59,"calc OpenSCAD 7.06 cm3 x PETG 40%",127,"01-avionics 7.6/7.7 (bracket z 110-145 mid)",18
+foot pads x4 (EVA),0.45,"calc OpenSCAD 6.42 cm3 x EVA 0.07",-136,"foot_z -140 + pad h/2",6
+vane spar x4 (CF rod Ø3),2.54,"calc Ø3 CF rod x60 mm x4",-36,"vane_pivot_z (spar axis)",5
+column x4 (CF tube Ø6),18.85,"calc CF tube OD6/ID4 x200 mm x4",78,"hopper_params.scad columns z -22~178 mid",5
+leg x4 (CF tube Ø6),15.06,"calc CF tube OD6/ID4 x159.8 mm x4",-95,"ring bottom -50 to foot -140 mid",15
+bail (steel rod Ø3),5.02,"calc steel rod Ø3, 180 deg arc r28.8",200,"hopper_params.scad bail() above top plate",20
 wiring+straps+ties+epoxy,50,budget (master 5.1),100,ESTIMATE - spread over frame,40
-2 shelves+ESC bracket (PETG),25,01-avionics 8.1,155,01-avionics 7.7 (shelf ~150~175),12
