@@ -6,7 +6,12 @@ import { bodyToThreeQuat, bodyToThreeVec } from './frames.js';
 import { buildHopper, poseVanes } from './hopper.js';
 
 const $ = (id) => document.getElementById(id);
-const deg = (r) => (r === null ? '-' : (r * 180 / Math.PI).toFixed(1));
+// 반올림해서 0이 되는 작은 음수(-1e-12 등)는 "-0.0" 대신 "0.0"으로 쓴다
+const deg = (r) => {
+  if (r === null) return '-';
+  const s = (r * 180 / Math.PI).toFixed(1);
+  return s === '-0.0' ? '0.0' : s;
+};
 
 // ---------- 장면 ----------
 const view = $('view');
@@ -50,7 +55,9 @@ let idx = 0;
 let playing = false;
 let playStartWall = 0;
 let playStartT = 0;
-let speed = 1;
+// select에서 읽는다. Firefox는 새로고침할 때 select 값을 되살리므로 1로 고정하면 표시와 실제 배속이 다를 수 있다.
+let speed = Number($('speed').value);
+let vanesValid = true; // servo1..4가 모두 -1~1 안이면 true (02 문서 §4는 µs도 허용한다)
 $('speed').addEventListener('change', (e) => {
   speed = Number(e.target.value);
   if (playing && rows.length) { playStartWall = performance.now(); playStartT = rows[idx].t_ms; }
@@ -61,7 +68,7 @@ function show(i) {
   const r = rows[idx];
   if (!r) return;
   hopper.quaternion.copy(bodyToThreeQuat(r.qw, r.qx, r.qy, r.qz));
-  poseVanes(vanes, [r.servo1, r.servo2, r.servo3, r.servo4]);
+  poseVanes(vanes, vanesValid ? [r.servo1, r.servo2, r.servo3, r.servo4] : [null, null, null, null]);
   $('t').textContent = r.t_ms;
   $('mode').textContent = r.mode ?? '-';
   $('phi').textContent = deg(r.phi);
@@ -82,7 +89,9 @@ function load(text, name) {
   $('play').textContent = '재생';
   $('play').disabled = $('seek').disabled = rows.length === 0;
   $('seek').max = Math.max(rows.length - 1, 0);
-  $('status').textContent = `${name}: ${rows.length}행` + (res.skipped ? `, 건너뛴 행 ${res.skipped}` : '');
+  vanesValid = !rows.some((r) => [r.servo1, r.servo2, r.servo3, r.servo4].some((s) => s !== null && Math.abs(s) > 1));
+  $('status').textContent = `${name}: ${rows.length}행` + (res.skipped ? `, 건너뛴 행 ${res.skipped}` : '')
+    + (vanesValid ? '' : ', servo 값이 -1~1 밖이라(µs로 보임) 베인을 중립에 둔다');
   show(0);
 }
 
@@ -111,7 +120,7 @@ renderer.setAnimationLoop(() => {
     const target = playStartT + (performance.now() - playStartWall) * speed;
     let i = idx;
     while (i < rows.length - 1 && rows[i + 1].t_ms <= target) i += 1;
-    show(i);
+    if (i !== idx) show(i); // 0.25×에서는 여러 프레임 동안 같은 행이다
     if (i >= rows.length - 1) { playing = false; $('play').textContent = '재생'; }
   }
   controls.update();
