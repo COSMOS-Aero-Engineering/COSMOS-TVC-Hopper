@@ -171,7 +171,7 @@ Ch.4에서 LQR 게인을 설계한다. **우리 Stage 1은 이 선형화를 안 
 | `Kf` | `params.yaml: Kf` | PLACEHOLDER |
 | `Jxx,Jyy,Jzz` | `params.yaml: Jxx,Jyy,Jzz` | PLACEHOLDER |
 | `l` | `params.yaml: vane_arm_l` | PLACEHOLDER 0.104 m(CG 추정 68 mm + 피벗 36 mm). 예전 0.048은 링 반지름이라 정의와 달랐다(#21) |
-| `r` | `params.yaml: vane_arm_r` | 0.048 m, 링 반지름 근사 그대로 |
+| `r` | `params.yaml: vane_arm_r` | PLACEHOLDER 0.021 m(z축 → 베인 압력중심, 허브 r 7-14 ~ 배기 반경 32 사이 균일 유속 가정, #34). 예전 0.048은 링 반지름이었다. 도메인 랜덤화는 `vane_arm_r_range`로 l과 따로 흔든다 |
 | `CLα` (raw, 유한 날개) | `params.yaml: CLalpha` | PLACEHOLDER 1.637/rad, §2.2 결정 참고 |
 | `A_fin, A_duct` | `params.yaml: A_fin, A_duct` | PLACEHOLDER, 배기 내경 실측 필요 |
 | `CL = CLα·A_fin/(2A_duct)` (lumped) | `hopper_aviary.py: vane_lift_gain()` → `self.CL` | 일치(#27), 제트 운동량 상한 검사 포함 |

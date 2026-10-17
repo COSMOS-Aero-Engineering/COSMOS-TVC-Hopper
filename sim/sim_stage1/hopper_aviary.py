@@ -119,10 +119,11 @@ class HopperAttitudeEnv(gym.Env):
         self.Jyy = jitter(self.nominal_Jyy, self.dr.get("Jyy_range", 0.0))
         self.Jzz = jitter(self.nominal_Jzz, self.dr.get("Jzz_range", 0.0))
 
+        # l(무게중심 → 베인 피벗 세로 거리)과 r(z축 → 베인 압력중심 반경)은 다른 치수라 따로 흔든다(#34).
+        # vane_arm_r_range가 없으면 예전처럼 vane_arm_range를 쓴다.
         arm_range = self.dr.get("vane_arm_range", 0.0)
-        arm_scale = 1.0 + self.np_random.uniform(-arm_range, arm_range)
-        self.l = self.nominal_l * arm_scale
-        self.r = self.nominal_r * arm_scale
+        self.l = jitter(self.nominal_l, arm_range)
+        self.r = jitter(self.nominal_r, self.dr.get("vane_arm_r_range", arm_range))
 
         self.Kf = jitter(self.nominal_Kf, self.dr.get("Kf_range", 0.0))
 
