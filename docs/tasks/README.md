@@ -9,7 +9,7 @@ PRD 이슈(#26-#29)는 "무엇을, 어디까지" 하는지 정한다. 이 폴더
 | #26 | 김민찬·박지훈 | [무게중심과 베인 토크 팔](26-cad-cg.md) | `cad/cg/parts.csv`, `cad/cg/cg_estimate.py` (돌려 본 결과 z_cg 65.7 mm, l 101.7 mm) |
 | #26 | 이민우 | [KiCad IMU 넷 대조와 ERC](26-kicad-imu-nets.md) | `kicad/_tools/check_imu_nets.py` (원본 스크립트 기준 10행 일치) |
 | #26 | 김민찬 | (발주·실험 A 계획은 PRD #26 5절에 직접 적는다) | |
-| #27 | 김준원 | [시뮬레이션 베인 제어력 수정](27-sim-vane-authority.md) | PR #35로 진행 중(합격 판정). 남은 일과 CL 근거 보강 메모 |
+| #27 | 김준원 | [시뮬레이션 베인 제어력 수정](27-sim-vane-authority.md) | PR #35 머지(합격 판정, 10/16). 남은 일과 CL 근거 보강 메모 |
 | #28 | 김시우 | [IMU 축·부호 확인](28-imu-axis.md) | 측정 절차, 기대 부호 표, 로그 저장 명령 |
 | #28 | 권재후 | [DShot 실물 시험과 CSV 계약 대조](28-dshot-bench.md) | 8개 항목 기록표, 펌웨어 출력 ↔ CSV 계약 대조표 초안 |
 | #29 | 김민지 | [CSV 재생 3D 뷰어](29-web-viewer.md) | `web/` Vite 프로젝트(빌드 통과), 예제 CSV 2개, 축 변환 함수 초안 |

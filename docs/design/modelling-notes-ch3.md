@@ -156,7 +156,7 @@ F1, F2, F3, F4 = self.CLalpha * Ft * alpha
 논문은 호버점(φ=θ=0, Ft=mg)에서 야코비안 선형화해 12차원 상태공간 모델(식 3.41–3.43)을 만들고
 Ch.4에서 LQR 게인을 설계한다. **우리 Stage 1은 이 선형화를 안 거치고 비선형 방정식을 numpy로 직접
 적분**(오일러 적분, dt=0.01s) — RL(PPO)은 선형 모델이 필요 없어서다. 이 절은:
-- 나중에 **LQR을 PID 대신/추가로 baseline에 넣고 싶으면** 그때 필요 (`AGENTS.md` PID vs RL 프로토콜
+- 나중에 **LQR을 PID 대신/추가로 baseline에 넣고 싶으면** 그때 필요 (`03-control-pipeline-design.md` §3 PID vs RL 비교 구조
   참고 — 지금은 PID 또는 LQR 둘 다 "baseline" 후보로 열어둠).
 - 제어 입력 벡터 정의 `u=[α1,α2,α3,α4,ωt]`(식 3.37)는 **우리 action space(5차원, `hopper_aviary.py`)와
   구조가 동일** — 단 우리는 ωt 대신 정규화된 throttle을 씀.
