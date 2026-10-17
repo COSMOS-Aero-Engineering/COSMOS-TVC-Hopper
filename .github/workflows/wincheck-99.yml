@@ -1,0 +1,88 @@
+# Temporary check for issue #99. Never merged. Branch infra/99-wincheck only.
+# Reproduces Windows client default execution policy (effective Restricted) on a
+# windows-latest runner, then feeds the old (origin/main) and new (this branch)
+# README uv install lines to Windows PowerShell 5.1 through stdin, as if typed.
+# All steps use cmd so the runner's own PowerShell script files are not blocked.
+name: wincheck-99 (temporary)
+
+on:
+  push:
+    branches: [infra/99-wincheck]
+
+jobs:
+  uv-install:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Environment before
+        shell: cmd
+        run: |
+          ver
+          where uv
+          echo USERPROFILE=%USERPROFILE%
+          echo XDG_BIN_HOME=%XDG_BIN_HOME%
+          echo UV_INSTALL_DIR=%UV_INSTALL_DIR%
+          echo PSExecutionPolicyPreference=%PSExecutionPolicyPreference%
+          if exist "%USERPROFILE%\.local\bin\uv.exe" (echo uv.exe already in .local\bin & exit /b 1)
+          powershell -NoProfile -Command "'PS ' + $PSVersionTable.PSVersion; Get-ExecutionPolicy -List | Out-String"
+          exit /b 0
+
+      - name: Set policy like a fresh Windows client (LocalMachine Restricted, CurrentUser Undefined)
+        shell: cmd
+        run: |
+          set PSExecutionPolicyPreference=
+          powershell -NoProfile -Command "Set-ExecutionPolicy Restricted -Scope LocalMachine -Force; Set-ExecutionPolicy Undefined -Scope CurrentUser -Force; Get-ExecutionPolicy -List | Out-String; 'Effective: ' + (Get-ExecutionPolicy)"
+          powershell -NoProfile -Command "if ((Get-ExecutionPolicy).ToString() -ne 'Restricted') { exit 1 }"
+          if errorlevel 1 (echo effective policy is not Restricted & exit /b 1)
+          exit /b 0
+
+      - name: Control - old README line (origin/main) must fail with the policy error
+        shell: cmd
+        run: |
+          set PSExecutionPolicyPreference=
+          git show origin/main:README.md | findstr /B /C:"irm https://astral.sh/uv/install.ps1" > oldcmd.txt
+          type oldcmd.txt
+          powershell -NoProfile -Command - < oldcmd.txt > old.log 2>&1
+          set rc=%ERRORLEVEL%
+          type old.log
+          echo old line exit=%rc%
+          findstr /C:"requires an execution policy" old.log > nul || (echo policy error text not found & exit /b 1)
+          if exist "%USERPROFILE%\.local\bin\uv.exe" (echo uv.exe exists after old line & exit /b 1)
+          echo CONTROL OK: old line refused, uv.exe not installed
+          exit /b 0
+
+      - name: Fix - new README line (this branch) must install uv
+        shell: cmd
+        run: |
+          set PSExecutionPolicyPreference=
+          findstr /B /C:"powershell -ExecutionPolicy ByPass" README.md > newcmd.txt
+          type newcmd.txt
+          powershell -NoProfile -Command - < newcmd.txt > new.log 2>&1
+          set rc=%ERRORLEVEL%
+          type new.log
+          echo new line exit=%rc%
+          if not "%rc%"=="0" (echo new line failed & exit /b 1)
+          "%USERPROFILE%\.local\bin\uv.exe" --version || (echo uv.exe missing or broken & exit /b 1)
+          echo FIX OK
+          exit /b 0
+
+      - name: Fix - new line run directly from cmd
+        shell: cmd
+        run: |
+          set PSExecutionPolicyPreference=
+          powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+          if errorlevel 1 (echo cmd run failed & exit /b 1)
+          exit /b 0
+
+      - name: Stored policy unchanged after install
+        shell: cmd
+        run: |
+          set PSExecutionPolicyPreference=
+          powershell -NoProfile -Command "Get-ExecutionPolicy -List | Out-String; 'Effective: ' + (Get-ExecutionPolicy)"
+          powershell -NoProfile -Command "if ((Get-ExecutionPolicy -Scope LocalMachine).ToString() -ne 'Restricted' -or (Get-ExecutionPolicy -Scope CurrentUser).ToString() -ne 'Undefined') { exit 1 }"
+          if errorlevel 1 (echo stored policy changed & exit /b 1)
+          echo POLICY OK: LocalMachine Restricted, CurrentUser Undefined
+          exit /b 0
