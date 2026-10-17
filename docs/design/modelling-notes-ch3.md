@@ -115,7 +115,7 @@ F1, F2, F3, F4 = self.CLalpha * Ft * alpha
 **바디 프레임 토크** (Fig 3.7, l=COM~베인 조인트 거리, r=z축~베인 중심 거리). 원저자 MATLAB의 값도
 `l = 0.0947 m`(세로 거리), `r = 0.04 m`다. 우리 `vane_arm_l`은 #27에서 링 반지름 48 mm를
 세로 거리 104 mm(`01-avionics-integration-final.md` §8.4)로 고쳤다. `vane_arm_r`은 #34에서 링 반지름 48 mm를
-베인 압력중심 반경 18 mm(추정)로 고쳤다:
+베인 압력중심 반경 18 mm(추정)로 고쳤다. #98부터 r은 `params.yaml`의 `vane_geometry`(잠김 구간 4-32 mm)에서 계산한다:
 
 ```
 τx = (F1+F3)·l
@@ -172,9 +172,9 @@ Ch.4에서 LQR 게인을 설계한다. **우리 Stage 1은 이 선형화를 안 
 | `Kf` | `params.yaml: Kf` | PLACEHOLDER |
 | `Jxx,Jyy,Jzz` | `params.yaml: Jxx,Jyy,Jzz` | PLACEHOLDER |
 | `l` | `params.yaml: vane_arm_l` | PLACEHOLDER 0.104 m(CG 추정 68 mm + 피벗 36 mm). 예전 0.048은 링 반지름이라 정의와 달랐다(#21) |
-| `r` | `params.yaml: vane_arm_r` | PLACEHOLDER 0.018 m(z축 → 베인 압력중심. `A_fin`과 같은 가정: 베인 r 4-32 mm 잠김, 균일 유속, #34). 허브 차폐 효과는 근거가 없어 `vane_arm_r_range` ±25 %로 덮는다. 예전 0.048은 링 반지름이었다 |
+| `r` | `hopper_aviary.py: vane_geometry()` ← `params.yaml: vane_geometry` | PLACEHOLDER 0.018 m(z축 → 베인 압력중심. `A_fin`과 같은 입력: 베인 r 4-32 mm 잠김, 균일 유속, #34·#98). 허브 차폐 효과는 근거가 없어 `vane_arm_r_range` ±25 %로 덮는다. 예전 0.048은 링 반지름이었다 |
 | `CLα` (raw, 유한 날개) | `params.yaml: CLalpha` | PLACEHOLDER 1.637/rad, §2.2 결정 참고 |
-| `A_fin, A_duct` | `params.yaml: A_fin, A_duct` | PLACEHOLDER, 배기 내경 실측 필요 |
+| `A_fin, A_duct` | `A_fin`: `vane_geometry()` ← `params.yaml: vane_geometry`(#98), `A_duct`: `params.yaml: A_duct` | PLACEHOLDER, 배기 내경 실측 필요 |
 | `CL = CLα·A_fin/(2A_duct)` (lumped) | `hopper_aviary.py: vane_lift_gain()` → `self.CL` | 일치(#27), 제트 운동량 상한 검사 포함 |
 | `CD0` | `params.yaml: CD0` | 원저자 뭉쳐진 값, 동역학 코드에서 안 씀 |
 | `τx,τy,τz` | `tau_x,tau_y,tau_z` | 일치 |
