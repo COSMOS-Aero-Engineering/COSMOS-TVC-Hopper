@@ -40,6 +40,12 @@ Thumbs.db
 # pio device monitor --filter log2file 출력. 남길 로그는 data/로 옮겨 커밋한다
 /firmware/cosmos/*/logs/
 
+# KiCad 로컬 상태 (#68). 커밋 대상 아님
+# .kicad_prl: 사용자별 화면 설정. KiCad 공식 문서가 버전 관리에서 빼도 된다고 한다
+# ~*.lck: 프로젝트를 열어 둔 동안만 있는 잠금 파일. KiCad를 닫으면 지워진다
+*.kicad_prl
+~*.lck
+
 # 예외: 외주 업체에 실제로 보낸 STL은 기록으로 남긴다
 # (출력물이 이상할 때 "우리가 보낸 파일이 이거였나"를 확인할 유일한 근거)
 !/cad/print-orders/**/*.stl
