@@ -59,8 +59,10 @@ let playStartT = 0;
 let speed = Number($('speed').value);
 let vanesValid = true; // servo1..4가 모두 -1~1 안이면 true (02 문서 §4는 µs도 허용한다)
 $('speed').addEventListener('change', (e) => {
+  // 지금까지 재생한 시간을 이전 배속으로 계산해 기준점으로 삼는다. rows[idx].t_ms로 되돌리면 행 사이 시간이 사라진다.
+  const now = performance.now();
+  if (playing) { playStartT += (now - playStartWall) * speed; playStartWall = now; }
   speed = Number(e.target.value);
-  if (playing && rows.length) { playStartWall = performance.now(); playStartT = rows[idx].t_ms; }
 });
 
 function show(i) {
