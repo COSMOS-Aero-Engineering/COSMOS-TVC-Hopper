@@ -35,12 +35,17 @@ git config user.email "본인 이메일"
 
 ```powershell
 # Windows PowerShell
-irm https://astral.sh/uv/install.ps1 | iex
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 ```bash
 # Mac / Linux
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+
+Windows 명령은 [uv 공식 설치 문서](https://docs.astral.sh/uv/getting-started/installation/)의 명령과 같다.
+`-ExecutionPolicy ByPass`를 빼지 않는다. 이 옵션이 없으면 Windows 기본 실행 정책(`Restricted`)에서 uv
+설치 스크립트가 오류를 내고 멈춘다(#99). 이 옵션은 이 명령이 새로 띄우는 PowerShell 프로세스에만
+적용된다. PC에 저장된 실행 정책은 바꾸지 않는다([Microsoft 문서](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-5.1#set-a-different-policy-for-one-session)).
 
 그다음은 어느 OS든 같다. (Mac은 **Apple Silicon만** 된다 — 고정된 torch 2.14.0에 Intel Mac용
 휠이 없다. Intel Mac이면 Windows/Linux PC를 쓰거나, 부장에게 말해서 torch 버전을 조정한다.)
@@ -192,6 +197,7 @@ gh pr create --base main --reviewer junwonkim07
 | BNO085 값이 안 뜸 | SPI 배선 또는 PS0/PS1 모드 설정 문제 | CS=10, MOSI=11, MISO=12, SCK=13, RST=20, INT=21, WAK/PS0=22 확인. PS1은 3.3V에 묶고 전원도 3.3V만 사용. 모듈 실크가 다르면 `firmware/cosmos/imu_test/src/imu_test.ino` 상단 배선표와 실물 후면 표기를 대조 |
 | `pip install` 중 `OSError: [Errno 2] No such file or directory: ...torch\include\...` | Windows 경로 길이 260자 제한 (torch는 경로가 아주 깊다) | 저장소를 더 짧은 경로로 옮기거나(예: `C:\dev\COSMOS-TVC-Hopper`), [긴 경로 지원 활성화](https://pip.pypa.io/warnings/enable-long-paths) |
 | 설치 후 OneDrive가 몇 GB를 동기화하기 시작함 | `.venv`(torch 포함 ~1GB)가 OneDrive 폴더 안에 생겨서 | OneDrive 설정 → 백업/폴더 선택에서 `.venv` 제외. 지워도 `python tasks.py setup`으로 언제든 다시 만든다 |
+| uv 설치 명령이 `Error: PowerShell requires an execution policy in [Unrestricted, RemoteSigned, Bypass] to run uv`를 출력하고 멈춤 | `-ExecutionPolicy ByPass` 없이 `irm https://astral.sh/uv/install.ps1 \| iex`만 실행함. Windows 기본 실행 정책(`Restricted`)에서는 uv 설치 스크립트가 스스로 멈춘다 | 위 [소프트웨어팀](#소프트웨어팀)의 Windows 명령을 그대로 다시 실행한다. 오류 메시지가 권하는 `Set-ExecutionPolicy`는 하지 않아도 된다 |
 | `uv: command not found` / `uv 이(가) 없다` | uv 미설치 또는 설치 후 터미널 미재시작 | 위 [소프트웨어팀](#소프트웨어팀) 설치 명령 실행 후 터미널을 새로 연다 |
 | `환경을 uv.lock 에 맞추지 못했다` 또는 CI의 `uv sync --locked` 실패 | `pyproject.toml`만 고치고 `uv.lock`을 갱신하지 않음 | `python tasks.py lock` 후 `uv.lock`·`sim/requirements.txt`를 함께 커밋 |
 
