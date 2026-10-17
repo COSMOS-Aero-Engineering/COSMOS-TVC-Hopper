@@ -1,14 +1,15 @@
 part,mass_g,mass_source,z_mm,z_source,z_uncertainty_mm
-64mm EDF fan+motor,160,budget (master 5.1),46,01-avionics 8.4 (z~46),10
-60A ESC,40,budget (master 5.1),127,01-avionics 7.6/7.7 (bracket z 110~145 mid),18
-4S 1300mAh LiPo,150,budget (master 5.1),162,01-avionics 7.7 (shelf z 150~175 mid),12
-Teensy 4.0,5,budget (master 5.1),162,01-avionics 7.7 (avionics shelf),12
-BNO085 breakout,3,budget (master 5.1),162,01-avionics 7.7 (avionics shelf),12
-ESP32 dev board,10,budget (master 5.1) - check if still used,162,assumed avionics shelf - check,20
-RC receiver,6,budget (master 5.1),162,01-avionics 7.7 (avionics shelf),12
-4x servo,55,budget (master 5.1),-36,01-avionics 7.7 (vane pivot = servo axis),5
-vane ring+4 vanes+linkage,70,budget (master 5.1),-36,01-avionics 7.7 (ring -22~-50 mid),8
-top plate+bail+4 columns+tray,90,budget (master 5.1),110,ESTIMATE - plate z 178~182 + columns -22~178; split by CAD,40
-4 landing legs,70,budget (master 5.1),-95,01-avionics 7.7 (ring bottom -50 to foot -140 mid),15
+64mm EDF fan+motor,169,"spec Freewing E7207 64mm 12B 4S (169 g whole unit)",46,"01-avionics 8.4 (z~46)",10
+60A ESC,40,"budget (master 5.1); single 60A+cap+leads ~35-65 g",127,"01-avionics 7.6/7.7 (bracket z 110-145 mid)",18
+4S 1300mAh LiPo,166,"spec Turnigy Graphene 1300 4S 65C (166 g incl. wire/plug)",162,"01-avionics 7.7 (shelf z 150-175 mid)",12
+Teensy 4.0,3,"spec PJRC board 2.8-3 g (헤더 포함 시 ~5 g)",162,"01-avionics 7.7 (avionics shelf)",12
+BNO085 breakout,2.5,"spec Adafruit 4754 (2.5 g)",162,"01-avionics 7.7 (avionics shelf)",12
+RC receiver,6,"budget (master 5.1); DSMX sat ~3 g / SBUS RX ~15 g",162,"01-avionics 7.7 (avionics shelf)",12
+4x servo,53.6,"spec MG90S 13.4 g x4 (Tower Pro)",-36,"01-avionics 7.7 (vane pivot = servo axis)",5
+vane ring+4 vanes+linkage,70,"budget (master 5.1)",-36,"01-avionics 7.7 (ring -22 to -50 mid)",8
+top plate (PETG),15.3,"calc PETG 1.27 x infill 40%, vol 30.2 cm3 (cad/cg/print_mass.py)",180,"hopper_params.scad top_plate() z 178-182",2
+4x column (CF tube),18.8,"calc CF tube OD6/ID4 1.5 g/cm3 (cad/cg/print_mass.py)",78,"hopper_params.scad columns z -22~178 mid (uniform)",5
+bail (steel rod),5.0,"calc steel rod OD3 (cad/cg/print_mass.py)",200,"hopper_params.scad bail() above top plate",20
+4 landing legs,70,"budget (master 5.1); CF tube OD6",-95,"01-avionics 7.7 (ring bottom -50 to foot -140 mid)",15
 wiring+straps+ties+epoxy,50,budget (master 5.1),100,ESTIMATE - spread over frame,40
-2 shelves+ESC bracket (PETG),25,01-avionics 8.1,155,01-avionics 7.7 (shelf ~150~175),12
+2 shelves+ESC bracket (PETG),25,01-avionics 8.1,155,"01-avionics 7.7 (shelf ~150-175)",12
