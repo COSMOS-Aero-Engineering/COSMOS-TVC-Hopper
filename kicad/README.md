@@ -87,6 +87,7 @@ python kicad/_tools/validate_sch.py      # 구조 자체검증(문법/넷 연결
 `.kicad_sch`를 찾는다. KiCad 심볼 라이브러리 폴더는 `KICAD_SYMBOL_DIR`(또는 `KICAD10_SYMBOL_DIR`)
 환경변수나 `--kicad-symbols <폴더>` 인자로 주고, 둘 다 없으면 흔한 설치 위치를 훑어 찾는다.
 출력 파일 위치는 `--out <파일>`로 바꾼다(기본은 `kicad/cosmos-avionics/cosmos-avionics.kicad_sch`).
+`validate_sch.py`에 파일 경로를 인자로 주면 그 파일을 검사한다(기본은 같은 회로도).
 
 `_tools/extract_symbols.py`는 KiCad 번들 심볼 라이브러리에서 실제 심볼 정의·핀 좌표를 그대로
 추출하는 유틸 — 좌표를 손으로 베끼지 않으려고 만든 것(정확성 확보).

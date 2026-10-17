@@ -52,19 +52,32 @@ LIB_SYMBOLS = {
 }
 
 
+def _kicad_version_key(path):
+    """Sort key that orders KiCad version folders numerically: 9.0 before 10.0."""
+    m = re.search(r"KiCad[/\\]([0-9]+(?:\.[0-9]+)*)", str(path))
+    return tuple(int(part) for part in m.group(1).split(".")) if m else (0,)
+
+
+def _has_libraries(path):
+    return all((path / f).is_file() for f in LIB_FILES.values())
+
+
 def _symbol_dir_candidates():
     """Yield places KiCad's bundled symbol libraries might live, best first."""
-    # 1. KiCad's own environment variables (KICAD10_SYMBOL_DIR ... KICAD_SYMBOL_DIR).
-    #    KiCad defines a versioned name per major version; newest wins.
-    names = sorted(
-        (n for n in os.environ if re.fullmatch(r"KICAD\d*_SYMBOL_DIR", n)),
-        reverse=True,
-    )
-    for name in names:
+    # 1. KiCad's own environment variables. An explicit KICAD_SYMBOL_DIR wins,
+    #    then the versioned names (KICAD10_SYMBOL_DIR, KICAD9_SYMBOL_DIR, ...)
+    #    from the newest major version down. Compare versions as numbers: a plain
+    #    string sort puts KICAD9 before KICAD10.
+    unversioned = os.environ.get("KICAD_SYMBOL_DIR")
+    if unversioned:
+        yield Path(unversioned)
+    versioned = [n for n in os.environ if re.fullmatch(r"KICAD\d+_SYMBOL_DIR", n)]
+    for name in sorted(versioned, key=lambda n: int(re.search(r"\d+", n).group()),
+                       reverse=True):
         value = os.environ.get(name)
         if value:
             yield Path(value)
-    # 2. Common install locations.
+    # 2. Common install locations, newest KiCad version first.
     if os.name == "nt":
         for base in (os.environ.get("LOCALAPPDATA"), os.environ.get("ProgramFiles"),
                      os.environ.get("ProgramFiles(x86)")):
@@ -72,14 +85,15 @@ def _symbol_dir_candidates():
                 continue
             for pattern in ("Programs/KiCad/*/share/kicad/symbols",
                             "KiCad/*/share/kicad/symbols"):
-                yield from sorted(Path(base).glob(pattern), reverse=True)
+                yield from sorted(Path(base).glob(pattern),
+                                  key=_kicad_version_key, reverse=True)
     else:
         for fixed in ("/usr/share/kicad/symbols", "/usr/local/share/kicad/symbols",
                       "/Applications/KiCad/KiCad.app/Contents/SharedSupport/symbols"):
             yield Path(fixed)
         yield from sorted(
             Path("/Applications").glob("KiCad*/KiCad.app/Contents/SharedSupport/symbols"),
-            reverse=True,
+            key=_kicad_version_key, reverse=True,
         )
 
 
@@ -87,12 +101,15 @@ def find_symbols_dir(override):
     """Return the directory that holds KiCad's bundled .kicad_sym files."""
     if override:
         path = Path(override)
-        if not path.is_dir():
-            raise SystemExit(f"--kicad-symbols is not a directory: {path}")
+        if not _has_libraries(path):
+            raise SystemExit(
+                f"--kicad-symbols does not hold KiCad's symbol libraries: {path}\n"
+                f"  expected files: {', '.join(sorted(LIB_FILES.values()))}"
+            )
         return path
     for candidate in _symbol_dir_candidates():
         try:
-            if all((candidate / f).is_file() for f in LIB_FILES.values()):
+            if _has_libraries(candidate):
                 return candidate
         except OSError:
             continue

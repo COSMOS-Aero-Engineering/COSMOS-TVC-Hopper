@@ -12,6 +12,8 @@ HERE = Path(__file__).resolve().parent        # kicad/_tools
 DEFAULT_SCH = HERE.parents[1] / "kicad" / "cosmos-avionics" / "cosmos-avionics.kicad_sch"
 
 path = sys.argv[1] if len(sys.argv) > 1 else str(DEFAULT_SCH)
+if not Path(path).is_file():
+    sys.exit(f"schematic not found: {path}")
 text = open(path, encoding="utf-8").read()
 
 errors = []

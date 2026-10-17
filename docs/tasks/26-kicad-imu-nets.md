@@ -38,4 +38,4 @@ python kicad/_tools/check_imu_nets.py
 ## 확인 못 한 것
 
 - 실제 `.kicad_sch`를 KiCad 화면에서 열어 본 대조와 ERC는 하지 않았다.
-- `gen_schematic.py`는 KiCad 설치 경로가 코드에 고정돼 있어 다른 PC에서 재생성하려면 `KICAD` 경로를 바꿔야 한다.
+- ~~`gen_schematic.py`는 KiCad 설치 경로가 코드에 고정돼 있어 다른 PC에서 재생성하려면 `KICAD` 경로를 바꿔야 한다.~~ 10/17 이슈 #67에서 경로를 없앴다. 이제 어느 PC에서든 저장소 루트에서 두 스크립트가 돈다.
