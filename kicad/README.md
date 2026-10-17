@@ -193,18 +193,23 @@ Windows Controlled Folder Access(랜섬웨어 방지)가 `Documents` 폴더를 �
 고치고 다시 실행하면 된다 — 손으로 `.kicad_sch`를 고치지 않는다(파라메트릭 CAD와 같은 원칙).
 
 ```bash
-cd kicad/_tools
-python gen_schematic.py     # cosmos-avionics.kicad_sch 재생성
-python validate_sch.py <저장소 루트>/kicad/cosmos-avionics/cosmos-avionics.kicad_sch   # 구조 자체검증
+# 어느 PC에서든, 저장소 루트에서 실행한다
+python kicad/_tools/gen_schematic.py     # cosmos-avionics.kicad_sch 재생성
+python kicad/_tools/validate_sch.py      # 구조 자체검증(문법/넷 연결)
 ```
 
-`validate_sch.py`는 인자를 주지 않으면 작성자 PC의 절대경로를 쓴다(이슈 #67). 인자로 `.kicad_sch` 경로를 넘긴다.
-`gen_schematic.py`의 18행 `KICAD`에도 작성자 PC 경로가 박혀 있다(`C:/Users/mimin/...`). 다른 PC에서는 그 줄을
-자기 KiCad 심볼 폴더로 바꾸기 전까지 실행되지 않는다(이슈 #67).
+두 스크립트는 작성자 PC의 절대경로를 쓰지 않는다(10/17 이슈 #67에서 없앴다). 자기 파일 위치를
+기준으로 저장소 안의 `.kicad_sch`를 찾는다. KiCad 심볼 라이브러리 폴더는 `--kicad-symbols <폴더>`
+인자나 `KICAD_SYMBOL_DIR`(또는 `KICAD10_SYMBOL_DIR`) 환경변수로 주고, 둘 다 없으면 흔한 설치
+위치를 훑어 찾는다. 출력 파일 위치는 `--out <파일>`로 바꾼다(기본은 위 `.kicad_sch`).
+`validate_sch.py`에 파일 경로를 인자로 주면 그 파일을 검사한다(기본은 같은 회로도).
 
 **#66을 고치기 전에 다시 생성하면 같은 결함이 있는 파일이 나온다.** 지금 재생성은 "고치는 일"이 아니다.
 이 스크립트의 검사는 문법 수준이다 — 괄호 균형, `lib_id` 선언, UUID 중복. **넷 검사는 레이블 글자 수를 세는
 것이라 실제 연결을 보지 않는다.** 연결을 확인하려면 `kicad-cli sch export netlist`와 ERC를 돌린다.
+
+또한 `gen_schematic.py`는 부품 UUID를 매번 새로 만든다. 재생성하면 회로 내용이 같아도 diff가 커진다.
+내용을 비교할 때는 UUID를 지우고 본다.
 
 `_tools/extract_symbols.py`는 KiCad 번들 심볼 라이브러리에서 실제 심볼 정의·핀 좌표를 그대로
 추출하는 유틸 — 좌표를 손으로 베끼지 않으려고 만든 것(정확성 확보).
@@ -212,7 +217,7 @@ python validate_sch.py <저장소 루트>/kicad/cosmos-avionics/cosmos-avionics.
 ## 다음 단계
 
 1. **생성기 Y축 결함을 고치고 회로도를 다시 만든 뒤 ERC를 다시 돌린다** — 이슈 #66.
-2. `_tools` 스크립트의 절대경로를 없앤다 — 이슈 #67.
+2. ~~`_tools` 스크립트의 절대경로를 없앤다~~ — 이슈 #67에서 했다(10/17). 이제 어느 PC에서든 저장소 루트에서 돈다.
 3. 김민찬 PC에서도 ERC를 돌려 같은 결과인지 확인한다 — 위 "알려진 문제" 참고.
 4. Eeschema에서 열어 보기 좋게 재배치(선택 — 넷 정보엔 영향 없음).
 5. 실물 조립(전자 탑재, `semester-roadmap.md` Week 4-5) 때 실제 배선과 대조한다. **#66을 고친 뒤에만 한다.**
