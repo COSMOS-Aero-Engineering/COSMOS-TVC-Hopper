@@ -4,7 +4,8 @@
 > §2.2 표 10행이 모두 불일치임을 찾았다(넷 이름은 맞고 레이블이 붙은 핀 자리가 뒤집혔다. GND 1행은
 > 연결 자체가 없다). 원인은 `gen_schematic.py`의 Y축 반전 결함이다. 결과와 판정은
 > [`kicad/README.md`](../../kicad/README.md)의 "2026-10-17 ERC 결과와 넷 대조" 절에 있고,
-> 결함 수정은 이슈 #66, 도구 경로 하드코딩은 #67이다.
+> 결함 수정은 이슈 #66, 도구 경로 하드코딩은 #67이다. KiCad GUI(Eeschema)를 열어 J3·J6 화면을 찍은
+> 스크린샷도 `kicad/cosmos-avionics/`에 남겼다.
 
 ## 지금 상태
 
@@ -35,13 +36,13 @@ python kicad/_tools/check_imu_nets.py
 
 ## 이어서 할 일
 
-1. **회로도 실물 대조:** 스크립트는 원본을 본 것이고, 실제 `.kicad_sch` 화면은 사람이 봐야 한다. J3(Teensy IMU 핀)와 J6의 레이블이 표와 같은지 확인하고 화면 캡처를 남긴다.
-2. **ERC:** Inspect → Electrical Rules Checker. 오류·경고 수와 내용을 그대로 적는다. 범용 커넥터 심볼은 핀 종류가 "passive"라서 "출력 없음" 경고가 많이 날 수 있다. 경고마다 실제 문제인지 이유를 적는다. 실행이 안 되면 오류 메시지를 그대로 남긴다.
+1. **회로도 실물 대조:** ~~스크립트는 원본을 본 것이고, 실제 `.kicad_sch` 화면은 사람이 봐야 한다.~~ **10/17 완료:** Eeschema로 열어 J3·J6 화면을 찍었다(`kicad/cosmos-avionics/gui-sch-j3-j6-2026-10-17.png`). 화면에서도 J6 10번에 레이블이 없고 레이블 순서가 모듈 실크와 뒤집혀 있다.
+2. **ERC:** ~~Inspect → Electrical Rules Checker.~~ **10/17 완료(CLI):** `kicad-cli sch erc`로 돌렸다. GUI의 검사(I) → 전기 규칙 검사자 (ERC) 항목이 있는 것까지 확인했지만 GUI 자동 실행은 실패했다. GUI로도 한 번 돌려 같은 값(오류 4개·경고 129개)이 나오는지 사람이 확인한다.
 3. **불일치가 있으면** 회로도를 손으로 고치지 않는다. 목록만 남기고 `gen_schematic.py`를 고쳐 다시 생성하는 방향을 김민찬과 정한다(`kicad/README.md` "재생성 방법").
 4. **김시우와 교차 확인:** 펌웨어 `firmware/cosmos/imu_test/src/imu_test.ino`의 핀 정의가 같은 표와 맞는지 같이 본다.
 5. **PR:** `[kicad] BNO085 SPI 넷 대조와 ERC 결과`. 스크립트 출력, 화면 캡처, ERC 결과 파일 또는 실패 기록.
 
 ## 확인 못 한 것
 
-- ~~실제 `.kicad_sch`를 KiCad 화면에서 열어 본 대조와 ERC는 하지 않았다.~~ 10/17 ERC는 kicad-cli로 실행했고 넷리스트로 대조했다. **KiCad GUI 화면에서 눈으로 본 대조는 아직 하지 않았다(사람 필요).**
+- ~~실제 `.kicad_sch`를 KiCad 화면에서 열어 본 대조와 ERC는 하지 않았다.~~ 10/17 Eeschema 화면 캡처와 CLI ERC를 했다. **남은 것: GUI에서 ERC를 열어 오류 4개·경고 129개가 같은지 눈으로 확인하는 일(사람 필요).**
 - `gen_schematic.py`는 KiCad 설치 경로가 코드에 고정돼 있어 다른 PC에서 재생성하려면 `KICAD` 경로를 바꿔야 한다.

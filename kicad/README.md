@@ -110,13 +110,22 @@ kicad-cli sch export netlist --output netlist.net \
   때문이다. 생성된 `.kicad_sch`를 읽지 않는다. `validate_sch.py`의 넷 검사도 레이블 글자 수만 세므로
   `SERVO4_RIGHT`를 2개로 세고 통과시킨다.
 
-### 화면 — GUI 스크린샷이 아니라 KiCad 렌더
+### 화면 증거
 
-KiCad GUI를 열어 찍은 스크린샷은 아직 없다. 대신 `kicad-cli sch export svg`가 만든 SVG를 PNG로 바꿔 증거로
-남겼다. 그림 내용은 KiCad가 그린 것이다.
+**KiCad GUI(Eeschema)를 열어 찍은 스크린샷이다.** 2026-10-17, 이민우 PC.
+
+- [`cosmos-avionics/gui-eeschema-2026-10-17.png`](cosmos-avionics/gui-eeschema-2026-10-17.png) — Eeschema 창 전체
+- [`cosmos-avionics/gui-sch-j3-j6-2026-10-17.png`](cosmos-avionics/gui-sch-j3-j6-2026-10-17.png) — J3·J6 확대. J6 10번에 레이블이 없는 것이 보인다.
+- [`cosmos-avionics/gui-inspect-menu-2026-10-17.png`](cosmos-avionics/gui-inspect-menu-2026-10-17.png) — 검사(I) 메뉴의 "전기 규칙 검사자 (ERC)"
+
+`kicad-cli`가 그린 렌더도 함께 남긴다. 넷리스트 대조를 할 때 쓴 그림이다.
 
 - [`cosmos-avionics/sch-2026-10-17-j3-j6.png`](cosmos-avionics/sch-2026-10-17-j3-j6.png) — J3(Teensy IMU 핀)과 J6(BNO085)
 - [`cosmos-avionics/sch-2026-10-17-j1.png`](cosmos-avionics/sch-2026-10-17-j1.png) — J1(서보 출력) 4번 핀 누락
+
+**GUI에서 ERC를 자동으로 실행하지는 못했다.** 검사(I) 메뉴에 "전기 규칙 검사자 (ERC)" 항목이 있는 것까지
+확인했고, 실제 ERC는 `kicad-cli`로 돌렸다(같은 엔진). GUI로도 한 번 돌려 같은 결과(오류 4개·경고 129개)가
+나오는지 사람이 확인하면 좋다.
 
 ### 생성기 결함 (이슈 #66)
 
