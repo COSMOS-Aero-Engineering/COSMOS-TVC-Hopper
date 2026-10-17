@@ -1,10 +1,16 @@
 # #26 KiCad IMU 넷 대조와 ERC (이민우)
 
+> **2026-10-17 완료.** ERC를 돌려 오류 4개·경고 129개를 기록했고, 생성된 회로도를 넷리스트로 대조해
+> §2.2 표 10행이 모두 불일치임을 찾았다(넷 이름은 맞고 레이블이 붙은 핀 자리가 뒤집혔다. GND 1행은
+> 연결 자체가 없다). 원인은 `gen_schematic.py`의 Y축 반전 결함이다. 결과와 판정은
+> [`kicad/README.md`](../../kicad/README.md)의 "2026-10-17 ERC 결과와 넷 대조" 절에 있고,
+> 결함 수정은 이슈 #66, 도구 경로 하드코딩은 #67이다.
+
 ## 지금 상태
 
 - 회로도 `kicad/cosmos-avionics/cosmos-avionics.kicad_sch`는 사람이 그린 게 아니라 `kicad/_tools/gen_schematic.py`가 만든 파일이다. 부품 20개, 넷 30개.
 - KiCad에 Teensy·BNO085 전용 심볼이 없어서 범용 커넥터 심볼로 대신했다. **핀 번호보다 옆의 넷 이름(레이블)이 실제 신호다.**
-- 실제 KiCad ERC(전기 규칙 검사)는 아직 아무도 돌리지 못했다. 김민찬 PC에서는 Windows 랜섬웨어 보호 기능 때문에 `kicad-cli`가 죽는다(`kicad/README.md` "알려진 문제"). 다른 PC에서는 될 수 있다.
+- 실제 KiCad ERC(전기 규칙 검사)는 아직 아무도 돌리지 못했다. 김민찬 PC에서는 Windows 랜섬웨어 보호 기능 때문에 `kicad-cli`가 죽는다(`kicad/README.md` "알려진 문제"). 다른 PC에서는 될 수 있다. **→ 10/17 이민우 PC에서 실행 완료(맨 위 안내 참고).**
 
 ## 용어
 
@@ -17,7 +23,7 @@
 
 [`kicad/_tools/check_imu_nets.py`](../../kicad/_tools/check_imu_nets.py)는 회로도를 만드는 원본(`gen_schematic.py`)에서 IMU 관련 넷을 읽어, 01 문서 §2.2 핀맵과 실물 실크를 한 표로 대조한다. KiCad가 없어도 돈다.
 
-2026-10-16 결과: **원본 스크립트 기준 10행 모두 일치.** PRD #26 6절 표의 "회로도 결과" 칸을 원본 기준으로는 채운 셈이다.
+2026-10-16 결과: **원본 스크립트 기준 10행 모두 일치.** PRD #26 6절 표의 "회로도 결과" 칸을 원본 기준으로는 채운 셈이다. **→ 10/17 정정: 원본은 맞지만 생성된 `.kicad_sch`는 다르다(맨 위 안내 참고).**
 
 ## 첫 30분
 
@@ -37,5 +43,5 @@ python kicad/_tools/check_imu_nets.py
 
 ## 확인 못 한 것
 
-- 실제 `.kicad_sch`를 KiCad 화면에서 열어 본 대조와 ERC는 하지 않았다.
+- ~~실제 `.kicad_sch`를 KiCad 화면에서 열어 본 대조와 ERC는 하지 않았다.~~ 10/17 ERC는 kicad-cli로 실행했고 넷리스트로 대조했다. **KiCad GUI 화면에서 눈으로 본 대조는 아직 하지 않았다(사람 필요).**
 - `gen_schematic.py`는 KiCad 설치 경로가 코드에 고정돼 있어 다른 PC에서 재생성하려면 `KICAD` 경로를 바꿔야 한다.
