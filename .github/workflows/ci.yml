@@ -49,7 +49,8 @@ jobs:
       - name: 의존성 설치 (uv.lock 고정 버전 그대로 + lock 최신 여부 검사)
         run: uv sync --locked
 
-      # compile(문법) → sanity(환경 20스텝) → smoke(SB3 연결 256스텝). 학습이 아니다.
+      # check가 돌리는 단계 목록은 `python tasks.py graph`의 check 줄을 본다(#50). 학습은 하지 않는다.
+      # 단계를 여기에 옮겨 적지 않는다. tasks.py에 단계가 늘면 이 주석만 틀린 채로 남는다.
       # tasks.py의 입력 해시 캐시는 러너가 매번 새로 뜨므로 CI에선 항상 콜드로 돈다 —
       # 일부러 캐시를 실어 나르지 않는다. CI는 "정말로 돌려본 결과"여야 하기 때문이다.
       - name: 검사 — python tasks.py check
