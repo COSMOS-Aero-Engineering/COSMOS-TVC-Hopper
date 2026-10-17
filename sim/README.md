@@ -31,8 +31,12 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 과제: 초기 교란(±0.3rad)에서 수평(phi=theta=0)으로 복귀·유지
 ```
 
-- 도메인 랜덤화: `params.yaml`의 `domain_rand` 블록 — Jxx/Jyy/Jzz ±30%, 베인 모멘트암 ±15%, Kf ±20%,
+- 도메인 랜덤화: `params.yaml`의 `domain_rand` 블록 — Jxx/Jyy/Jzz ±30%, 롤·피치 팔 l ±15%, 요 팔 r ±25%, Kf ±20%,
   무게중심-추력축 오프셋 ±3mm를 매 `reset()`마다 무작위 재추출.
+- seed 재현 범위(#98): `reset()`은 gymnasium `np_random`에서 에피소드 seed 하나만 뽑고, 초기 자세와 랜덤화하는 값은
+  이름마다 독립 난수 흐름(`hopper_aviary.py`의 `EPISODE_STREAMS`)에서 뽑는다. 값을 더하거나 빼도 같은 seed의
+  다른 값과 초기 자세는 그대로다. 랜덤화를 꺼도(`--no-dr`) 초기 자세는 같다. 같은 numpy·gymnasium 버전(`uv.lock`)에서만
+  보장한다. #98 전 커밋에서 만든 로그는 그 커밋에서만 재현된다.
 - PLACEHOLDER 값을 실측치로 바꿀 때: **`params.yaml`만 교체, `hopper_aviary.py`는 안 건드림**
   (일부러 그렇게 분리해둔 것).
 
