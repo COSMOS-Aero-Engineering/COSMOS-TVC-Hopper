@@ -24,7 +24,7 @@ edf_body_len        = 92;    // EDF 몸통 세로 길이(mm) — 배기면(z=0) 
 edf_clamp_z_from_exit = 70;  // 배기면(z=0) 기준 클램프 높이 — 립 근처(72mm 지름 구간)를 잡도록 흡입구 쪽에 가깝게 배치
 
 // ---------- DESIGN — §4 표 값 그대로 (구조 결정 후 바뀌면 여기 수정) ----------
-col_len              = 200;  // 기둥 길이(상판~베인링)
+col_len              = 212;  // 기둥 길이(상판~베인링). 2026-10-16 200→212(#59): 4S 팩 두께(850 mAh 30.5 mm, 1300 mAh 28-35 mm)가 상판 아래 28 mm에 안 들어갔다
 top_plate_t          = 4;    // 상판 두께
 vane_ring_h          = 28;   // 베인 링 높이
 vane_gap_below_exit  = 22;   // EDF 배기면 → 베인 피벗축
@@ -57,7 +57,16 @@ bail_od  = 3;   // D4 상단 베일 Ø3mm 스틸봉
 //     세 축 다 실측 완료, 더 이상 플레이스홀더 아님.
 teensy_l = 35; teensy_w = 17;             // Teensy 4.0 실측(최종) — 미리보기 전용, 프린트 파츠엔 안 쓰임
 esc_l    = 36; esc_w    = 24; esc_t = 8;  // ESC 보드 (브래킷 크기 산정용) — 아직 미측정, 공칭치수
-batt_l = 63.5; batt_w = 32.5; batt_h = 15; // 배터리 실측(최종) — 3축 전부 측정 완료
+batt_l = 73; batt_w = 34; batt_h = 31; // 실측 4S 1300 mAh(2026-10-17): 73+-3 x 33-34 x 31+-2 mm, 159.5 g
+batt_h_max = 33;   // 실측 두께 최대(31 + 2)
+batt_strap_t = 2;  // 벨크로 스트랩 두께
+batt_l_max = 76;   // 실측 길이 73 +- 3 mm (2026-10-17)
+batt_shelf_y_half = 42;   // 배터리 선반 반폭. 턱 두께 3이라 턱 사이 = 2*42 - 6 = 78 mm
+// 옆 무게중심 트림용 무게추(#59). 배터리(+Y) 한쪽 배치라 CG가 +Y로 약 9 mm 치우친다(cad/cg 계산).
+// 아비오닉스 선반(−Y) 바깥 끝 아래에 M5 볼트 2개로 와셔·너트·납추를 매달아 0-70 g을 조절한다(01 문서 §8.3 트림).
+ballast_x = 89;    // 선반 로컬 x(반경 방향)
+ballast_y = 10;    // 로컬 |y|
+ballast_hole_d = 5.5;
 
 shelf_top_z   = 150;   // 선반 윗면 z (배기면 기준). 상판 하면(178)까지 28mm, EDF 립(92)에서 58mm 위
 shelf_t       = 3;     // 선반 판 두께
@@ -67,12 +76,14 @@ saddle_h      = 16;    // 기둥을 감싸는 새들 링 높이
 saddle_wall   = 2.9;   // 새들 링 두께
 tie_slot_w    = 3.2;   // 케이블타이 슬롯 폭 (2.5mm 타이 기준)
 tie_slot_l    = 8;     // 케이블타이 슬롯 길이
+wire_slot_x0 = 62; wire_slot_x1 = 74;      // 아비오닉스 선반 배선 통로(로컬 x, 반경 방향). ESC 플랜지(x ≤ 60) 바깥
+wire_slot_y0 = 8;  wire_slot_y1 = 18;      // 로컬 |y|. 만능기판 인서트 보스(x 45.7-54.3, 83.8-92.4)와 겹치지 않는 자리
 
 // 만능기판(5x7cm) 장착 — 01-avionics-integration-final.md §5.1 의 확공 좌표와 1:1
 perf_hole_dx  = 53.34; // C2↔C23 = 21홀 × 2.54
 perf_hole_dy  = 38.10; // R2↔R17 = 15홀 × 2.54
 insert_d      = 4.2;   // M3 열융착 인서트 하부 구멍 (제품에 따라 4.0~4.6 — 실물 확인)
-insert_h      = 6;
+insert_h      = 4;     // M3 열융착 인서트 길이 4 mm 기준(BOM E1). 보스 높이 5.5 → 바닥 1.5 mm
 
 // MG90S 서보 (베인 직결 구동) — 2026-09-19 실물 SG90(캘리퍼스 대용, MG90S와 케이스 규격 동일
 // "드롭인 호환" 관계라 마운트 치수 대용 측정 유효) 캘리퍼스 실측. 전 항목 실측 완료(2026-09-19,
@@ -84,7 +95,15 @@ servo_ear_pitch = 33;         // 이어 홀 간격 — 실측 확정(3.3cm). 조
 servo_ear_to_shaft = 3;       // 출력축 ↔ 가까운 쪽 이어 홀 거리 — 실측 확정(0.3cm). 조사자료(9.9)보다 훨씬 짧음
                               // → 이어 홀이 비대칭 배치가 돼서 servo_boss_solid()의 boss_y 계산을
                               //   아래에서 "양쪪 홀을 다 덮는 최소폭" 방식으로 고쳤음(2026-09-19)
-servo_screw_d = 1.7;         // M2 셀프탭 하부 구멍
+servo_screw_d = 1.7;         // M2 셀프탭 하부 구멍 (커플러 혼 고정용)
+// 2026-10-16(#59): 서보 귀 나사 구멍을 슬롯으로 바꿨다. TowerPro 공식 MG90S 치수는 귀 끝-끝 전체 길이 32.1 mm
+// (https://towerpro.com.tw/product/mg90s-3/ 의 E)라서, 위 servo_ear_pitch 33(SG90 실측)은 구멍 간격일 수 없다
+// (귀 끝-끝을 잰 것으로 보임). 실물 MG90S를 아직 재지 못했으므로, 가까운 구멍은 축에서 2.5-10.5 mm,
+// 먼 구멍은 16.5-30.5 mm 범위를 덮는 슬롯으로 뚫는다(구멍 간격 27-33 mm, 축 위치 3-10 mm를 모두 덮음).
+// 슬롯 폭 2.2 mm = M2 볼트 관통, 너트는 캐비티 안쪽에서 조인다.
+servo_slot_w    = 2.2;
+servo_slot_near = [2.5, 10.5];   // 출력축에서 가까운 구멍까지 거리 범위(mm)
+servo_slot_far  = [16.5, 30.5];  // 먼 구멍까지 거리 범위(mm)
 servo_boss_t  = 4;           // 서보 장착판 두께(반경 방향)
 servo_standoff = 16;         // 링 바깥면 ↔ 장착판 사이 캐비티 깊이 (혼 + 스파 커플러가 들어감)
 
@@ -116,6 +135,9 @@ vane_ring_od = edf_housing_od + 24;
 vane_ring_id = edf_housing_od + 4;
 leg_top_r    = vane_ring_od/2;        // 다리 상단 부착 반경 (베인링에서 시작)
 leg_bot_r    = foot_circle/2;         // 다리 하단(발) 반경
+// #59: 다리 뿌리. 다리는 수직에서 약 56° 기운 관이라 수직 소켓에 안 들어갔다. 링 바깥 보스(반경 leg_root_r)에서
+// 다리 축 방향으로 소켓을 뚫는다. 소켓 끝은 링 안쪽 벽(제트 쪽)에서 2 mm 이상 떨어져야 한다(검증 echo).
+leg_root_r   = vane_ring_od/2 + 8;
 // ⚠️ 버그 수정(2026-09-13): col_mount_r가 예전엔 edf_housing_od/2+25로 따로 계산돼서
 //    vane_ring_od/2(=leg_top_r)보다 13mm나 커버렸음 → 기둥이 베인링 바깥 허공에서 끝나
 //    실제로 안 닿는 상태였음. 기둥도 다리와 같은 반경(링 바깥 표면)에서 시작하도록 통일.
@@ -146,6 +168,8 @@ edf_clamp_z  = edf_clamp_z_from_exit;  // 클램프 높이 — 배기면(z=0) �
 edf_body_top_z = edf_body_len;         // 참고용: EDF 몸통 상단(흡입구 립) z — 검증 echo에 사용
 tube_clearance = 0.3;                  // 소켓 구멍 여유 (Ø6mm 탄소관 삽입용, mm)
 socket_depth   = 12;                   // 베인링에 뚫는 소켓 구멍 깊이 (mm, 링 높이 28mm 중)
+bail_r       = (edf_housing_od/2 + 3 + col_mount_r + 15) / 2;   // 흡기 구멍 반경과 상판 바깥 반경의 가운데 (#59)
+leg_boss_r   = leg_od/2 + tube_clearance + 2.7;   // 소켓 둘레 벽 두께 2.7
 
 // ---------- 모듈 ----------
 
@@ -156,6 +180,8 @@ module top_plate() {
         cylinder(h=top_plate_t, r=col_mount_r + 15, center=false);
         // EDF 흡기 통로 홀 — 하우징보다 살짝 크게(공기 흐름 여유, 접촉 없음)
         translate([0,0,-1]) cylinder(h=top_plate_t+2, r=edf_housing_od/2 + 3, center=false);
+        // 베일 다리 구멍 2개 (#59)
+        for (sx = [-1, 1]) translate([sx * bail_r, 0, -1]) cylinder(h = top_plate_t + 2, r = bail_od/2 + 0.15, $fn = 16);
         // D1 탄소관(기둥) 삽입용 관통 소켓 4개
         for (i=[0:n_cols-1]) {
             a = i*360/n_cols + 45;
@@ -165,43 +191,70 @@ module top_plate() {
     }
 }
 
+// ---------- 체결 규격 (#59, 2026-10-16) ----------
+// 프린트 부품에는 나사산을 모델링하지 않는다. 볼트가 지나는 구멍(관통), 셀프탭 하부 구멍, 열융착 인서트 구멍으로 나눈다.
+m3_clear   = 3.4;   // M3 볼트 관통 구멍
+m3_nut_af  = 5.5;   // M3 너트 맞변 거리
+m2_clear   = 2.2;   // M2 볼트 관통 구멍
+m2_tap     = 1.7;   // M2 셀프탭 하부 구멍
+
 module edf_clamp() {
-    // 분할 클램프(collar clamp) — 볼트 플랜지 없는 EDF 하우징을 감싸서 고정
-    // 반원 두 조각 + 양쪽 조임 탭(볼트 2개로 조여서 실측 오차 흡수)
-    tab_w = 10; tab_t = 4; bolt_hole_d = 3.2; slot_len = 4; // M3 조임볼트 + 슬롯 여유(mm)
-    tab_l = (col_mount_r - edf_clamp_id/2) + 8; // 탭을 기둥까지 뻗어서 지퍼타이/스크류로 기둥에 고정
-    gap = 6; // 반원 사이 벌어진 틈(조임 여유)
-    translate([0,0,edf_clamp_z]) {
-        for (side = [0, 1]) {
-            mirror([0, side, 0])
+    // 분할 클램프 — 볼트 플랜지 없는 EDF 하우징을 감싼다. #59에서 다시 짰다:
+    //  - 예전 형상은 반쪽 두 개의 조임 탭이 0°에서만 맞고 반대쪽은 170°/190°로 16 mm 어긋나 볼트를 꿸 수 없었다.
+    //  - 또 탭이 기둥(45° 계열)에 닿지 않아 EDF가 프레임에 연결되지 않았다. 추력(약 13 N)이 지나는 길이 없었다.
+    //  지금: y>0 / y<0 반쪽 2개. 0°·180° 이음부 탭을 M3 볼트 2개로 조여 하우징을 문다(이음 틈 2 mm가 지름 오차 흡수).
+    //  각 반쪽에 기둥 조임 고리 2개(45°·135° / 225°·315°). 고리는 바깥으로 쪼갠 C형이고 M3 볼트로 기둥(Ø6 CF)을 문다.
+    band_t   = 2.5;
+    seam_gap = 2;                                    // 이음부 틈(한쪽)
+    tab_t    = 5;  tab_r1 = edf_clamp_id/2 + band_t + 9;
+    col_wall = 2.4;
+    for (side = [1, -1]) edf_clamp_half(side, band_t, seam_gap, tab_t, tab_r1, col_wall);
+}
+
+module edf_clamp_half(side, band_t, seam_gap, tab_t, tab_r1, col_wall) {
+    r_in = edf_clamp_id / 2;
+    col_r_in  = col_od / 2 + tube_clearance;
+    col_r_out = col_r_in + col_wall;
+    translate([0, 0, edf_clamp_z]) difference() {
+        union() {
+            // 반원 밴드: 이음부 틈만큼 양끝을 잘라 둔다
+            intersection() {
                 difference() {
-                    union() {
-                        // 반원 밴드 (180도보다 살짝 못 미치게, 틈 확보)
-                        rotate_extrude(angle=170, $fn=64)
-                            translate([edf_clamp_id/2, 0, 0])
-                                square([2.5, edf_clamp_h], center=false);
-                        // 양끝 조임 탭
-                        rotate([0,0,0])
-                            translate([edf_clamp_id/2 - 2, -tab_w/2, 0])
-                                cube([tab_l, tab_w, edf_clamp_h]);
-                        rotate([0,0,170])
-                            translate([edf_clamp_id/2 - 2, -tab_w/2, 0])
-                                cube([tab_l, tab_w, edf_clamp_h]);
-                    }
-                    // 탭 볼트홀 — 원형 대신 슬롯(장공)으로 파서, 실측 오차 있어도 조립 때 옆으로 밀어 맞출 여유를 줌
-                    translate([edf_clamp_id/2 + tab_l/2 - 1, 0, -1])
-                        hull() {
-                            translate([0, -slot_len/2, 0]) cylinder(h=edf_clamp_h+2, r=bolt_hole_d/2, $fn=24);
-                            translate([0,  slot_len/2, 0]) cylinder(h=edf_clamp_h+2, r=bolt_hole_d/2, $fn=24);
-                        }
-                    rotate([0,0,170])
-                        translate([edf_clamp_id/2 + tab_l/2 - 1, 0, -1])
-                            hull() {
-                                translate([0, -slot_len/2, 0]) cylinder(h=edf_clamp_h+2, r=bolt_hole_d/2, $fn=24);
-                                translate([0,  slot_len/2, 0]) cylinder(h=edf_clamp_h+2, r=bolt_hole_d/2, $fn=24);
-                            }
+                    cylinder(h = edf_clamp_h, r = r_in + band_t, $fn = 96);
+                    translate([0, 0, -1]) cylinder(h = edf_clamp_h + 2, r = r_in, $fn = 96);
                 }
+                translate([-r_in - 20, side > 0 ? seam_gap / 2 : -(r_in + 20), -1])
+                    cube([2 * (r_in + 20), r_in + 20 - seam_gap / 2, edf_clamp_h + 2]);
+            }
+            // 이음부 조임 탭 (0°, 180°): 반쪽마다 두께 tab_t
+            for (sx = [1, -1])
+                translate([sx > 0 ? r_in : -tab_r1, side > 0 ? seam_gap / 2 : -seam_gap / 2 - tab_t, 0])
+                    cube([tab_r1 - r_in, tab_t, edf_clamp_h]);
+            // 기둥 조임 고리 2개 + 밴드와 잇는 웹
+            for (k = [0, 1]) {
+                a = side > 0 ? 45 + 90 * k : 225 + 90 * k;
+                rotate([0, 0, a]) {
+                    translate([r_in + band_t - 1, -3, 0]) cube([col_mount_r - (r_in + band_t - 1), 6, edf_clamp_h]);
+                    translate([col_mount_r, 0, 0]) cylinder(h = edf_clamp_h, r = col_r_out, $fn = 32);
+                    // 조임 귀 (고리 바깥쪽, 쪼갠 틈 양옆)
+                    translate([col_mount_r + col_r_in - 1, -4.5, 0]) cube([9, 9, edf_clamp_h]);
+                }
+            }
         }
+        // 기둥 구멍 + 바깥쪽으로 쪼갠 틈 + 귀를 가로지르는 M3 조임 볼트 구멍
+        for (k = [0, 1]) {
+            a = side > 0 ? 45 + 90 * k : 225 + 90 * k;
+            rotate([0, 0, a]) {
+                translate([col_mount_r, 0, -1]) cylinder(h = edf_clamp_h + 2, r = col_r_in, $fn = 32);
+                translate([col_mount_r, -0.75, -1]) cube([col_r_in + 12, 1.5, edf_clamp_h + 2]);
+                translate([col_mount_r + col_r_in + 4.5, -6, edf_clamp_h / 2])
+                    rotate([-90, 0, 0]) cylinder(h = 12, r = m3_clear / 2, $fn = 24);
+            }
+        }
+        // 이음부 M3 볼트 구멍 (y 방향 관통)
+        for (sx = [1, -1])
+            translate([sx * (r_in + band_t + 4.5), -tab_t - seam_gap, edf_clamp_h / 2])
+                rotate([-90, 0, 0]) cylinder(h = 2 * tab_t + 2 * seam_gap, r = m3_clear / 2, $fn = 24);
     }
 }
 
@@ -223,7 +276,7 @@ module servo_boss_solid() {
     //   servo_ear_to_shaft=3, servo_ear_pitch=33 → 홀이 y=-3, y=+30 에 위치, 중심에서 안 대칭).
     //   장착판은 y=0을 중심으로 대칭 프린트되므로, 양쪽 홀 중 더 먼 쪽까지의 거리를 기준으로
     //   폭을 잡아야 짧은 쪽 홀이 판 밖으로 안 나간다.
-    ear_reach = max(abs(-servo_ear_to_shaft), abs(servo_ear_pitch - servo_ear_to_shaft), 7);
+    ear_reach = max(servo_slot_near[1], servo_slot_far[1], 7);   // 슬롯 끝까지 덮는다(#59)
     boss_y = max(servo_body_l, 2*ear_reach + 8) + 8;   // 이어·출력축 구멍을 전부 덮는 접선 폭
     boss_z = servo_body_w + 10;
     union() {
@@ -242,11 +295,12 @@ module servo_boss_solid() {
 }
 
 module servo_boss_cuts() {
-    // 이어 홀 2개 (출력축 기준 −servo_ear_to_shaft / +(pitch − servo_ear_to_shaft))
-    for (dy = [-servo_ear_to_shaft, servo_ear_pitch - servo_ear_to_shaft])
-        translate([servo_plate_r - 2, dy, vane_pivot_z])
-            rotate([0,90,0])
-                cylinder(h = servo_boss_t + 6, r = servo_screw_d/2, center=false, $fn=20);
+    // 이어 슬롯 2개 (출력축 기준 가까운 쪽은 −y, 먼 쪽은 +y). 위 servo_slot_* 설명 참고(#59)
+    for (rng = [[-servo_slot_near[1], -servo_slot_near[0]], [servo_slot_far[0], servo_slot_far[1]]])
+        hull() for (dy = rng)
+            translate([servo_plate_r - 2, dy, vane_pivot_z])
+                rotate([0,90,0])
+                    cylinder(h = servo_boss_t + 6, r = servo_slot_w/2, center=false, $fn=20);
     // 출력축·혼 통과 구멍 (Ø14 — 혼이 판을 지나 캐비티로 들어갈 수 있게 넉넉히)
     translate([servo_plate_r - 2, 0, vane_pivot_z])
         rotate([0,90,0])
@@ -267,19 +321,41 @@ module vane_wall_cuts() {
 
 // 스파 커플러 — 서보 혼(알루미늄 싱글암, BOM C5)과 Ø3 CF 스파를 잇는 프린트 파트 ×4
 // ⚠️ 혼 슬롯 치수(두께·폭)는 실물 혼을 재서 coupler_horn_t / coupler_horn_w 를 고칠 것.
-module vane_coupler() {
+// slack: 혼 슬롯 두께·폭에 더하는 여유(mm). 혼 실측 전 발주용으로 0.4 mm 세트를 같이 뽑는다(#59).
+module vane_coupler(slack = 0) {
     difference() {
         rotate([0,90,0]) cylinder(h = coupler_len, r = coupler_d/2, center=false, $fn=40);
         // 스파 보어 (반경 방향 관통)
         translate([-1,0,0]) rotate([0,90,0])
             cylinder(h = coupler_len + 2, r = vane_spar_bore/2, center=false, $fn=32);
         // 혼 암이 들어가는 슬롯 (바깥쪽 절반까지)
-        translate([coupler_len - coupler_horn_depth, -coupler_horn_w/2, -coupler_horn_t/2])
-            cube([coupler_horn_depth + 1, coupler_horn_w, coupler_horn_t]);
-        // 혼 고정 핀/나사 구멍 2개 (슬롯을 가로지름)
-        for (dx = [coupler_len - 4, coupler_len - 9])
+        translate([coupler_len - coupler_horn_depth, -(coupler_horn_w + slack)/2, -(coupler_horn_t + slack)/2])
+            cube([coupler_horn_depth + 1, coupler_horn_w + slack, coupler_horn_t + slack]);
+        // 혼 고정 나사 길 (슬롯을 가로지름). 혼 구멍 간격을 아직 모르므로 원형 구멍 2개 대신
+        // 혼 물림 구간 전체에 M2 셀프탭 폭의 긴 홈을 낸다(#59). 나사는 혼 구멍을 지나 홈 벽을 물고,
+        // 헐거우면 에폭시(BOM E3)로 보강한다.
+        hull() for (dx = [coupler_len - coupler_horn_depth + 1.5, coupler_len - 1.5])
             translate([dx, 0, -coupler_d])
-                cylinder(h = 2*coupler_d, r = servo_screw_d/2, center=false, $fn=20);
+                cylinder(h = 2*coupler_d, r = m2_tap/2, center=false, $fn=20);
+    }
+}
+
+function leg_axis(a) = let(p1 = [leg_root_r*cos(a), leg_root_r*sin(a), vane_ring_bot_z],
+                            p2 = [leg_bot_r*cos(a), leg_bot_r*sin(a), foot_z]) (p1 - p2) / norm(p1 - p2);
+module leg_root_boss(a, rb) {   // 링 바깥 다리 뿌리 덩어리 (조립 좌표)
+    p1 = [leg_root_r*cos(a), leg_root_r*sin(a), vane_ring_bot_z];
+    hull() {
+        translate(p1 - leg_axis(a) * 2) sphere(r = rb, $fn = 32);
+        translate(p1 + leg_axis(a) * socket_depth) sphere(r = rb, $fn = 32);
+        translate([vane_ring_od/2*cos(a) - 1*cos(a), vane_ring_od/2*sin(a) - 1*sin(a), vane_ring_bot_z])
+            cylinder(h = vane_ring_h * 0.6, r = rb, $fn = 32);
+    }
+}
+module leg_root_socket(a) {
+    p1 = [leg_root_r*cos(a), leg_root_r*sin(a), vane_ring_bot_z];
+    hull() {
+        translate(p1 - leg_axis(a) * 10) sphere(r = leg_od/2 + tube_clearance, $fn = 24);
+        translate(p1 + leg_axis(a) * socket_depth) sphere(r = leg_od/2 + tube_clearance, $fn = 24);
     }
 }
 
@@ -294,6 +370,8 @@ module vane_ring() {
                 for (i=[0:n_vanes-1])
                     rotate([0,0,i*360/n_vanes + az_vane])
                         translate([0,0,-vane_ring_bot_z]) servo_boss_solid();
+                // 다리 뿌리 보스 4개 (#59)
+                translate([0,0,-vane_ring_bot_z]) for (i=[0:n_legs-1]) leg_root_boss(i*360/n_legs + az_col, leg_boss_r);
             }
             translate([0,0,-1]) cylinder(h=vane_ring_h+2, r=vane_ring_id/2, center=false);
             // 기둥(위쪽) 소켓 — 링 윗면에서 아래로
@@ -302,12 +380,8 @@ module vane_ring() {
                 translate([col_mount_r*cos(a), col_mount_r*sin(a), vane_ring_h - socket_depth])
                     cylinder(h=socket_depth+1, r=col_od/2 + tube_clearance, center=false);
             }
-            // 다리(아래쪽) 소켓 — 링 아랫면에서 위로. 기둥과 같은 방위(45° 계열) = 베인/서보와 45° 엇갈림
-            for (i=[0:n_legs-1]) {
-                a = i*360/n_legs + az_col;
-                translate([leg_top_r*cos(a), leg_top_r*sin(a), -1])
-                    cylinder(h=socket_depth+1, r=leg_od/2 + tube_clearance, center=false);
-            }
+            // 다리 소켓 — 다리 축 방향으로 기울여 뚫는다(#59). 기둥과 같은 방위(45° 계열)
+            translate([0,0,-vane_ring_bot_z]) for (i=[0:n_legs-1]) leg_root_socket(i*360/n_legs + az_col);
             // 베인 스파 보어 · 하드스톱 슬롯 · 서보 이어 홀
             for (i=[0:n_vanes-1])
                 rotate([0,0,i*360/n_vanes + az_vane])
@@ -324,7 +398,9 @@ module vane_ring() {
 //    제트베인은 "반경 방향으로 뻗고, 시위가 유동(z)을 따라가는 평판"이 맞다 —
 //    반경축(스파) 회전 → 제트를 접선 방향으로 꺾음 → 두 쌍이 롤/피치, 4개 동시 캔트가 요.
 module vane_one(deflect = 0) {
-    rotate([deflect, 0, 0])                 // 스파(반경축) 둘레 회전 = 베인 편향각
+    // 스파(반경축, z = vane_pivot_z) 둘레 회전 = 베인 편향각. #59 정정: 예전엔 원점(z = 0) 둘레로 돌려
+    // 꺾인 베인이 엉뚱한 곳에 그려졌다(출력물 형상은 deflect = 0이라 영향 없음).
+    translate([0, 0, vane_pivot_z]) rotate([deflect, 0, 0]) translate([0, 0, -vane_pivot_z])
         difference() {
             union() {
                 translate([vane_inner_r, -vane_thick/2, vane_pivot_z - vane_chord/2])
@@ -351,7 +427,7 @@ module vanes(deflect = 0) {
 module legs() {
     for (i=[0:n_legs-1]) {
         a = i*360/n_legs + az_col; // 기둥과 같은 방위 = 베인·서보(0/90/180/270)와 45° 엇갈림
-        p1 = [leg_top_r*cos(a), leg_top_r*sin(a), vane_ring_bot_z];
+        p1 = [leg_root_r*cos(a), leg_root_r*sin(a), vane_ring_bot_z];
         p2 = [leg_bot_r*cos(a), leg_bot_r*sin(a), foot_z];
         hull() {
             translate(p1) sphere(r=leg_od/2);
@@ -361,12 +437,13 @@ module legs() {
 }
 
 module bail() {
-    // 상판 위 손잡이(베일) — 세로로 선 아치형. 정확한 굽힘 형상은 실물 벤딩으로 결정
-    bail_r = col_mount_r * 0.6;
+    // 상판 위 손잡이(베일) — 세로로 선 아치형 Ø3 스틸봉. #59 정정: 예전 반경(0.6 x 48 = 29 mm)은
+    // 상판 흡기 구멍(반경 39) 안쪽이라 꽂을 데가 없었다. 상판 몸체 가운데(반경 bail_r)로 옮기고 다리를 상판에 꽂는다.
     translate([0,0,top_plate_top_z])
         rotate([90,0,0])
             rotate_extrude(angle=180, $fn=64)
                 translate([bail_r,0,0]) circle(r=bail_od/2);
+    for (sx = [-1, 1]) translate([sx * bail_r, 0, top_plate_bot_z]) cylinder(h = top_plate_t, r = bail_od/2, $fn = 16);
 }
 
 // ---------- 장비 선반 (rev C.1 신규) ----------
@@ -417,7 +494,8 @@ module shelf_blank(x_out, y_half) {
 
 module equip_shelf_battery() {
     // +Y(배터리) 선반: 판 위에 팩을 눕히고 벨크로 스트랩 2개로 X자 고정
-    y_half = 40;
+    // #59: 실측 배터리 길이 73+-3 mm(최대 76)가 양끝 턱 사이 74 mm에 안 들어갔다. y_half 40 -> 42 (턱 사이 78 mm)
+    y_half = batt_shelf_y_half;
     x_out  = shelf_r_inner + 50;    // 반경 42 → 92
     difference() {
         shelf_blank(x_out, y_half);
@@ -450,17 +528,28 @@ module equip_shelf_avionics() {
         // M3 열융착 인서트 구멍
         for (hx = [px0, px0 + perf_hole_dy])
             for (hy = [-perf_hole_dx/2, perf_hole_dx/2])
-                translate([hx, hy, shelf_top_z - shelf_t + shelf_t + 2.5 - insert_h])
+                translate([hx, hy, shelf_top_z + 2.5 - insert_h])   // 막힌 구멍: 바닥 1.5 mm 남김(#59)
                     cylinder(h = insert_h + 1, r = insert_d/2, $fn=28);
+        // 무게추 볼트 구멍 2개 (#59)
+        for (sy = [-ballast_y, ballast_y])
+            translate([ballast_x, sy, shelf_top_z - shelf_t - 1]) cylinder(h = shelf_t + 5, r = ballast_hole_d/2, $fn = 24);
+        // ESC 브래킷 플랜지 타이 슬롯과 짝이 되는 선반 타이 슬롯 2개(#59). 예전엔 선반 쪽 짝이 없어
+        // 브래킷을 선반에 묶을 길이 없었다.
+        for (sy = [-(esc_l + 8)/2 + 6, (esc_l + 8)/2 - 6])
+            tie_slot(shelf_r_inner + 6 + tie_slot_l/2, sy, shelf_top_z - shelf_t);
         // 수신기·UBEC 타이 슬롯
         for (sy = [-34, 34]) {
             tie_slot(shelf_r_inner + 14, sy, shelf_top_z - shelf_t);
             tie_slot(shelf_r_inner + 34, sy, shelf_top_z - shelf_t);
         }
         // 배선 통로 슬롯 2개 (서보선·3상선이 아래로 빠지는 길)
-        for (sy = [-20, 20])
-            translate([shelf_r_inner + 1, sy - 7.5, shelf_top_z - shelf_t - 1])
-                cube([6, 15, shelf_t + 2]);
+        // 2026-10-16(#59): 예전 슬롯(x 43-49, y ±12.5-27.5)은 바로 아래 ESC 브래킷 플랜지(x 44-60, |y| ≤ 22)에
+        // 절반 넘게 가려졌다. 플랜지 바깥이면서 만능기판 인서트 보스와 새들 타이 슬롯을 모두 피하는
+        // x 62-74, |y| 8-18(12x10 mm)로 옮겼다. 선은 기판 밑(스탠드오프 높이)으로 나와 기판 가장자리로 간다.
+        // 겹침은 아래 검증 echo가 확인한다.
+        for (s = [-1, 1])
+            translate([wire_slot_x0, s > 0 ? wire_slot_y0 : -wire_slot_y1, shelf_top_z - shelf_t - 1])
+                cube([wire_slot_x1 - wire_slot_x0, wire_slot_y1 - wire_slot_y0, shelf_t + 2]);
     }
 }
 
@@ -506,8 +595,9 @@ module mock_avionics() {
         }
 }
 module mock_esc() {
+    // 브래킷 수직판(x shelf_r_inner+2 ~ +5)의 바깥면에 붙는다(#59 정정: 예전 모형은 판 안에 겹쳐 그렸다)
     rotate([0,0,270])
-        translate([shelf_r_inner + 6, 0, shelf_top_z - shelf_t - 26])
+        translate([shelf_r_inner + 5 + esc_t/2, 0, shelf_top_z - shelf_t - 26])
             color("black") cube([esc_t, esc_l, esc_w], center=true);
 }
 module servo_blocks() {
@@ -520,13 +610,23 @@ module servo_blocks() {
 }
 
 module foot_pads() {
-    // D5 EVA/EPP 발 범퍼 (플레이스홀더 원통)
+    // 발 범퍼(프린트). #59 정정: 예전엔 꽉 찬 원통이라 다리 탄소관이 꽂힐 자리가 없었다.
+    // 다리 축 방향으로 소켓(Ø leg_od + 여유)을 뚫는다.
     for (i=[0:n_legs-1]) {
         a = i*360/n_legs + az_col; // legs()와 동일 각도로 맞춤
-        translate([leg_bot_r*cos(a), leg_bot_r*sin(a), foot_z - foot_pad_h/2])
-            color("darkorange") cylinder(h=foot_pad_h, r=foot_pad_d/2, center=true);
+        p1 = [leg_root_r*cos(a), leg_root_r*sin(a), vane_ring_bot_z];
+        p2 = [leg_bot_r*cos(a), leg_bot_r*sin(a), foot_z];
+        difference() {
+            translate([p2[0], p2[1], foot_z - foot_pad_h/2])
+                color("darkorange") cylinder(h=foot_pad_h, r=foot_pad_d/2, center=true, $fn=40);
+            hull() {   // 다리 축 그대로 끝에서 3 mm 더 연장. 범퍼 바닥과 약 3 mm 벽이 남는다
+                translate(p1) sphere(r=leg_od/2 + tube_clearance, $fn=24);
+                translate(p2 + (p2 - p1) / norm(p2 - p1) * 3) sphere(r=leg_od/2 + tube_clearance, $fn=24);
+            }
+        }
     }
 }
+
 
 // ---------- 조립 ----------
 // render_mode = "preview": 조립 미리보기 (기둥/다리를 실봉으로, 부품을 색블록으로 시각화 — 실제 프린트 대상 아님)
@@ -550,7 +650,7 @@ if (render_mode == "preview") {
     mock_battery(); mock_avionics(); mock_esc();   // ⚠️ 프린트 안 함 — 실물 자리 표시용
     servo_blocks();                                 // ⚠️ 프린트 안 함 — MG90S 자리 표시용
     foot_pads();
-} else {
+} else if (render_mode == "print") {
     // 진짜 프린트 파트만 (개별 export 순서는 cad/print_parts/README.md):
     //   상판 · 베인링(서보보스·스파보어·스톱슬롯 포함) · 베인 4 · EDF 클램프 · 배터리선반 ·
     //   아비오닉스선반 · ESC 브래킷 · 발범퍼 4
@@ -571,8 +671,9 @@ echo(str("EDF 몸통 범위 = 0 ~ ", edf_body_top_z, " mm (배기면 기준) —
 echo(str("장비 선반 윗면 z=", shelf_top_z, "mm — EDF 립(", edf_body_top_z, "mm)보다 ",
          shelf_top_z - edf_body_top_z, "mm 위, 상판 하면(", top_plate_bot_z, "mm)보다 ",
          top_plate_bot_z - shelf_top_z, "mm 아래 → ",
-         (shelf_top_z > edf_body_top_z && shelf_top_z + batt_h < top_plate_bot_z)
-           ? "정상(배터리 높이까지 상판 밑에 들어감)"
+         (shelf_top_z > edf_body_top_z && shelf_top_z + max(batt_h, batt_h_max) + batt_strap_t + 1 <= top_plate_bot_z)
+           ? str("정상(최대 ", batt_h_max, "mm 팩 + 스트랩이 상판 밑에 들어감, 여유 ",
+                 top_plate_bot_z - shelf_top_z - max(batt_h, batt_h_max) - batt_strap_t, "mm)")
            : "!! 겹침 — shelf_top_z 재조정 필요 !!"));
 echo(str("선반 안쪽 경계 r=", shelf_r_inner, "mm vs 흡기홀 반경 ", edf_housing_od/2 + 3,
          "mm → ", (shelf_r_inner >= edf_housing_od/2 + 3)
@@ -592,5 +693,40 @@ echo(str("Ø3 CF 스파 재단 길이 = ", vane_spar_len, " mm  (베인 안쪽 �
 echo(str("상판 상단 z = ", top_plate_top_z, " mm"));
 echo(str("베인 피벗 z = ", vane_pivot_z, " mm — 마스터 §4 의 '배기면→피벗 ", vane_gap_below_exit,
          "mm'는 실제로는 '배기면→링 상단'. 제어 모멘트암은 |z_cg - ", vane_pivot_z, "| 로 계산할 것"));
+// 배선 슬롯 겹침 검사: ESC 플랜지(x shelf_r_inner+2 ~ +18, |y| ≤ (esc_l+8)/2), 만능기판 인서트 보스, 새들 타이 슬롯
+function rect_gap(ax0, ax1, ay0, ay1, bx0, bx1, by0, by1) =
+    max(max(bx0 - ax1, ax0 - bx1), max(by0 - ay1, ay0 - by1));   // > 0 이면 떨어져 있음
+function circ_gap(x0, x1, y0, y1, cx, cy, r) =
+    norm([max(x0 - cx, 0, cx - x1), max(y0 - cy, 0, cy - y1)]) - r;
+wire_slot_px0 = shelf_r_inner + (54 - perf_hole_dy)/2;
+wire_slot_gaps = [
+    rect_gap(wire_slot_x0, wire_slot_x1, wire_slot_y0, wire_slot_y1,
+             shelf_r_inner + 2, shelf_r_inner + 18, -(esc_l + 8)/2, (esc_l + 8)/2),
+    min([for (hx = [wire_slot_px0, wire_slot_px0 + perf_hole_dy])
+         circ_gap(wire_slot_x0, wire_slot_x1, wire_slot_y0, wire_slot_y1, hx, perf_hole_dx/2, insert_d/2 + 2.2)]),
+    rect_gap(wire_slot_x0, wire_slot_x1, wire_slot_y0, wire_slot_y1,
+             col_mount_r*cos(45) + 7 - tie_slot_l/2, col_mount_r*cos(45) + 7 + tie_slot_l/2,
+             col_mount_r*sin(45) - tie_slot_w/2, col_mount_r*sin(45) + tie_slot_w/2),
+    rect_gap(wire_slot_x0, wire_slot_x1, wire_slot_y0, wire_slot_y1,
+             shelf_r_inner + 6, shelf_r_inner + 6 + tie_slot_l,
+             (esc_l + 8)/2 - 6 - tie_slot_w/2, (esc_l + 8)/2 - 6 + tie_slot_w/2)];
+echo(str("배선 슬롯 간격(mm): ESC 플랜지 ", wire_slot_gaps[0], ", 인서트 보스 ", wire_slot_gaps[1],
+         ", 새들 타이 슬롯 ", wire_slot_gaps[2], ", ESC 타이 슬롯 ", wire_slot_gaps[3], " → ",
+         min(wire_slot_gaps) >= 1 ? "정상(모두 1 mm 이상 떨어짐)" : "!! 겹치거나 1 mm 미만 !!"));
+echo(str("서보 귀 슬롯: 가까운 쪽 ", servo_slot_near, "mm, 먼 쪽 ", servo_slot_far,
+         "mm → 구멍 간격 ", servo_slot_near[0] + servo_slot_far[0], "-", servo_slot_near[1] + servo_slot_far[1],
+         "mm 범위를 받음 (MG90S 실물 미측정, #59)"));
+leg_sock_end = [leg_root_r*cos(45), leg_root_r*sin(45), vane_ring_bot_z] + leg_axis(45) * socket_depth;
+echo(str("다리 소켓: 기울기 ", acos(leg_axis(45)[2]), "° (수직 기준), 소켓 끝과 링 안쪽 벽 사이 ",
+         norm([leg_sock_end[0], leg_sock_end[1]]) - (leg_od/2 + tube_clearance) - vane_ring_id/2, " mm → ",
+         norm([leg_sock_end[0], leg_sock_end[1]]) - (leg_od/2 + tube_clearance) - vane_ring_id/2 >= 2
+           ? "정상(제트 쪽 벽을 뚫지 않음)" : "!! 소켓이 링 안쪽 벽에 너무 가깝다 !!"));
+echo(str("베일 반경 ", bail_r, " mm: 흡기 구멍 ", edf_housing_od/2 + 3, " mm와 상판 바깥 ", col_mount_r + 15, " mm 사이 → ",
+         (bail_r - bail_od/2 > edf_housing_od/2 + 3 + 2 && bail_r + bail_od/2 < col_mount_r + 15 - 2) ? "정상" : "!! 베일 구멍이 상판 가장자리에 걸림 !!"));
+echo(str("배터리 선반 턱 사이 ", 2*batt_shelf_y_half - 6, " mm vs 배터리 최대 길이 ", batt_l_max, " mm → ",
+         2*batt_shelf_y_half - 6 >= batt_l_max + 1 ? "정상" : "!! 배터리가 턱에 걸림 !!"));
+ballast_gap = min([for (hx = [wire_slot_px0, wire_slot_px0 + perf_hole_dy]) for (sy = [-1, 1])
+    norm([ballast_x - hx, ballast_y - sy * perf_hole_dx/2]) - ballast_hole_d/2 - (insert_d/2 + 2.2)]);
+echo(str("무게추 구멍과 만능기판 인서트 보스 최소 간격 ", ballast_gap, " mm → ", ballast_gap >= 2 ? "정상" : "!! 너무 가까움 !!"));
 echo(str("발 바닥 z = ", foot_z, " mm"));
 echo(str("상판top~발bottom 실제 전고 = ", top_plate_top_z - foot_z, " mm  (설계 H_total 참고값 = ", H_total, " mm)"));

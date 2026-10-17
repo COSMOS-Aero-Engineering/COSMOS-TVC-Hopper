@@ -17,29 +17,29 @@ CF_DENSITY = 1.5       # CF/에폭시 튜브·로드
 STEEL_DENSITY = 7.85
 EVA_DENSITY = 0.07
 
-# OpenSCAD 2026.10.15 render -> STL 부피 (cm3)
+# STL 부피 (cm3). 2026-10-17 #59 형상(export_print_parts.py, OpenSCAD 2021.01)으로 갱신
 OPENSCAD_VOL_CM3 = {
-    "top plate": 30.129,
-    "vane ring": 130.944,
+    "top plate": 30.1,
+    "vane ring": 139.8,
     "vanes x4": 10.724,
-    "EDF clamp": 12.199,
-    "battery shelf": 16.951,
-    "avionics shelf": 18.603,
-    "ESC bracket": 7.063,
-    "vane couplers x4": 7.462,
-    "foot pads x4": 6.416,
+    "EDF clamp": 15.1,
+    "battery shelf": 17.0,
+    "avionics shelf": 18.4,
+    "ESC bracket": 7.1,
+    "vane couplers x4": 7.1,
+    "foot pads x4": 5.7,
 }
 
 # hopper_params.scad 형상 변수 (2026-10-17)
 EDF_HOUSING_OD = 72
 RING_OD = EDF_HOUSING_OD + 24          # 96
-LEG_TOP_R = RING_OD / 2                # 48
+LEG_TOP_R = RING_OD / 2 + 8            # 56 = leg_root_r (#59: 기울인 소켓 보스)
 FOOT_CIRCLE = 360
 LEG_BOT_R = FOOT_CIRCLE / 2            # 180
 VANE_RING_BOT_Z = -50
 FOOT_Z = -140
 COL_OD = 6
-COL_LEN = 200
+COL_LEN = 212                          # #59: 4S 팩 높이 때문에 200 -> 212
 N_COLS = 4
 CF_ID = 4.0                            # 탄소관 내경 가정 (외경 6 - 벽 2x1)
 LEG_OD = 6
@@ -48,7 +48,7 @@ SPAR_D = 3.0                           # Ø3 CF 로드(솔리드)
 SPAR_LEN = 60                         # vane_spar_len
 N_SPARS = 4
 BAIL_OD = 3.0
-BAIL_R = LEG_TOP_R * 0.6               # col_mount_r * 0.6
+BAIL_R = 51                            # #59: 흡기 구멍과 상판 바깥 사이 (hopper_params.scad bail_r)
 
 
 def tube_cm3(od, id_, length):
@@ -83,7 +83,7 @@ def main():
         total += m
         print(f"{name:28s} {v:9.3f} {m:8.2f}")
     print(f"{'합계 (프린트+구조, 배선/구매 제외)':28s} {'':>9s} {total:8.2f}")
-    print(f"\nleg 길이 = {leg_len:.1f} mm (ring r48 z-50 -> foot r180 z-140)")
+    print(f"\nleg 길이 = {leg_len:.1f} mm (leg root r{LEG_TOP_R:.0f} z{VANE_RING_BOT_Z} -> foot r{LEG_BOT_R:.0f} z{FOOT_Z})")
 
 
 if __name__ == "__main__":
