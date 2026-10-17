@@ -1,0 +1,64 @@
+# 임시 검사(#109). infra/109-wincheck 브랜치에만 있다. main에 넣지 않는다.
+# Windows PowerShell 5.1 + 오래된 gh(2.40.1, --add-sub-issue 없음)에서 ship.py link를 확인한다.
+# 토큰은 issues: read뿐이라 sub-issue를 잇는 쓰기는 반드시 403으로 실패한다.
+name: wincheck-109
+on:
+  push:
+    branches: [infra/109-wincheck]
+permissions:
+  contents: read
+  issues: read
+jobs:
+  link:
+    strategy:
+      fail-fast: false
+      matrix:
+        gh: [preinstalled, "2.40.1"]
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: old gh on PATH
+        if: matrix.gh != 'preinstalled'
+        run: |
+          $v = "${{ matrix.gh }}"
+          Invoke-WebRequest "https://github.com/cli/cli/releases/download/v$v/gh_${v}_windows_amd64.zip" -OutFile gh.zip
+          Expand-Archive gh.zip -DestinationPath oldgh
+          "$PWD\oldgh\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding ascii -Append
+      - name: versions
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $PSVersionTable.PSVersion
+          (Get-Command gh).Source
+          gh --version
+          python --version
+          "stdout encoding: " + (python -c "import sys; print(sys.stdout.encoding)")
+          $has = (gh issue edit --help | Select-String -SimpleMatch "add-sub-issue")
+          "gh issue edit has --add-sub-issue: " + [bool]$has
+          gh auth status; "gh auth status exit=$LASTEXITCODE"
+          exit 0
+      - name: unit tests
+        run: python -m unittest -v test_ship
+      - name: link on real issues (exit codes)
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $bad = 0
+          foreach ($case in @(@(109,0), @(79,0), @(98,1), @(93,0), @(26,0), @(55,1), @(999999,1))) {
+            python ship.py link $case[0]
+            $got = $LASTEXITCODE
+            "RESULT link $($case[0]) exit=$got want=$($case[1])"
+            if ($got -ne $case[1]) { $bad = 1 }
+          }
+          exit $bad
+      - name: write with read-only token returns 403 and ship.gh_api parses it
+        run: |
+          $ErrorActionPreference = 'Continue'
+          python -c "import ship; rc, _, st, err = ship.gh_api('repos/{owner}/{repo}/issues/27/sub_issues', method='POST', fields=['sub_issue_id=5896999724']); print('RESULT rc=%s status=%s err=%s' % (rc, st, ascii(err))); raise SystemExit(0 if (rc != 0 and st == 403) else 1)"
+          exit $LASTEXITCODE
