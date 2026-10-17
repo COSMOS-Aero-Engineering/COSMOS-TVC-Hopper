@@ -94,7 +94,9 @@ def check_torque(p):
         want = hand_torque(p, action) / J * env.dt
         print(f"   | {name} | {np.array2string(got, precision=5)} | {np.array2string(want, precision=5)} |")
         for axis, g, w in zip("xyz", got, want):
-            if abs(w) < LEAK_TOL:
+            if not np.isfinite(g):
+                failures.append(f"{name}: Δω{axis} = {g} (유한한 값이 아니다)")
+            elif abs(w) < LEAK_TOL:
                 if abs(g) > LEAK_TOL:
                     failures.append(f"{name}: Δω{axis} = {g:.3g}, 손계산은 0 (누설)")
             elif np.sign(g) != np.sign(w):
