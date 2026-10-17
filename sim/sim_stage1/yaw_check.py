@@ -29,10 +29,6 @@ from pd_gate import EVAL_SEEDS, MAX_CRASH, MAX_MEDIAN_TILT_DEG, gate_passes, pd
 
 PARAMS = os.path.join(os.path.dirname(__file__), "params.yaml")
 
-# hopper_aviary.py step()의 스로틀 → 추력 환산(omega_t_equiv = throttle · 3000)과 같은 값.
-# params.yaml에 없는 상수라 여기 한 번 더 적는다. 환경에서 바꾸면 여기도 바꾼다.
-OMEGA_T_PER_THROTTLE = 3000.0
-
 REL_TOL = 1e-4      # 상태가 float32라 1e-7 근처까지 맞는다. 여유를 둔다
 LEAK_TOL = 1e-6     # rad/s, 한 스텝 각속도 누설 허용치
 MAX_FINAL_YAW_DEG = 1.0
@@ -58,7 +54,7 @@ def hand_torque(p, action):
     CL = p["CLalpha"] * p["A_fin"] / (2.0 * p["A_duct"])
     alpha = np.asarray(action[:4], dtype=float) * np.deg2rad(p["alpha_max_deg"])
     throttle = (action[4] + 1.0) / 2.0
-    Ft = p["Kf"] * (throttle * OMEGA_T_PER_THROTTLE) ** 2
+    Ft = p["Kf"] * (throttle * p["omega_t_per_throttle"]) ** 2
     l, r = p["vane_arm_l"], p["vane_arm_r"]
     tau = np.zeros(3)
     for i, theta in enumerate(np.deg2rad([0, 90, 180, 270])):

@@ -48,7 +48,7 @@ EPISODE_S = 5.0
 def authority(params_path: Path = PARAMS, throttle: float = 1.0) -> dict:
     p = yaml.safe_load(params_path.read_text(encoding="utf-8"))
     alpha_max = np.deg2rad(p["alpha_max_deg"])
-    thrust = p["Kf"] * (throttle * 3000.0) ** 2
+    thrust = p["Kf"] * (throttle * p["omega_t_per_throttle"]) ** 2
     vane_force = vane_lift_gain(p) * thrust * alpha_max
     torque = 2.0 * vane_force * p["vane_arm_l"]      # 한 축당 베인 2장
     ang_acc = torque / p["Jxx"]
