@@ -3,10 +3,15 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { parseLog } from './csv.js';
 import { bodyToThreeQuat, bodyToThreeVec } from './frames.js';
-import { buildHopper } from './hopper.js';
+import { buildHopper, poseVanes } from './hopper.js';
 
 const $ = (id) => document.getElementById(id);
-const deg = (r) => (r === null ? '-' : (r * 180 / Math.PI).toFixed(1));
+// 반올림해서 0이 되는 작은 음수(-1e-12 등)는 "-0.0" 대신 "0.0"으로 쓴다
+const deg = (r) => {
+  if (r === null) return '-';
+  const s = (r * 180 / Math.PI).toFixed(1);
+  return s === '-0.0' ? '0.0' : s;
+};
 
 // ---------- 장면 ----------
 const view = $('view');
@@ -32,7 +37,7 @@ grid.position.y = -140;
 scene.add(grid);
 scene.add(new THREE.AxesHelper(60)); // 빨강 = three X, 초록 = three Y(위), 파랑 = three Z
 
-const { group: hopper } = buildHopper();
+const { group: hopper, vanes } = buildHopper();
 scene.add(hopper);
 
 function resize() {
@@ -50,13 +55,22 @@ let idx = 0;
 let playing = false;
 let playStartWall = 0;
 let playStartT = 0;
+// select에서 읽는다. Firefox는 새로고침할 때 select 값을 되살리므로 1로 고정하면 표시와 실제 배속이 다를 수 있다.
+let speed = Number($('speed').value);
+let vanesValid = true; // servo1..4가 모두 -1~1 안이면 true (02 문서 §4는 µs도 허용한다)
+$('speed').addEventListener('change', (e) => {
+  // 지금까지 재생한 시간을 이전 배속으로 계산해 기준점으로 삼는다. rows[idx].t_ms로 되돌리면 행 사이 시간이 사라진다.
+  const now = performance.now();
+  if (playing) { playStartT += (now - playStartWall) * speed; playStartWall = now; }
+  speed = Number(e.target.value);
+});
 
 function show(i) {
   idx = Math.max(0, Math.min(i, rows.length - 1));
   const r = rows[idx];
   if (!r) return;
   hopper.quaternion.copy(bodyToThreeQuat(r.qw, r.qx, r.qy, r.qz));
-  // TODO(#29 작업 6, 선택): servo1..4를 베인 회전각으로 보여주기 (02 문서 §5.3)
+  poseVanes(vanes, vanesValid ? [r.servo1, r.servo2, r.servo3, r.servo4] : [null, null, null, null]);
   $('t').textContent = r.t_ms;
   $('mode').textContent = r.mode ?? '-';
   $('phi').textContent = deg(r.phi);
@@ -77,7 +91,9 @@ function load(text, name) {
   $('play').textContent = '재생';
   $('play').disabled = $('seek').disabled = rows.length === 0;
   $('seek').max = Math.max(rows.length - 1, 0);
-  $('status').textContent = `${name}: ${rows.length}행` + (res.skipped ? `, 건너뛴 행 ${res.skipped}` : '');
+  vanesValid = !rows.some((r) => [r.servo1, r.servo2, r.servo3, r.servo4].some((s) => s !== null && Math.abs(s) > 1));
+  $('status').textContent = `${name}: ${rows.length}행` + (res.skipped ? `, 건너뛴 행 ${res.skipped}` : '')
+    + (vanesValid ? '' : ', servo 값이 -1~1 밖이라(µs로 보임) 베인을 중립에 둔다');
   show(0);
 }
 
@@ -102,11 +118,11 @@ $('play').addEventListener('click', () => {
 
 renderer.setAnimationLoop(() => {
   if (playing && rows.length) {
-    // 벽시계 경과시간으로 t_ms를 따라간다 (1x). TODO(#29 작업 5): 배속 곱하기
-    const target = playStartT + (performance.now() - playStartWall);
+    // 벽시계 경과시간 × 배속으로 t_ms를 따라간다 (#29 작업 5: 1×, 0.25×)
+    const target = playStartT + (performance.now() - playStartWall) * speed;
     let i = idx;
     while (i < rows.length - 1 && rows[i + 1].t_ms <= target) i += 1;
-    show(i);
+    if (i !== idx) show(i); // 0.25×에서는 여러 프레임 동안 같은 행이다
     if (i >= rows.length - 1) { playing = false; $('play').textContent = '재생'; }
   }
   controls.update();
