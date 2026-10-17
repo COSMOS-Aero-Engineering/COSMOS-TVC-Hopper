@@ -71,6 +71,8 @@ def load_stl(path):
                     tris.append(cur)
                     cur = []
         return tris
+    if len(b) < 84:      # 빈 결과(교집합이 없는 경우 등)
+        return []
     n = struct.unpack("<I", b[80:84])[0]
     return [[struct.unpack("<3f", b[84 + i * 50 + 12 + j * 12:84 + i * 50 + 24 + j * 12]) for j in range(3)]
             for i in range(n)]

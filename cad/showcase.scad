@@ -112,7 +112,7 @@ module kill_switch() {
 }
 
 module esc_detail() {
-    rotate([0, 0, 270]) translate([shelf_r_inner + 6, 0, shelf_top_z - shelf_t - 26]) {
+    rotate([0, 0, 270]) translate([shelf_r_inner + 5 + esc_t / 2, 0, shelf_top_z - shelf_t - 26]) {
         color([0.10, 0.35, 0.80]) cube([esc_t, esc_l, esc_w], center = true);       // 열수축 튜브
         color(C_LIP) translate([-esc_t / 2 - 0.5, 0, 0]) cube([1, esc_l - 6, esc_w - 6], center = true);
         // 모터 3상선 → EDF

@@ -128,6 +128,9 @@ vane_ring_od = edf_housing_od + 24;
 vane_ring_id = edf_housing_od + 4;
 leg_top_r    = vane_ring_od/2;        // 다리 상단 부착 반경 (베인링에서 시작)
 leg_bot_r    = foot_circle/2;         // 다리 하단(발) 반경
+// #59: 다리 뿌리. 다리는 수직에서 약 56° 기운 관이라 수직 소켓에 안 들어갔다. 링 바깥 보스(반경 leg_root_r)에서
+// 다리 축 방향으로 소켓을 뚫는다. 소켓 끝은 링 안쪽 벽(제트 쪽)에서 2 mm 이상 떨어져야 한다(검증 echo).
+leg_root_r   = vane_ring_od/2 + 8;
 // ⚠️ 버그 수정(2026-09-13): col_mount_r가 예전엔 edf_housing_od/2+25로 따로 계산돼서
 //    vane_ring_od/2(=leg_top_r)보다 13mm나 커버렸음 → 기둥이 베인링 바깥 허공에서 끝나
 //    실제로 안 닿는 상태였음. 기둥도 다리와 같은 반경(링 바깥 표면)에서 시작하도록 통일.
@@ -158,6 +161,8 @@ edf_clamp_z  = edf_clamp_z_from_exit;  // 클램프 높이 — 배기면(z=0) �
 edf_body_top_z = edf_body_len;         // 참고용: EDF 몸통 상단(흡입구 립) z — 검증 echo에 사용
 tube_clearance = 0.3;                  // 소켓 구멍 여유 (Ø6mm 탄소관 삽입용, mm)
 socket_depth   = 12;                   // 베인링에 뚫는 소켓 구멍 깊이 (mm, 링 높이 28mm 중)
+bail_r       = (edf_housing_od/2 + 3 + col_mount_r + 15) / 2;   // 흡기 구멍 반경과 상판 바깥 반경의 가운데 (#59)
+leg_boss_r   = leg_od/2 + tube_clearance + 2.7;   // 소켓 둘레 벽 두께 2.7
 
 // ---------- 모듈 ----------
 
@@ -168,6 +173,8 @@ module top_plate() {
         cylinder(h=top_plate_t, r=col_mount_r + 15, center=false);
         // EDF 흡기 통로 홀 — 하우징보다 살짝 크게(공기 흐름 여유, 접촉 없음)
         translate([0,0,-1]) cylinder(h=top_plate_t+2, r=edf_housing_od/2 + 3, center=false);
+        // 베일 다리 구멍 2개 (#59)
+        for (sx = [-1, 1]) translate([sx * bail_r, 0, -1]) cylinder(h = top_plate_t + 2, r = bail_od/2 + 0.15, $fn = 16);
         // D1 탄소관(기둥) 삽입용 관통 소켓 4개
         for (i=[0:n_cols-1]) {
             a = i*360/n_cols + 45;
@@ -326,6 +333,25 @@ module vane_coupler(slack = 0) {
     }
 }
 
+function leg_axis(a) = let(p1 = [leg_root_r*cos(a), leg_root_r*sin(a), vane_ring_bot_z],
+                            p2 = [leg_bot_r*cos(a), leg_bot_r*sin(a), foot_z]) (p1 - p2) / norm(p1 - p2);
+module leg_root_boss(a, rb) {   // 링 바깥 다리 뿌리 덩어리 (조립 좌표)
+    p1 = [leg_root_r*cos(a), leg_root_r*sin(a), vane_ring_bot_z];
+    hull() {
+        translate(p1 - leg_axis(a) * 2) sphere(r = rb, $fn = 32);
+        translate(p1 + leg_axis(a) * socket_depth) sphere(r = rb, $fn = 32);
+        translate([vane_ring_od/2*cos(a) - 1*cos(a), vane_ring_od/2*sin(a) - 1*sin(a), vane_ring_bot_z])
+            cylinder(h = vane_ring_h * 0.6, r = rb, $fn = 32);
+    }
+}
+module leg_root_socket(a) {
+    p1 = [leg_root_r*cos(a), leg_root_r*sin(a), vane_ring_bot_z];
+    hull() {
+        translate(p1 - leg_axis(a) * 10) sphere(r = leg_od/2 + tube_clearance, $fn = 24);
+        translate(p1 + leg_axis(a) * socket_depth) sphere(r = leg_od/2 + tube_clearance, $fn = 24);
+    }
+}
+
 module vane_ring() {
     // D1(기둥)·D2(다리) 탄소관은 구매품 — 링 위/아래 면에 소켓 구멍만 뚫어 꽂고 접착한다.
     // rev C.1 추가: 서보 보스 4개 · 스파 보어 4개 · 하드스톱 슬롯 4개 · 다리 방위 수정
@@ -337,6 +363,8 @@ module vane_ring() {
                 for (i=[0:n_vanes-1])
                     rotate([0,0,i*360/n_vanes + az_vane])
                         translate([0,0,-vane_ring_bot_z]) servo_boss_solid();
+                // 다리 뿌리 보스 4개 (#59)
+                translate([0,0,-vane_ring_bot_z]) for (i=[0:n_legs-1]) leg_root_boss(i*360/n_legs + az_col, leg_boss_r);
             }
             translate([0,0,-1]) cylinder(h=vane_ring_h+2, r=vane_ring_id/2, center=false);
             // 기둥(위쪽) 소켓 — 링 윗면에서 아래로
@@ -345,12 +373,8 @@ module vane_ring() {
                 translate([col_mount_r*cos(a), col_mount_r*sin(a), vane_ring_h - socket_depth])
                     cylinder(h=socket_depth+1, r=col_od/2 + tube_clearance, center=false);
             }
-            // 다리(아래쪽) 소켓 — 링 아랫면에서 위로. 기둥과 같은 방위(45° 계열) = 베인/서보와 45° 엇갈림
-            for (i=[0:n_legs-1]) {
-                a = i*360/n_legs + az_col;
-                translate([leg_top_r*cos(a), leg_top_r*sin(a), -1])
-                    cylinder(h=socket_depth+1, r=leg_od/2 + tube_clearance, center=false);
-            }
+            // 다리 소켓 — 다리 축 방향으로 기울여 뚫는다(#59). 기둥과 같은 방위(45° 계열)
+            translate([0,0,-vane_ring_bot_z]) for (i=[0:n_legs-1]) leg_root_socket(i*360/n_legs + az_col);
             // 베인 스파 보어 · 하드스톱 슬롯 · 서보 이어 홀
             for (i=[0:n_vanes-1])
                 rotate([0,0,i*360/n_vanes + az_vane])
@@ -367,7 +391,9 @@ module vane_ring() {
 //    제트베인은 "반경 방향으로 뻗고, 시위가 유동(z)을 따라가는 평판"이 맞다 —
 //    반경축(스파) 회전 → 제트를 접선 방향으로 꺾음 → 두 쌍이 롤/피치, 4개 동시 캔트가 요.
 module vane_one(deflect = 0) {
-    rotate([deflect, 0, 0])                 // 스파(반경축) 둘레 회전 = 베인 편향각
+    // 스파(반경축, z = vane_pivot_z) 둘레 회전 = 베인 편향각. #59 정정: 예전엔 원점(z = 0) 둘레로 돌려
+    // 꺾인 베인이 엉뚱한 곳에 그려졌다(출력물 형상은 deflect = 0이라 영향 없음).
+    translate([0, 0, vane_pivot_z]) rotate([deflect, 0, 0]) translate([0, 0, -vane_pivot_z])
         difference() {
             union() {
                 translate([vane_inner_r, -vane_thick/2, vane_pivot_z - vane_chord/2])
@@ -394,7 +420,7 @@ module vanes(deflect = 0) {
 module legs() {
     for (i=[0:n_legs-1]) {
         a = i*360/n_legs + az_col; // 기둥과 같은 방위 = 베인·서보(0/90/180/270)와 45° 엇갈림
-        p1 = [leg_top_r*cos(a), leg_top_r*sin(a), vane_ring_bot_z];
+        p1 = [leg_root_r*cos(a), leg_root_r*sin(a), vane_ring_bot_z];
         p2 = [leg_bot_r*cos(a), leg_bot_r*sin(a), foot_z];
         hull() {
             translate(p1) sphere(r=leg_od/2);
@@ -404,12 +430,13 @@ module legs() {
 }
 
 module bail() {
-    // 상판 위 손잡이(베일) — 세로로 선 아치형. 정확한 굽힘 형상은 실물 벤딩으로 결정
-    bail_r = col_mount_r * 0.6;
+    // 상판 위 손잡이(베일) — 세로로 선 아치형 Ø3 스틸봉. #59 정정: 예전 반경(0.6 x 48 = 29 mm)은
+    // 상판 흡기 구멍(반경 39) 안쪽이라 꽂을 데가 없었다. 상판 몸체 가운데(반경 bail_r)로 옮기고 다리를 상판에 꽂는다.
     translate([0,0,top_plate_top_z])
         rotate([90,0,0])
             rotate_extrude(angle=180, $fn=64)
                 translate([bail_r,0,0]) circle(r=bail_od/2);
+    for (sx = [-1, 1]) translate([sx * bail_r, 0, top_plate_bot_z]) cylinder(h = top_plate_t, r = bail_od/2, $fn = 16);
 }
 
 // ---------- 장비 선반 (rev C.1 신규) ----------
@@ -557,8 +584,9 @@ module mock_avionics() {
         }
 }
 module mock_esc() {
+    // 브래킷 수직판(x shelf_r_inner+2 ~ +5)의 바깥면에 붙는다(#59 정정: 예전 모형은 판 안에 겹쳐 그렸다)
     rotate([0,0,270])
-        translate([shelf_r_inner + 6, 0, shelf_top_z - shelf_t - 26])
+        translate([shelf_r_inner + 5 + esc_t/2, 0, shelf_top_z - shelf_t - 26])
             color("black") cube([esc_t, esc_l, esc_w], center=true);
 }
 module servo_blocks() {
@@ -571,11 +599,20 @@ module servo_blocks() {
 }
 
 module foot_pads() {
-    // D5 EVA/EPP 발 범퍼 (플레이스홀더 원통)
+    // 발 범퍼(프린트). #59 정정: 예전엔 꽉 찬 원통이라 다리 탄소관이 꽂힐 자리가 없었다.
+    // 다리 축 방향으로 소켓(Ø leg_od + 여유)을 뚫는다.
     for (i=[0:n_legs-1]) {
         a = i*360/n_legs + az_col; // legs()와 동일 각도로 맞춤
-        translate([leg_bot_r*cos(a), leg_bot_r*sin(a), foot_z - foot_pad_h/2])
-            color("darkorange") cylinder(h=foot_pad_h, r=foot_pad_d/2, center=true);
+        p1 = [leg_root_r*cos(a), leg_root_r*sin(a), vane_ring_bot_z];
+        p2 = [leg_bot_r*cos(a), leg_bot_r*sin(a), foot_z];
+        difference() {
+            translate([p2[0], p2[1], foot_z - foot_pad_h/2])
+                color("darkorange") cylinder(h=foot_pad_h, r=foot_pad_d/2, center=true, $fn=40);
+            hull() {   // 다리 축 그대로 끝에서 3 mm 더 연장. 범퍼 바닥과 약 3 mm 벽이 남는다
+                translate(p1) sphere(r=leg_od/2 + tube_clearance, $fn=24);
+                translate(p2 + (p2 - p1) / norm(p2 - p1) * 3) sphere(r=leg_od/2 + tube_clearance, $fn=24);
+            }
+        }
     }
 }
 
@@ -668,5 +705,12 @@ echo(str("배선 슬롯 간격(mm): ESC 플랜지 ", wire_slot_gaps[0], ", 인�
 echo(str("서보 귀 슬롯: 가까운 쪽 ", servo_slot_near, "mm, 먼 쪽 ", servo_slot_far,
          "mm → 구멍 간격 ", servo_slot_near[0] + servo_slot_far[0], "-", servo_slot_near[1] + servo_slot_far[1],
          "mm 범위를 받음 (MG90S 실물 미측정, #59)"));
+leg_sock_end = [leg_root_r*cos(45), leg_root_r*sin(45), vane_ring_bot_z] + leg_axis(45) * socket_depth;
+echo(str("다리 소켓: 기울기 ", acos(leg_axis(45)[2]), "° (수직 기준), 소켓 끝과 링 안쪽 벽 사이 ",
+         norm([leg_sock_end[0], leg_sock_end[1]]) - (leg_od/2 + tube_clearance) - vane_ring_id/2, " mm → ",
+         norm([leg_sock_end[0], leg_sock_end[1]]) - (leg_od/2 + tube_clearance) - vane_ring_id/2 >= 2
+           ? "정상(제트 쪽 벽을 뚫지 않음)" : "!! 소켓이 링 안쪽 벽에 너무 가깝다 !!"));
+echo(str("베일 반경 ", bail_r, " mm: 흡기 구멍 ", edf_housing_od/2 + 3, " mm와 상판 바깥 ", col_mount_r + 15, " mm 사이 → ",
+         (bail_r - bail_od/2 > edf_housing_od/2 + 3 + 2 && bail_r + bail_od/2 < col_mount_r + 15 - 2) ? "정상" : "!! 베일 구멍이 상판 가장자리에 걸림 !!"));
 echo(str("발 바닥 z = ", foot_z, " mm"));
 echo(str("상판top~발bottom 실제 전고 = ", top_plate_top_z - foot_z, " mm  (설계 H_total 참고값 = ", H_total, " mm)"));
