@@ -35,12 +35,17 @@ git config user.email "본인 이메일"
 
 ```powershell
 # Windows PowerShell
-irm https://astral.sh/uv/install.ps1 | iex
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 ```bash
 # Mac / Linux
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+
+Windows 명령은 [uv 공식 설치 문서](https://docs.astral.sh/uv/getting-started/installation/)의 명령과 같다.
+`-ExecutionPolicy ByPass`를 빼지 않는다. 이 옵션이 없으면 Windows 기본 실행 정책(`Restricted`)에서 uv
+설치 스크립트가 오류를 내고 멈춘다(#99). 이 옵션은 이 명령이 새로 띄우는 PowerShell 프로세스에만
+적용된다. PC에 저장된 실행 정책은 바꾸지 않는다([Microsoft 문서](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-5.1#set-a-different-policy-for-one-session)).
 
 그다음은 어느 OS든 같다. (Mac은 **Apple Silicon만** 된다 — 고정된 torch 2.14.0에 Intel Mac용
 휠이 없다. Intel Mac이면 Windows/Linux PC를 쓰거나, 부장에게 말해서 torch 버전을 조정한다.)

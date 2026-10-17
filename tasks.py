@@ -110,7 +110,7 @@ def uv():
     return need(
         "uv",
         "https://docs.astral.sh/uv/getting-started/installation/\n"
-        "           Windows PowerShell:  irm https://astral.sh/uv/install.ps1 | iex\n"
+        '           Windows PowerShell:  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"\n'
         "           Mac/Linux:           curl -LsSf https://astral.sh/uv/install.sh | sh",
     )
 
