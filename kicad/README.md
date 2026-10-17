@@ -78,10 +78,15 @@ Teensy 4.0·BNO085·MG90S 서보·FS-iA6B 수신기·ESC·UBEC·레벨시프터 
 고치고 다시 실행하면 된다 — 손으로 `.kicad_sch`를 고치지 않는다(파라메트릭 CAD와 같은 원칙).
 
 ```bash
-cd kicad/_tools
-python gen_schematic.py     # cosmos-avionics.kicad_sch 재생성
-python validate_sch.py      # 구조 자체검증(문법/넷 연결)
+# 어느 PC에서든, 저장소 루트에서 실행한다
+python kicad/_tools/gen_schematic.py     # cosmos-avionics.kicad_sch 재생성
+python kicad/_tools/validate_sch.py      # 구조 자체검증(문법/넷 연결)
 ```
+
+두 스크립트는 작성자 PC의 절대경로를 쓰지 않는다. 자기 파일 위치를 기준으로 저장소 안의
+`.kicad_sch`를 찾는다. KiCad 심볼 라이브러리 폴더는 `KICAD_SYMBOL_DIR`(또는 `KICAD10_SYMBOL_DIR`)
+환경변수나 `--kicad-symbols <폴더>` 인자로 주고, 둘 다 없으면 흔한 설치 위치를 훑어 찾는다.
+출력 파일 위치는 `--out <파일>`로 바꾼다(기본은 `kicad/cosmos-avionics/cosmos-avionics.kicad_sch`).
 
 `_tools/extract_symbols.py`는 KiCad 번들 심볼 라이브러리에서 실제 심볼 정의·핀 좌표를 그대로
 추출하는 유틸 — 좌표를 손으로 베끼지 않으려고 만든 것(정확성 확보).
