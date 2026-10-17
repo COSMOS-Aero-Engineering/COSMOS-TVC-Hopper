@@ -57,9 +57,16 @@ bail_od  = 3;   // D4 상단 베일 Ø3mm 스틸봉
 //     세 축 다 실측 완료, 더 이상 플레이스홀더 아님.
 teensy_l = 35; teensy_w = 17;             // Teensy 4.0 실측(최종) — 미리보기 전용, 프린트 파츠엔 안 쓰임
 esc_l    = 36; esc_w    = 24; esc_t = 8;  // ESC 보드 (브래킷 크기 산정용) — 아직 미측정, 공칭치수
-batt_l = 60; batt_w = 30; batt_h = 30.5; // 4S 850 mAh 75C 리스팅 치수(Tattu, BOM A4). 예전 실측 63.5x32.5x15는 4S 두께로 볼 수 없어 다시 재야 한다(#59)
-batt_h_max = 36;   // 최대 팩 두께: Turnigy Graphene 1300 4S 75x36x36 mm(리스팅, PR #70의 선택 제품)
+batt_l = 73; batt_w = 34; batt_h = 31; // 실측 4S 1300 mAh(2026-10-17): 73+-3 x 33-34 x 31+-2 mm, 159.5 g
+batt_h_max = 33;   // 실측 두께 최대(31 + 2)
 batt_strap_t = 2;  // 벨크로 스트랩 두께
+batt_l_max = 76;   // 실측 길이 73 +- 3 mm (2026-10-17)
+batt_shelf_y_half = 42;   // 배터리 선반 반폭. 턱 두께 3이라 턱 사이 = 2*42 - 6 = 78 mm
+// 옆 무게중심 트림용 무게추(#59). 배터리(+Y) 한쪽 배치라 CG가 +Y로 약 9 mm 치우친다(cad/cg 계산).
+// 아비오닉스 선반(−Y) 바깥 끝 아래에 M5 볼트 2개로 와셔·너트·납추를 매달아 0-70 g을 조절한다(01 문서 §8.3 트림).
+ballast_x = 89;    // 선반 로컬 x(반경 방향)
+ballast_y = 10;    // 로컬 |y|
+ballast_hole_d = 5.5;
 
 shelf_top_z   = 150;   // 선반 윗면 z (배기면 기준). 상판 하면(178)까지 28mm, EDF 립(92)에서 58mm 위
 shelf_t       = 3;     // 선반 판 두께
@@ -487,7 +494,8 @@ module shelf_blank(x_out, y_half) {
 
 module equip_shelf_battery() {
     // +Y(배터리) 선반: 판 위에 팩을 눕히고 벨크로 스트랩 2개로 X자 고정
-    y_half = 40;
+    // #59: 실측 배터리 길이 73+-3 mm(최대 76)가 양끝 턱 사이 74 mm에 안 들어갔다. y_half 40 -> 42 (턱 사이 78 mm)
+    y_half = batt_shelf_y_half;
     x_out  = shelf_r_inner + 50;    // 반경 42 → 92
     difference() {
         shelf_blank(x_out, y_half);
@@ -522,6 +530,9 @@ module equip_shelf_avionics() {
             for (hy = [-perf_hole_dx/2, perf_hole_dx/2])
                 translate([hx, hy, shelf_top_z + 2.5 - insert_h])   // 막힌 구멍: 바닥 1.5 mm 남김(#59)
                     cylinder(h = insert_h + 1, r = insert_d/2, $fn=28);
+        // 무게추 볼트 구멍 2개 (#59)
+        for (sy = [-ballast_y, ballast_y])
+            translate([ballast_x, sy, shelf_top_z - shelf_t - 1]) cylinder(h = shelf_t + 5, r = ballast_hole_d/2, $fn = 24);
         // ESC 브래킷 플랜지 타이 슬롯과 짝이 되는 선반 타이 슬롯 2개(#59). 예전엔 선반 쪽 짝이 없어
         // 브래킷을 선반에 묶을 길이 없었다.
         for (sy = [-(esc_l + 8)/2 + 6, (esc_l + 8)/2 - 6])
@@ -712,5 +723,10 @@ echo(str("다리 소켓: 기울기 ", acos(leg_axis(45)[2]), "° (수직 기준)
            ? "정상(제트 쪽 벽을 뚫지 않음)" : "!! 소켓이 링 안쪽 벽에 너무 가깝다 !!"));
 echo(str("베일 반경 ", bail_r, " mm: 흡기 구멍 ", edf_housing_od/2 + 3, " mm와 상판 바깥 ", col_mount_r + 15, " mm 사이 → ",
          (bail_r - bail_od/2 > edf_housing_od/2 + 3 + 2 && bail_r + bail_od/2 < col_mount_r + 15 - 2) ? "정상" : "!! 베일 구멍이 상판 가장자리에 걸림 !!"));
+echo(str("배터리 선반 턱 사이 ", 2*batt_shelf_y_half - 6, " mm vs 배터리 최대 길이 ", batt_l_max, " mm → ",
+         2*batt_shelf_y_half - 6 >= batt_l_max + 1 ? "정상" : "!! 배터리가 턱에 걸림 !!"));
+ballast_gap = min([for (hx = [wire_slot_px0, wire_slot_px0 + perf_hole_dy]) for (sy = [-1, 1])
+    norm([ballast_x - hx, ballast_y - sy * perf_hole_dx/2]) - ballast_hole_d/2 - (insert_d/2 + 2.2)]);
+echo(str("무게추 구멍과 만능기판 인서트 보스 최소 간격 ", ballast_gap, " mm → ", ballast_gap >= 2 ? "정상" : "!! 너무 가까움 !!"));
 echo(str("발 바닥 z = ", foot_z, " mm"));
 echo(str("상판top~발bottom 실제 전고 = ", top_plate_top_z - foot_z, " mm  (설계 H_total 참고값 = ", H_total, " mm)"));

@@ -36,13 +36,15 @@ module p_servos() {   // MG90S 공식 치수: 접선 22.8, 수직 12.2, 반경 �
     for (i = [0 : n_vanes - 1]) rotate([0, 0, i * 360 / n_vanes + az_vane])
         translate([servo_plate_r + servo_boss_t, -6, vane_pivot_z - 12.2 / 2]) cube([22.8, 22.8, 12.2]);
 }
-module p_battery() { rotate([0, 0, 90]) translate([shelf_r_inner + batt_w / 2 + 4, 0, shelf_top_z + batt_h / 2])
-    cube([batt_w, batt_l, batt_h], center = true); }
+module p_battery() {   // 실측 최대 치수(2026-10-17): 길이 76, 폭 34, 두께 33
+    rotate([0, 0, 90]) translate([shelf_r_inner + 34 / 2 + 4, 0, shelf_top_z + 33 / 2]) cube([34, batt_l_max, 33], center = true); }
 module p_esc() { mock_esc(); }
 module p_perfboard() { rotate([0, 0, 270]) translate([shelf_r_inner + 25, 0, shelf_top_z + 12]) cube([50, 70, 1.6], center = true); }
 module p_receiver() { rotate([0, 0, 270]) translate([shelf_r_inner + 25 - 14, 22, shelf_top_z + 12 + 0.8 + 7.5]) cube([26.2, 47, 15], center = true); }
 module p_ubec() { rotate([0, 0, 270]) translate([shelf_r_inner + 30, 0, shelf_top_z - shelf_t - 3.5 - 0.1]) cube([17, 43, 7], center = true); }
 module p_bail() { bail(); }
+module p_ballast() {   // 최대 무게추: 와셔 묶음 Ø12 x 높이 18, 선반 판 아래
+    rotate([0, 0, 270]) for (sy = [-ballast_y, ballast_y]) translate([ballast_x, sy, shelf_top_z - shelf_t - 18.1]) cylinder(h = 18, r = 6, $fn = 24); }
 """
 
 PARTS = {
@@ -59,7 +61,7 @@ PARTS = {
     # 구매품
     "edf": "p_edf();", "columns": "p_columns();", "legs": "p_legs();", "spars": "p_spars();",
     "servos": "p_servos();", "battery": "p_battery();", "esc": "p_esc();", "perfboard": "p_perfboard();",
-    "receiver": "p_receiver();", "ubec": "p_ubec();", "bail": "p_bail();",
+    "receiver": "p_receiver();", "ubec": "p_ubec();", "bail": "p_bail();", "ballast": "p_ballast();",
 }
 # 베인을 하드스톱까지 꺾은 상태는 베인링·스파·커플러와만 따로 본다
 DEFLECTED = {"vanes_+stop": "vanes(vane_stop_deg);", "vanes_-stop": "vanes(-vane_stop_deg);"}

@@ -1,8 +1,8 @@
 part,mass_g,mass_source,shape,x,y,z,p1,p2,p3,position_source
 EDF unit share: housing+rotor+lip,56.8,team #70: Freewing E7207 whole unit 169 g; split 43:126 by listing ratio (estimate),ring,0,0,46,33.5,36,92,hopper_params.scad edf_housing_od 72 / edf_body_len 92
 EDF unit share: motor,112.2,"team #70: Freewing E7207 169 g (motor share, estimate)",box,0,0,40,28,28,36,motor at hub centre (estimate)
-ESC 60A single + cap,30,team #70: single 60A BLHeli_32 board+leads+cap ~25-35 g (estimate),box,0,-48,127,24,36,8,01-avionics 7.6 (270 deg bracket z 110-145)
-LiPo 4S 1300mAh 65C,166,"team #70: Turnigy Graphene 1300 4S 65C 166 g (listing 176 g incl. leads/plug, 75x36x36 mm)",box,0,62.25,168,75,36,36,battery shelf +Y; z = shelf top 150 + h/2
+ESC 60A single + cap,34.2,MEASURED 2026-10-17: 34.2 g incl. leads (total length 240 mm),box,0,-48,127,24,36,8,01-avionics 7.6 (270 deg bracket z 110-145)
+LiPo 4S 1300mAh (measured),159.5,"MEASURED 2026-10-17: 159.5 g, 73+-3 x 33-34 x 31+-2 mm",box,0,63.0,165.5,73,34,31,battery shelf +Y; radial centre = shelf_r_inner + w/2 + 4
 Teensy 4.0 with pins,3,team #70: PJRC board 2.8-3 g (with headers ~5 g),box,0,-75,166,17,35,4,mock_avionics position
 BNO085 GY module,2.5,team #70: Adafruit 4754 2.5 g,box,-22,-77,165,16,18,3,mock_avionics position
 RC receiver,6,team #70: budget (Spektrum sat ~3 g / SBUS RX ~15 g; FS-iA6B manual 14.9 g),box,22,-70,168,26.2,47,15,avionics shelf
@@ -26,3 +26,4 @@ servo extensions + XT60 + main wires + ties,55,ESTIMATE (servo ext 4x5 g + XT60/
 kill switch,10,ESTIMATE (BOM B6 not chosen),box,0,59,196,22,14,10,showcase.scad kill switch on top plate
 fasteners M2/M3 + inserts,8,ESTIMATE,ring,0,0,40,30,60,120,spread
 4x servo horn (alu),4,team #70: est ~1 g each (unmeasured),servo4,0,0,-36,66,0,0,on servo output = vane_pivot_z
+"trim ballast (washers/nuts on 2x M5, -Y)",72,TRIM: set after weighing so lateral CG < 2 mm (0-72 g). 72 g = zero offset with current table,box,0,-89,138,12,32,18,"avionics shelf ballast holes (local x 89, y +-10), below plate"
