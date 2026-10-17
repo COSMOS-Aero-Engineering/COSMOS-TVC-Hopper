@@ -58,7 +58,7 @@ bail_od  = 3;   // D4 상단 베일 Ø3mm 스틸봉
 teensy_l = 35; teensy_w = 17;             // Teensy 4.0 실측(최종) — 미리보기 전용, 프린트 파츠엔 안 쓰임
 esc_l    = 36; esc_w    = 24; esc_t = 8;  // ESC 보드 (브래킷 크기 산정용) — 아직 미측정, 공칭치수
 batt_l = 60; batt_w = 30; batt_h = 30.5; // 4S 850 mAh 75C 리스팅 치수(Tattu, BOM A4). 예전 실측 63.5x32.5x15는 4S 두께로 볼 수 없어 다시 재야 한다(#59)
-batt_h_max = 35;   // 1300 mAh 팩까지 받으려는 최대 두께(리스팅 28-35 mm)
+batt_h_max = 36;   // 최대 팩 두께: Turnigy Graphene 1300 4S 75x36x36 mm(리스팅, PR #70의 선택 제품)
 batt_strap_t = 2;  // 벨크로 스트랩 두께
 
 shelf_top_z   = 150;   // 선반 윗면 z (배기면 기준). 상판 하면(178)까지 28mm, EDF 립(92)에서 58mm 위
