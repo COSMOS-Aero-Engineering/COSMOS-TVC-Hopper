@@ -903,7 +903,10 @@ AGENTS_REF_RE = re.compile(r"AGENTS\.md`?[ \t]*§")
 # 다른 문서의 번호 참조라서 보지 않는다.
 AGENTS_SELF_REF_RE = re.compile(r"§(?=[^\s\d])")
 # AGENTS.md 안에서 § 앞 낱말이 이 형식이면 다른 문서의 절이다. 예: "README §협업 규칙 6".
+# 낱말 끝의 조사는 먼저 뗀다(AGENTS_PARTICLE_RE). 예: "README의 §협업 규칙 6".
 AGENTS_FOREIGN_RE = re.compile(r"(?:README|\.md`?|문서|마스터|PRD)$")
+# § 앞 낱말 끝에 붙는 조사. 하나만 뗀다.
+AGENTS_PARTICLE_RE = re.compile(r"(?:의|에서|에|와|과|도|은|는)$")
 
 
 def agents_sections(text):
@@ -960,15 +963,15 @@ def iter_agents_refs(text, self_refs=False):
 
     줄과 칸은 1부터 세고, 칸은 § 위치다. 줄은 find_user_paths()와 같게 줄바꿈 문자로만 나눈다.
     self_refs가 참이면 text가 AGENTS.md 자신이다. 이때는 파일 이름 없이 쓴 "§이름"도 이 파일의
-    절로 본다. 단 § 앞 낱말이 다른 문서 이름이면 보지 않는다.
+    절로 본다. 단 § 앞 낱말이 다른 문서 이름이면 보지 않는다. 낱말 끝의 조사는 떼고 본다.
     """
     for lineno, line in enumerate(text.split("\n"), start=1):
         starts = {m.end() for m in AGENTS_REF_RE.finditer(line)}
         if self_refs:
             for m in AGENTS_SELF_REF_RE.finditer(line):
                 before = line[:m.start()].split()
-                if before and AGENTS_FOREIGN_RE.search(before[-1]) \
-                        and not before[-1].rstrip("`").endswith("AGENTS.md"):
+                word = AGENTS_PARTICLE_RE.sub("", before[-1]) if before else ""
+                if AGENTS_FOREIGN_RE.search(word) and not word.rstrip("`").endswith("AGENTS.md"):
                     continue
                 starts.add(m.end())
         for start in sorted(starts):
