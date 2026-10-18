@@ -251,6 +251,8 @@ def cache_key(task, dep_keys):
         h.update(digest.encode())
     if task.uses_env:
         h.update(env_fingerprint().encode())
+    if task.tool:
+        h.update(task.tool().encode())
     return h.hexdigest()
 
 
@@ -309,7 +311,7 @@ SKIPPED_TASKS = []
 
 class Task:
     def __init__(self, name, doc, run=None, deps=(), inputs=(), outputs=(),
-                 cacheable=True, uses_env=False):
+                 cacheable=True, uses_env=False, tool=None):
         self.name = name
         self.doc = doc
         self.run = run or (lambda: None)
@@ -318,6 +320,7 @@ class Task:
         self.outputs = tuple(outputs)     # 이 파일들이 없으면 캐시가 맞아도 다시 만든다
         self.cacheable = cacheable
         self.uses_env = uses_env          # .venv 상태를 캐시 키에 포함할지
+        self.tool = tool                  # 외부 도구의 경로·버전 문자열을 돌려주는 함수. 캐시 키에 넣는다
 
 
 def task_setup():
@@ -529,15 +532,32 @@ def find_openscad():
             if base:
                 cands.append(str(Path(base) / "OpenSCAD" / "openscad.exe"))
     for cand in cands:
-        if not cand or not Path(cand).is_file():
-            continue
-        try:
-            r = subprocess.run([cand, "--version"], capture_output=True, timeout=60)
-        except (OSError, subprocess.TimeoutExpired):
-            continue
-        if r.returncode == 0:
+        if cand and Path(cand).is_file() and openscad_version(cand) is not None:
             return cand
     return None
+
+
+def openscad_version(exe):
+    """`exe --version`의 출력을 돌려준다. 실패하면 None.
+
+    OpenSCAD 2021.01은 Linux와 Windows 모두 버전을 stderr에 쓴다. 그래서 stdout과 stderr를 합친다.
+    """
+    try:
+        r = subprocess.run([exe, "--version"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return (r.stdout + r.stderr).strip() if r.returncode == 0 else None
+
+
+def openscad_fingerprint():
+    """cad 작업의 캐시 키에 넣는 OpenSCAD 경로와 버전.
+
+    이 값이 키에 없으면 한 번 통과한 뒤 OpenSCAD를 지우거나 바꿔도 cad가 캐시 히트로 통과한다.
+    없으면 "no-openscad"다. 그러면 키가 달라져서 cad가 다시 돌고 [건너뜀]을 출력한다.
+    """
+    exe = find_openscad()
+    return f"{exe}\n{openscad_version(exe)}" if exe else "no-openscad"
 
 
 def scan_cad_output(text):
@@ -682,7 +702,7 @@ TASKS = {t.name: t for t in [
     Task("userpath", "kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 확인 (#96)", task_userpath,
          inputs=[*USER_PATH_SCAN, "test_userpath.py"]),
     Task("cad", "CAD 검증 echo에 '!!' 경고·OpenSCAD 경고가 없는지 확인, OpenSCAD 없으면 건너뜀 (#61)",
-         task_cad, inputs=["cad/hopper_params.scad", "test_cadcheck.py"]),
+         task_cad, inputs=["cad/hopper_params.scad", "test_cadcheck.py"], tool=openscad_fingerprint),
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
          " 단계 목록은 graph)", task_check,
          deps=["skills", "shiptest", "userpath", "cad", "compile", "sanity", "gate", "yaw",

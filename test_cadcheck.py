@@ -78,6 +78,27 @@ class SkipWithoutOpenscad(unittest.TestCase):
             self.assertEqual(skipped, ["fake_skip"])
 
 
+class CacheKey(unittest.TestCase):
+    """OpenSCAD를 지우거나 버전을 바꾸면 cad의 캐시 키가 바뀌는지 본다."""
+
+    def key(self, exe, version):
+        with mock.patch.object(tasks, "find_openscad", return_value=exe), \
+                mock.patch.object(tasks, "openscad_version", return_value=version):
+            return tasks.resolve_key("cad", {})
+
+    def test_key_changes_when_openscad_is_removed(self):
+        self.assertNotEqual(self.key("/usr/bin/openscad", "OpenSCAD version 2021.01"),
+                            self.key(None, None))
+
+    def test_key_changes_with_openscad_version(self):
+        self.assertNotEqual(self.key("/usr/bin/openscad", "OpenSCAD version 2021.01"),
+                            self.key("/usr/bin/openscad", "OpenSCAD version 2024.12"))
+
+    def test_key_same_for_same_openscad(self):
+        self.assertEqual(self.key("/usr/bin/openscad", "OpenSCAD version 2021.01"),
+                         self.key("/usr/bin/openscad", "OpenSCAD version 2021.01"))
+
+
 @unittest.skipUnless(OPENSCAD, "OpenSCAD가 없다")
 class RealOpenscad(unittest.TestCase):
     """작은 .scad로 check_cad_file이 실패해야 할 때 실패하는지 본다."""
