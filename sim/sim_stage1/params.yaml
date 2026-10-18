@@ -62,6 +62,12 @@ alpha_max_deg: 10    # 선형 근사 유효 범위 (논문 명시값, 서보 물
 # 아래 1.1e-6은 목표 정적추력을 중간값(10N)으로 잡고 역산한 잠정값 — 여전히 PLACEHOLDER다.
 # 실험 A(EDF 추력곡선 실측)가 나오면 반드시 교체할 것.
 Kf: 1.1e-6           # PLACEHOLDER(역산값), Ft = Kf * omega_t_equiv^2 (omega_t_equiv는 실제 rpm 아니고 throttle 기반 임시 스케일)
+# omega_t_per_throttle: 스로틀 → 추력 환산 상수. omega_t_equiv = throttle(0-1) * omega_t_per_throttle.
+#   단위는 임의 단위다. omega_t_equiv는 실제 rpm도 rad/s도 아니고 throttle을 키운 값일 뿐이다.
+#   Kf 1.1e-6은 이 값 3000을 전제로 역산했다: 100% 스로틀 Ft = Kf * 3000^2 = 9.9 N.
+#   둘 중 하나만 바꾸면 최대 추력이 바뀐다. hopper_aviary.py, yaw_check.py, connectome/authority.py가 이 값을 읽는다(#87).
+#   실험 A 뒤 실제 회전수 기반 추력 모델로 Kf와 함께 바꾼다
+omega_t_per_throttle: 3000.0   # 임의 단위(실제 rpm 아님), PLACEHOLDER
 
 # --- 도메인 랜덤화 (매 에피소드마다 아래 비율 범위 안에서 물리 상수를 무작위로 흔들어서 학습)
 #     목적: 지금 값들이 전부 PLACEHOLDER라 정확한 값을 모름 → 학습된 정책이 "이 근처 어딘가"의
@@ -78,3 +84,23 @@ domain_rand:
   # 무게중심-추력축 어긋남(축당 mm). 근거: 01-avionics §8.2 횡 CG 목표 ≤ 3 mm(설계 잔차 1.9 mm).
   # 베인 최대 제어력의 등가 오프셋은 2·CL·alpha_max·l = 6.5 mm(l 최소 -15%에서 5.5 mm)라 그 안쪽이다.
   cg_offset_mm: 3.0
+
+# --- EDF 회전자 반작용·자이로 항 (#86) ---
+# 스위치 enabled의 기본값은 false(끔)다. 켜면 hopper_aviary.py step()이 두 토크를 더한다.
+#   회전자 각운동량  h = s·I_r·Ω·e_z  (s = spin_dir, Ω = 바디 기준 회전자 각속도, e_z = 바디 +Z)
+#   반작용  τ = −dh/dt        → τz = −s·I_r·dΩ/dt (스로틀을 바꿀 때만 생긴다)
+#   자이로  τ = −ω × h        → τx = −s·I_r·Ω·ωy, τy = +s·I_r·Ω·ωx, τz = 0
+# 식의 근거와 유도, 상수 추정 계산은 docs/design/modelling-notes-ch3.md §3의 "EDF 회전자 반작용·자이로 항"에 있다.
+# 아래 상수는 전부 공개 자료와 가정으로 잡은 추정값(PLACEHOLDER)이다. 실측값이 아니다.
+# 산 EDF로 회전수(회전계)와 회전 방향을 재서 바꾼다(실험 A, TC-0).
+# 이 값들은 랜덤화하지 않는다. #98이 _randomize_episode_params의 난수 흐름을 바꾸는 중이라서다(랜덤화는 #121).
+# 범위를 돌려 보려면 아래 값을 손으로 바꿔서 python yaw_check.py를 돌린다.
+rotor:
+  enabled: false     # 기본 끔. 켜면 pd_gate.py·yaw_check.py의 판정도 이 항을 넣은 환경으로 한다
+  inertia: 1.0e-5    # kg·m², PLACEHOLDER(추정) — 임펠러 + 아웃러너 모터 캔. 범위 5e-6 - 3.5e-5
+  omega_max: 3800.0  # rad/s(약 36,300 rpm), PLACEHOLDER(추정) — 스로틀 100 %의 부하 회전수 = KV × 4S 전압 × 부하율. 범위 3100 - 4000
+                     # Ω = omega_max · throttle로 둔다. 환경의 추력이 스로틀²에 비례하므로(Ft ∝ Ω²) 그 모델과 맞는다
+  tau: 0.05          # s, PLACEHOLDER(가정) — 회전수의 1차 지연 시상수. 범위 0.03 - 0.15. 0이면 지연 없음
+                     # 회전수가 바뀔 때 주고받는 각운동량 I_r·ΔΩ는 tau와 상관없다. tau는 토크가 퍼지는 시간만 바꾼다
+  spin_dir: 1        # PLACEHOLDER — +1: 회전자 각속도가 +Z(위, 흡기 쪽)를 향한다 = 흡기 쪽에서 내려다보면 반시계. −1은 반대
+                     # EDF 제품마다 다르다(CW·CCW 판이 따로 있다). TC-0에서 산 EDF의 회전 방향을 보고 정한다

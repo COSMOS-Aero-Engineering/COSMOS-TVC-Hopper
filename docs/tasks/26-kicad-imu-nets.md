@@ -5,7 +5,7 @@
 > 연결 자체가 없다). 원인은 `gen_schematic.py`의 Y축 반전 결함이다. 이 결함은 부품 20개 모두에 걸리고,
 > **배터리·UBEC·Teensy 전원·ESC의 극성이 반대가 된다(그대로 배선하면 기판이 탄다).** 결과와 판정은
 > [`kicad/README.md`](../../kicad/README.md)의 "2026-10-17 ERC 결과와 넷 대조" 절에 있고,
-> 결함 수정은 이슈 #66, 도구 경로 하드코딩은 #67이다. KiCad GUI(Eeschema)를 열어 J3·J6 화면을 찍은
+> 결함 수정은 이슈 #66, 도구 경로 하드코딩은 #67에서 없앴다(10/17). KiCad GUI(Eeschema)를 열어 J3·J6 화면을 찍은
 > 스크린샷도 `kicad/cosmos-avionics/`에 남겼다. 펌웨어 핀 표 교차확인은 이슈 #89로 옮겼다.
 
 ## 지금 상태
@@ -47,4 +47,4 @@ python kicad/_tools/check_imu_nets.py
 
 - ~~실제 `.kicad_sch`를 KiCad 화면에서 열어 본 대조와 ERC는 하지 않았다.~~ 10/17 Eeschema 화면 캡처와 CLI ERC를 했다. **남은 것: GUI에서 ERC를 열어 오류 4개·경고 129개가 같은지 눈으로 확인하는 일(사람 필요).**
 - 펌웨어 핀 표 대조를 김시우가 확인하는 일은 이슈 #89로 옮겼다.
-- `gen_schematic.py`는 KiCad 설치 경로가 코드에 고정돼 있어 다른 PC에서 재생성하려면 `KICAD` 경로를 바꿔야 한다.
+- ~~`gen_schematic.py`는 KiCad 설치 경로가 코드에 고정돼 있어 다른 PC에서 재생성하려면 `KICAD` 경로를 바꿔야 한다.~~ 10/17 이슈 #67에서 경로를 없앴다. 이제 어느 PC에서든 저장소 루트에서 두 스크립트가 돈다.
