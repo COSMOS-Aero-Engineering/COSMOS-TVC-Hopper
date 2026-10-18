@@ -41,7 +41,14 @@ REVIEW_PROMPT = ("Review the changes on this branch against {base}. Report concr
 # 리뷰어에게 표준 입력으로 넘기는 GitHub 기록(#167). Codex 리뷰어는 read-only 샌드박스라 네트워크가
 # 막혀 gh로 PR·이슈를 읽지 못한다. 기록은 리뷰 요청 문장과 따로 넘기고, 요청 문장은 범위만 둔다.
 RECORD_FIELDS = "number,title,state,url,author,createdAt,body,comments"
+# PR이면 더 읽는 필드. `gh issue view`의 comments에는 PR 리뷰(승인·변경 요청)가 없다.
+PR_FIELDS = "mergedAt,commits,reviews"
+# 줄 단위 리뷰 댓글. `gh pr view --json`에 이 필드가 없어서 REST API로 읽는다. 한 줄에 JSON 하나다.
+INLINE_JQ = (".[] | {author: .user.login, createdAt: .created_at, path, "
+             "line: (.line // .original_line), body}")
 MAX_REFERENCED = 20
+# PR 템플릿. 본문에 고치지 않고 남은 템플릿 줄(예: "- [ ] 이슈 #21 ...")의 `#번호`는 읽지 않는다.
+PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 
 
 def die(msg):
@@ -482,11 +489,23 @@ def gh_json(cmd):
         return None
 
 
+def gh_json_lines(cmd):
+    """한 줄에 JSON 하나를 내는 gh 명령(`--jq '.[]'`)의 출력을 목록으로 읽는다. 실패하면 None."""
+    r = call(cmd, check=False, capture=True)
+    if r.returncode != 0:
+        return None
+    try:
+        return [json.loads(line) for line in r.stdout.splitlines() if line.strip()]
+    except ValueError:
+        return None
+
+
 def format_record(rec, pr_extra=None):
     """이슈나 PR 하나를 리뷰어가 읽을 텍스트로 만든다. 본문과 댓글은 고치지 않고 그대로 둔다.
 
     본문에도 `##` 제목이 있어서 기록 경계는 태그로 표시한다. pr_extra가 `{}`이면 PR의 머지 시각과
-    커밋을 읽지 못한 것이다. 이때는 "머지 안 됨"으로 보이지 않게 읽지 못했다고 쓴다.
+    커밋을 읽지 못한 것이다. 이때는 "머지 안 됨"으로 보이지 않게 읽지 못했다고 쓴다. 댓글, 리뷰,
+    줄 단위 리뷰 댓글은 시각 순서로 섞어서 쓴다. 답글이 어느 리뷰에 대한 것인지 보이게 하려는 것이다.
     """
     login = (rec.get("author") or {}).get("login", "?")
     kind = "pr" if pr_extra is not None else "issue"
@@ -494,35 +513,64 @@ def format_record(rec, pr_extra=None):
              f"title: {rec.get('title', '')}",
              f"url: {rec.get('url', '')} | state: {rec.get('state', '')} | "
              f"author: {login} | created: {rec.get('createdAt', '')}"]
+    events = [(c.get("createdAt") or "", f"comment by {(c.get('author') or {}).get('login', '?')}",
+               c.get("body") or "") for c in rec.get("comments") or []]
     if pr_extra == {}:
-        lines.append("merged, commits: not available (gh pr view failed)")
+        lines.append("merged, commits, reviews: not available (gh pr view failed)")
     elif pr_extra is not None:
         lines.append(f"merged: {pr_extra.get('mergedAt') or '-'}")
         for c in pr_extra.get("commits") or []:
             lines.append(f"commit {c.get('oid', '')[:7]} authored {c.get('authoredDate', '')} "
                          f"committed {c.get('committedDate', '')}: {c.get('messageHeadline', '')}")
+        for v in pr_extra.get("reviews") or []:
+            who = (v.get("author") or {}).get("login", "?")
+            events.append((v.get("submittedAt") or "", f"review by {who} ({v.get('state', '')})",
+                           v.get("body") or ""))
+        inline = pr_extra.get("inline")
+        if inline is None:
+            lines.append("inline review comments: not available (gh api failed)")
+        for c in inline or []:
+            events.append((c.get("createdAt") or "",
+                           f"inline review comment by {c.get('author') or '?'} on "
+                           f"{c.get('path', '')}:{c.get('line') or '-'}", c.get("body") or ""))
     lines += ["", rec.get("body") or "(no body)"]
-    for c in rec.get("comments") or []:
-        who = (c.get("author") or {}).get("login", "?")
-        lines += ["", f"--- comment by {who} at {c.get('createdAt', '')} ---", c.get("body") or ""]
+    for at, what, body in sorted(events, key=lambda e: e[0]):
+        lines += ["", f"--- {what} at {at} ---", body]
     lines.append("</github_record>")
     return "\n".join(lines)
 
 
 def fetch_record(n):
-    """이슈나 PR #n을 읽어 텍스트로 만든다. 못 읽으면 None."""
+    """이슈나 PR #n을 읽어 텍스트로 만든다. 못 읽으면 None. PR이면 리뷰와 줄 단위 리뷰 댓글도 읽는다."""
     rec = gh_json(["gh", "issue", "view", str(n), "--json", RECORD_FIELDS])
     if rec is None:
         return None
     pr_extra = None
     if "/pull/" in (rec.get("url") or ""):
-        pr_extra = gh_json(["gh", "pr", "view", str(n), "--json", "mergedAt,commits"]) or {}
+        pr_extra = gh_json(["gh", "pr", "view", str(n), "--json", PR_FIELDS]) or {}
+        if pr_extra:
+            pr_extra["inline"] = gh_json_lines(
+                ["gh", "api", "--paginate", f"repos/{{owner}}/{{repo}}/pulls/{n}/comments",
+                 "--jq", INLINE_JQ])
     return format_record(rec, pr_extra)
 
 
-def body_refs(text):
-    """본문의 이 저장소 `#번호`를 나온 순서대로 돌려준다. 저장소 이름을 붙인 참조는 뺀다."""
-    return [int(n) for n in ISSUE_REF.findall(OTHER_REPO_REF.sub(" ", text or ""))]
+def template_lines():
+    """PR 템플릿의 줄(앞뒤 공백 제거). 파일이 없으면 빈 집합."""
+    try:
+        text = PR_TEMPLATE.read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    return {line.strip() for line in text.splitlines() if line.strip()}
+
+
+def body_refs(text, skip=frozenset()):
+    """본문의 이 저장소 `#번호`를 나온 순서대로 돌려준다. 저장소 이름을 붙인 참조는 뺀다.
+
+    skip에 든 줄은 건너뛴다. PR 템플릿 줄을 넘기면 고치지 않고 남은 템플릿 문구의 번호를 읽지 않는다.
+    """
+    kept = "\n".join(line for line in (text or "").splitlines() if line.strip() not in skip)
+    return [int(n) for n in ISSUE_REF.findall(OTHER_REPO_REF.sub(" ", kept))]
 
 
 def ref_list(numbers):
@@ -560,9 +608,9 @@ def review_records():
         texts.append(rec.get("body"))
         parts.append(format_record(rec))
         read_closing.append(n)
-    refs = []
+    refs, skip = [], template_lines()
     for text in texts:
-        for n in body_refs(text):
+        for n in body_refs(text, skip):
             if n not in seen and n not in refs:
                 refs.append(n)
     skipped = refs[MAX_REFERENCED:]

@@ -279,10 +279,12 @@ def record(number, body="", pr=False, comments=()):
 class FakeReviewGh:
     """review_records가 부르는 gh 명령(`gh pr view`, `gh issue view`)에 정한 응답을 준다."""
 
-    def __init__(self, branch_pr, *records, closing=()):
+    def __init__(self, branch_pr, *records, closing=(), reviews=(), inline=()):
         self.branch_pr = branch_pr
         self.records = {r["number"]: r for r in records}
         self.closing = closing
+        self.reviews = list(reviews)
+        self.inline = inline
         self.calls = []
 
     def __call__(self, cmd, check=True, capture=False, cwd=None, input=None):
@@ -296,7 +298,13 @@ class FakeReviewGh:
         elif cmd[:3] == ["gh", "pr", "view"]:
             out = {"mergedAt": "2026-10-16T00:25:42Z",
                    "commits": [{"oid": "6714d86abc", "authoredDate": "2026-10-15T11:48:33Z",
-                                "committedDate": "2026-10-15T11:48:33Z", "messageHeadline": "h"}]}
+                                "committedDate": "2026-10-15T11:48:33Z", "messageHeadline": "h"}],
+                   "reviews": self.reviews}
+        elif cmd[:3] == ["gh", "api", "--paginate"]:
+            if self.inline is None:
+                return subprocess.CompletedProcess(cmd, 1, "", "HTTP 502")
+            return subprocess.CompletedProcess(
+                cmd, 0, "".join(json.dumps(c) + "\n" for c in self.inline), "")
         elif cmd[:3] == ["gh", "issue", "view"] and int(cmd[3]) in self.records:
             out = self.records[int(cmd[3])]
         else:
@@ -339,6 +347,52 @@ class ReviewRecordsTest(unittest.TestCase):
         self.assertNotIn('number="5"', text)
         self.assertEqual(text.count("<github_record "), text.count("</github_record>"))
 
+    def test_pr_reviews_and_inline_comments_in_time_order(self):
+        # `gh issue view`의 comments에는 PR 리뷰가 없다. 변경 요청도 근거라서 따로 읽어 넣는다.
+        fake = FakeReviewGh(
+            200, record(200, "본문", pr=True, comments=("반영했다",)),
+            reviews=[{"author": {"login": "MINBBBB1201"}, "state": "CHANGES_REQUESTED",
+                      "submittedAt": "2026-10-15T12:00:00Z", "body": "이슈 완료 처리 1건"},
+                     {"author": {"login": "junwonkim07"}, "state": "APPROVED",
+                      "submittedAt": "2026-10-17T00:00:00Z", "body": ""}],
+            inline=[{"author": "MINBBBB1201", "createdAt": "2026-10-15T12:00:01Z",
+                     "path": "ship.py", "line": 43, "body": "여기"}])
+        text, _ = run_records(fake)
+        self.assertIn(["gh", "api", "--paginate", "repos/{owner}/{repo}/pulls/200/comments",
+                       "--jq", ship.INLINE_JQ], fake.calls)
+        order = ["--- review by MINBBBB1201 (CHANGES_REQUESTED) at 2026-10-15T12:00:00Z ---\n"
+                 "이슈 완료 처리 1건",
+                 "--- inline review comment by MINBBBB1201 on ship.py:43 at "
+                 "2026-10-15T12:00:01Z ---\n여기",
+                 "--- comment by c at 2026-10-16T00:00:00Z ---\n반영했다",
+                 "--- review by junwonkim07 (APPROVED) at 2026-10-17T00:00:00Z ---"]
+        self.assertEqual([text.index(part) for part in order],
+                         sorted(text.index(part) for part in order))
+
+    def test_failed_inline_comments_are_reported(self):
+        fake = FakeReviewGh(200, record(200, "본문", pr=True), inline=None)
+        text, _ = run_records(fake)
+        self.assertIn("inline review comments: not available (gh api failed)", text)
+
+    def test_unedited_template_lines_are_not_references(self):
+        # 템플릿 문구 "- [ ] 이슈 #21 ..."을 그대로 둔 PR이 #21을 읽으면 상관없는 기록이 들어간다.
+        # 체크한 줄("- [x] ...")은 템플릿과 달라서 번호를 읽는다.
+        line = "- [ ] 이슈 #21 재현 스크립트 / PD 합격 기준"
+        with tempfile.TemporaryDirectory() as d:
+            template = Path(d) / "pull_request_template.md"
+            template.write_text(f"## 확인한 것\n\n{line}\n", encoding="utf-8")
+            with mock.patch.object(ship, "PR_TEMPLATE", template):
+                fake = FakeReviewGh(200, record(200, f"근거: #24\n  {line}  ", pr=True),
+                                    record(24), record(21))
+                _, summary = run_records(fake)
+                self.assertIn("referenced in those bodies: #24", summary)
+                self.assertEqual(fake.viewed(), [200, 24])
+                checked = f"#24\n{line.replace('[ ]', '[x]')}"
+                self.assertEqual(ship.body_refs(checked, ship.template_lines()), [24, 21])
+            with mock.patch.object(ship, "PR_TEMPLATE", Path(d) / "missing.md"):
+                self.assertEqual(ship.template_lines(), set())
+        self.assertEqual(ship.body_refs(f"#24\n{line}"), [24, 21])
+
     def test_closing_issue_in_other_repo_is_skipped(self):
         fake = FakeReviewGh(200, record(200, "본문", pr=True), record(7, "이 저장소 7"),
                             closing=((7, "https://github.com/x/y/issues/7"),))
@@ -358,7 +412,7 @@ class ReviewRecordsTest(unittest.TestCase):
     def test_failed_pr_metadata_is_not_shown_as_unmerged(self):
         with mock.patch.object(ship, "gh_json", side_effect=[record(19, "본문", pr=True), None]):
             text = ship.fetch_record(19)
-        self.assertIn("merged, commits: not available (gh pr view failed)", text)
+        self.assertIn("merged, commits, reviews: not available (gh pr view failed)", text)
         self.assertNotIn("merged: -", text)
 
     def test_reference_limit(self):
