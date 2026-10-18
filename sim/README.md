@@ -46,9 +46,13 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 
 ```bash
 python tasks.py sanity   # 환경 정상 동작 확인 (20스텝)
-python tasks.py check    # CI와 같은 검사 — PR 올리기 전에
+python tasks.py check    # CI sim job의 check 단계와 같은 검사 — PR 올리기 전에
 python tasks.py train    # PPO 학습 (200k 스텝)
 ```
+
+`check`는 CI 전체가 아니다. CI는 `check` 말고도 학습 자료 목록·내부 링크 검사와 펌웨어 PlatformIO 빌드를 따로 돌린다.
+이 둘은 `check`에 없다. 명령은 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)의 각 단계에 있다.
+`check`가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다.
 
 에피소드를 3D 뷰어용 CSV로 남기려면 `sim/sim_stage1/`에서:
 
