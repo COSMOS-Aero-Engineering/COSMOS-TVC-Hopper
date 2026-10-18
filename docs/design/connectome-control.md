@@ -151,7 +151,13 @@ dt=2ms, tau=20ms로 두니 환경 한 스텝(10ms) 안에 감각뉴런에서 하
 
 ---
 
-## 7. ⚠ 발견: 지금 params.yaml로는 어떤 제어기도 Stage 1을 못 푼다
+## 7. ⚠ 발견(2026-09-18): 당시 params.yaml로는 어떤 제어기도 Stage 1을 못 풀었다
+
+> **이 절은 2026-09-18 당시 기록이다.** 아래 "현재 `Kf=3e-8`"은 그날의 값이다. 그 뒤
+> PR #10(2026-09-19)이 `Kf`를 1.1e-6으로 잠정 보정했고, PR #35(#21)가 베인 양력 계수 CL과
+> `vane_arm_l`을 다시 계산했다. 2026-10-18 `params.yaml`로는 여유 배수가 약 533배라
+> `warn_if_underpowered()`가 경고를 내지 않는다. 지금 값은 `python sim/connectome/authority.py`로
+> 본다. 경고 문구는 그때 읽은 `params.yaml`의 `Kf`를 출력한다(#129).
 
 PD baseline이 5초 내내 복원을 못 해서 게인 문제인 줄 알았는데, 물리 상수로 최대 토크를
 직접 계산해보니 다른 문제였다 (`sim/connectome/authority.py`):
