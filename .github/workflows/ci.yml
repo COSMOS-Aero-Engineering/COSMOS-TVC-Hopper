@@ -106,7 +106,6 @@ jobs:
     # 바꾸는 순서는 sim job의 name 위 주석과 같다.
     name: firmware — 전체
     needs: [firmware]
-    if: always()
     runs-on: ubuntu-latest
     steps:
       # needs.firmware.result는 matrix 전체를 합친 결과 하나다(success, failure, cancelled, skipped).
