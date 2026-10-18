@@ -23,6 +23,10 @@ EDF 회전자 항(#86): params.yaml의 rotor.enabled를 켜면 회전자 반작�
 켜면 추력도 1차 지연을 따르는 회전수 Ω에서 계산한다(Ft ∝ Ω², #122). 끄면 추력은 지연 없이 스로틀을 따른다.
 식과 상수 근거는 docs/design/modelling-notes-ch3.md §3의 "EDF 회전자 반작용·자이로 항".
 
+스로틀 변화율 제한(#120): params.yaml의 throttle_slew_rate(1/s)로 스로틀 명령이 한 스텝에 바뀌는 양을
+±throttle_slew_rate·dt로 자른다. 회전자 항 스위치와 상관없이 늘 쓴다. 펌웨어도 같은 제한을 쓴다(마스터 설계 §8.1).
+제한 뒤 실제로 쓴 스로틀은 step()의 info["throttle"]에 있다. 이 값은 관측(obs)에 없다.
+
 도메인 랜덤화: params.yaml의 domain_rand 설정에 따라 매 reset()마다 Jxx/Jyy/Jzz,
 베인 모멘트암(l,r), Kf, 무게중심-추력축 오프셋, 회전자 상수(inertia·omega_max·tau, #121)를
 그 범위 안에서 무작위로 다시 뽑는다.
@@ -142,6 +146,13 @@ class HopperAttitudeEnv(gym.Env):
         self.nominal_r = vane_geometry(p)["r"]
         self.nominal_Kf = p["Kf"]
         self.omega_t_per_throttle = p["omega_t_per_throttle"]   # 랜덤화하지 않는다
+        # 스로틀 변화율 제한(#120). 스로틀(0-1)이 1초에 바뀔 수 있는 최댓값(1/s). null이면 제한하지 않는다.
+        # 키가 없으면 KeyError를 낸다. 제한이 조용히 꺼지지 않게 하려고 기본값을 두지 않았다.
+        rate = p["throttle_slew_rate"]
+        self.throttle_slew_rate = None if rate is None else float(rate)
+        if self.throttle_slew_rate is not None and not self.throttle_slew_rate > 0:
+            raise ValueError(f"throttle_slew_rate = {rate}: 0보다 커야 한다. 제한을 끄려면 null로 둔다.")
+        self.throttle_applied = None   # 직전 스텝에 실제로 쓴 스로틀(0-1). 에피소드 첫 step()에서 정한다
         self.CL = vane_lift_gain(p)
         self.CD0 = p["CD0"]
         self.alpha_max = np.deg2rad(p["alpha_max_deg"])
@@ -284,7 +295,7 @@ class HopperAttitudeEnv(gym.Env):
         action = np.clip(action, self.action_space.low, self.action_space.high)
         a1, a2, a3, a4, throttle_norm = action
         alpha = np.array([a1, a2, a3, a4]) * self.alpha_max
-        throttle = (throttle_norm + 1.0) / 2.0  # -1~1 -> 0~1
+        throttle = self._limit_throttle((throttle_norm + 1.0) / 2.0)  # -1~1 -> 0~1, 그다음 변화율 제한(#120)
 
         # 회전자 항을 켜면(#86) 회전수 Ω가 스로틀을 1차 지연으로 따라가고, 추력도 이 Ω에서 계산한다(#122).
         # 추력에 쓰는 유효 스로틀 = Ω / omega_max. 끄면 지금처럼 스로틀을 그대로 쓴다.
@@ -349,7 +360,22 @@ class HopperAttitudeEnv(gym.Env):
         terminated = bool(crashed)
         truncated = self.step_count >= self.max_steps
 
-        return self.state.copy(), float(reward), terminated, truncated, {}
+        return self.state.copy(), float(reward), terminated, truncated, {"throttle": float(throttle)}
+
+    def _limit_throttle(self, throttle_cmd):
+        """스로틀 변화율 제한(#120). 이번 스텝에 실제로 쓸 스로틀(0-1)을 돌려준다.
+
+        직전 스텝의 스로틀에서 ±throttle_slew_rate·dt 안으로 자른다. 올릴 때와 내릴 때 같은 제한이다.
+        에피소드 첫 스텝은 자르지 않는다. 회전자와 같은 가정이다: 팬이 이미 그 스로틀로 돌고 있었다.
+        명령이 그대로면 min(max(x, x − d), x + d) = x라서 스로틀을 고정한 결과는 제한이 없을 때와 비트 단위로 같다.
+        """
+        if self.step_count == 0 or self.throttle_applied is None or self.throttle_slew_rate is None:
+            throttle = throttle_cmd
+        else:
+            d = self.throttle_slew_rate * self.dt
+            throttle = min(max(throttle_cmd, self.throttle_applied - d), self.throttle_applied + d)
+        self.throttle_applied = throttle
+        return throttle
 
     def _advance_rotor(self, throttle):
         """회전자 회전수 Ω를 한 스텝(dt) 진행하고 (스텝 시작 Ω0, 스텝 끝 Ω1)을 rad/s로 돌려준다(#86, #122).

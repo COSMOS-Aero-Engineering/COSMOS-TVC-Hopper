@@ -16,7 +16,8 @@
    ω = 0이라 자이로 토크도 0에서 시작하지만, 환경은 자이로 항을 사다리꼴 규칙으로 적분하므로 Δω에 축 사이
    결합이 생긴다. 손계산은 (J − dt/2·[h]×)·Δω = dt·τ를 3×3 행렬로 따로 푼다. [h]×는 h × (·)의 행렬이다.
    이때 누설은 손계산이 0인 축만 본다. 롤 명령의 Δωy 같은 자이로 결합은 손계산에 들어 있다.
-2. 회전자 항 손계산 (#86, 도메인 랜덤화 끔, 회전자 항 켬, spin_dir +1과 -1 각각)
+2. 회전자 항·스로틀 변화율 손계산 (#86, #120, 도메인 랜덤화 끔)
+   가-다는 회전자 항을 켜고 spin_dir +1과 -1을 각각 본다. 가-다는 회전자 식만 보려고 스로틀 변화율 제한을 끈다.
    가. 반작용: 베인 0, 스로틀 1.0 → 0.75 계단. 베인 토크가 없으면 z축 각운동량 Jzz·ωz + s·I_r·Ω가
        매 스텝 그대로다. 회전수가 다 따라간 뒤 Δωz = −s·I_r·omega_max·(0.75 − 1.0)/Jzz다.
        이 값은 1차 지연 모델과 상관없다. Δωx·Δωy는 0이다.
@@ -28,13 +29,16 @@
        THRUST_PROBE_STEPS번째 스텝에 롤 명령을 주고 그 스텝의 Δω를 손계산과 상대오차 1e-4 안에서 비교한다.
        손계산은 1차 지연의 해석해 u_k = 0.75 + 0.25·e^(−k·dt/tau)(u = Ω/omega_max)로 추력 Kf·(u_k·omega_t_per_throttle)²를 쓴다.
        추력이 지연 없이 스로틀을 따르면(#122 전 모델) Δω가 (0.75/u_k)²배라서 이 검사가 실패한다.
+   라. 스로틀 변화율 제한(#120): 명령 1.0 → 0.75 → 1.0 계단에서 환경이 실제로 쓴 스로틀(info["throttle"])이
+       첫 스텝은 그대로, 그 뒤는 스텝마다 throttle_slew_rate·dt씩 바뀌는지 본다(허용 오차 SLEW_TOL).
    1·2번은 랜덤화를 끄므로 회전자 상수도 params.yaml rotor의 명목값이다(#121).
 3. 요 PD (도메인 랜덤화 켬, 평가 seed 0-199)
    pd_gate.py의 롤·피치 PD에 요 PD(같은 게인 kp=8, kd=2)를 섞는다. 같은 seed로 두 스로틀 시나리오를 잰다.
    회전자 상수(inertia·omega_max·tau)도 seed마다 domain_rand.rotor_*_range에서 뽑은 값이다(#121).
      A: 스로틀 1.0 고정(#65와 같다). 반작용 토크는 0이고 자이로 항만 작용한다.
-     B: t = 1 s에 스로틀 1.0 → 0.75 계단. 0.75는 호버 스로틀 추정값이다.
+     B: t = 1 s에 스로틀 명령 1.0 → 0.75 계단. 0.75는 호버 스로틀 추정값이다.
         01 문서 §8.1의 AUW 735 g, 정적 추력 1300 gf에서 √(735/1300) = 0.75(추력 ∝ 스로틀²).
+        환경이 params.yaml의 throttle_slew_rate로 명령을 자르므로 실제 스로틀은 경사로 바뀐다(#120).
    각 시나리오를 회전자 항 끔, 켬(spin_dir +1), 켬(spin_dir -1)으로 돌린다.
    - 합격: 모든 seed에서 마지막 |ψ| ≤ 1°. 롤·피치 판정(pd_gate.py와 같은 기준)도 합격이다.
      초기 |ψ|는 최대 0.3 rad(17.2°)다.
@@ -67,6 +71,8 @@ GYRO_STEPS = 30         # 0.3 s
 NORM_TOL = 1e-4         # 자이로 손계산에서 |ω| 보존 허용 상대오차
 ROLL_STEP_RAD = 0.2     # 참고 지표(TC-2.5 꼴)의 첫 롤각
 THRUST_PROBE_STEPS = 5  # 추력 지연 손계산(#122): 계단 뒤 이 스텝째에 롤 명령을 준다. 명목 tau 0.05 s = 5 스텝
+SLEW_TOL = 1e-5         # 변화율 손계산(#120) 허용 오차. 행동이 float32라 스텝마다 6e-8쯤 반올림이 쌓인다.
+                        # 0.25/s에서 한 스텝 변화량 0.0025의 0.4 %라서 변화율이 틀리면 잡힌다
 
 # 베인 명령 [a1, a2, a3, a4, throttle(-1~1)]
 COMMANDS = {
@@ -196,6 +202,7 @@ def rotor_env(spin):
     env.dr = {"enabled": False}
     env.rotor_enabled = True
     env.rotor_spin_dir = spin
+    env.throttle_slew_rate = None   # 가-다는 회전자 식만 본다. 변화율 제한은 라.에서 따로 본다
     env.reset(seed=0)
     return env
 
@@ -294,9 +301,40 @@ def check_thrust_lag(p, spin):
     return failures
 
 
+def check_slew(p):
+    """라. 스로틀 변화율 제한(#120): 명령 계단 1.0 → 0.75 → 1.0에서 실제 스로틀이 경사로 바뀌는지 본다."""
+    rate = p["throttle_slew_rate"]
+    if rate is None:
+        print("   라. 스로틀 변화율 제한: params.yaml throttle_slew_rate = null (제한 없음, 검사 건너뜀)")
+        return []
+    env = HopperAttitudeEnv()
+    env.dr = {"enabled": False}
+    env.reset(seed=0)
+    d = rate * env.dt
+    n = int(np.ceil((1.0 - THROTTLE_HOVER) / d)) + 5   # 경사가 끝나고 5스텝 더
+    commands = [1.0] + [THROTTLE_HOVER] * n + [1.0] * n
+    want, got = [], []
+    for k, cmd in enumerate(commands):
+        _, _, _, _, info = env.step(throttle_action(cmd))
+        got.append(info["throttle"])
+        # 손계산: 첫 스텝은 명령 그대로. 그 뒤는 명령 쪽으로 d씩 가고 명령에서 멈춘다
+        prev = want[-1] if want else cmd
+        want.append(cmd if k == 0 else min(max(cmd, prev - d), prev + d))
+    ramp_s = (1.0 - THROTTLE_HOVER) / rate
+    err = float(np.max(np.abs(np.array(got) - np.array(want))))
+    print(f"   라. 스로틀 변화율 제한 {rate:g}/s: 명령 1.0 → {THROTTLE_HOVER:g} → 1.0, 경사 {ramp_s:.2f} s씩, "
+          f"실제 스로틀과 손계산의 차이 최대 {err:.1e}")
+    failures = []
+    if not err <= SLEW_TOL:
+        failures.append(f"라. 스로틀 변화율 제한: 실제 스로틀이 손계산과 {err:.3g} 다르다 (허용 {SLEW_TOL:g})")
+    if abs(got[0] - 1.0) > SLEW_TOL:
+        failures.append(f"라. 스로틀 변화율 제한: 첫 스텝 스로틀 {got[0]:.6g}, 명령 1.0 그대로여야 한다")
+    return failures
+
+
 def check_rotor(p):
     r = p["rotor"]
-    print("2. 회전자 항 손계산 (랜덤화 끔, 회전자 항 켬)")
+    print("2. 회전자 항·스로틀 변화율 손계산 (랜덤화 끔. 가-다는 회전자 항 켬, 변화율 제한 끔)")
     print(f"   inertia = {r['inertia']:g} kg·m², omega_max = {r['omega_max']:g} rad/s, tau = {r['tau']:g} s "
           f"(params.yaml rotor 명목값, 추정값)\n")
     failures = []
@@ -306,6 +344,7 @@ def check_rotor(p):
         failures += check_rotor_gyro(p, spin)
     for spin in (1, -1):
         failures += check_thrust_lag(p, spin)
+    failures += check_slew(p)
     print()
     return failures
 
@@ -371,9 +410,12 @@ def roll_step_pitch_peak(rotor, spin=1):
     return float(np.degrees(peak))
 
 
-def check_yaw_pd(rotor_switch):
+def check_yaw_pd(rotor_switch, slew_rate):
     print(f"3. 요 PD (랜덤화 켬, 회전자 상수 포함, 평가 seed {EVAL_SEEDS.start}-{EVAL_SEEDS.stop - 1}, kp=8, kd=2)")
-    print(f"   A: 스로틀 1.0 고정. B: t = {STEP_TIME_S:g} s에 스로틀 1.0 → {THROTTLE_HOVER:g} 계단(호버 추정)")
+    print(f"   A: 스로틀 1.0 고정. B: t = {STEP_TIME_S:g} s에 스로틀 명령 1.0 → {THROTTLE_HOVER:g} 계단(호버 추정)")
+    print("   스로틀 변화율 제한(params.yaml throttle_slew_rate): "
+          + (f"{slew_rate:g}/s → B의 실제 스로틀은 {(1.0 - THROTTLE_HOVER) / slew_rate:.2f} s에 걸쳐 바뀐다"
+             if slew_rate is not None else "없음 → B의 실제 스로틀도 계단이다"))
     print(f"   params.yaml rotor.enabled = {str(rotor_switch).lower()} → "
           + ("A·B의 회전자 항 켬 줄을 판정한다\n" if rotor_switch else "A·회전자 항 끔 줄만 판정한다\n"))
     print("   각은 전부 |ψ|(°)다. 넘어진 seed의 마지막 값은 넘어진 순간의 값이다.\n")
@@ -414,7 +456,7 @@ def main():
     with open(PARAMS, "r", encoding="utf-8") as f:
         p = yaml.safe_load(f)
     rotor_switch = bool(p.get("rotor", {}).get("enabled", False))
-    failures = check_torque(p) + check_rotor(p) + check_yaw_pd(rotor_switch)
+    failures = check_torque(p) + check_rotor(p) + check_yaw_pd(rotor_switch, p["throttle_slew_rate"])
     if failures:
         print("\n요 축 판정: 불합격")
         for msg in failures:

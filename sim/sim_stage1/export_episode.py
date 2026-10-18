@@ -8,7 +8,7 @@ Stage 1 에피소드를 웹 대시보드 CSV 형식(docs/design/02-web-dashboard
 - source = SIM (실측 데이터와 섞이지 않게 구분)
 - mode   = PID(PD 기준 제어기) | RL(PPO 모델) | MANUAL(무입력)
 - servo1..4 = 액션 a1..a4 그대로(-1~1), 순서 FWD/LEFT/AFT/RIGHT (01-avionics §1)
-- throttle  = 0~1 (환경 내부 변환과 같은 값)
+- throttle  = 0-1, 변화율 제한(#120) 뒤 환경이 실제로 쓴 값(step()의 info["throttle"])
 - qw..qz    = ZYX 오일러각에서 계산한 쿼터니언 (§5-3, 뷰어의 짐벌락 회피용)
 - batt_v, rpm 은 시뮬레이션에 없어서 비워 둔다
 - reward    = 그 행의 상태에서 액션을 낸 뒤 받은 보상. 마지막 행(최종 상태)은 비어 있다
@@ -113,8 +113,8 @@ def run_episode(env, policy, mode, seed):
         action = np.clip(np.asarray(policy(obs), dtype=np.float32), -1, 1)
         row = state_row(round(step * env.dt * 1000), mode, obs)
         row.update({f"servo{i + 1}": float(action[i]) for i in range(4)})
-        row["throttle"] = float((action[4] + 1.0) / 2.0)
-        obs, reward, terminated, truncated, _ = env.step(action)
+        obs, reward, terminated, truncated, info = env.step(action)
+        row["throttle"] = float(info["throttle"])   # 정책 명령이 아니라 변화율 제한 뒤 값(#120)
         row["reward"] = float(reward)
         total += reward
         rows.append(row)
