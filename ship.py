@@ -595,7 +595,10 @@ def review_records():
         err = " / ".join(line.strip() for line in (r.stderr or "").splitlines() if line.strip())
         return None, (f"이 브랜치의 PR을 읽지 못했다 ({err or f'exit {r.returncode}'}). "
                       "PR이 없으면 PR을 연 뒤에 리뷰를 돌린다. 그러면 PR·이슈 기록도 넘긴다")
-    pr = json.loads(r.stdout)
+    try:
+        pr = json.loads(r.stdout)
+    except ValueError:
+        return None, "이 브랜치의 PR 정보를 읽지 못했다 (gh pr view가 JSON이 아닌 출력을 냈다)"
     marker = secrets.token_hex(4)
     repo = pr["url"].rsplit("/pull/", 1)[0] + "/"
     closing = [ref["number"] for ref in pr.get("closingIssuesReferences") or []

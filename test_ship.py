@@ -444,6 +444,11 @@ class ReviewRecordsTest(unittest.TestCase):
         self.assertIn('PR을 읽지 못했다 (no pull requests found for branch "infra/1")', why)
         with mock.patch.object(ship.shutil, "which", lambda name: None):
             self.assertEqual(ship.review_records(), (None, "gh가 없다"))
+        # gh가 0으로 끝나도 출력이 JSON이 아니면 멈추지 않고 기록 없이 리뷰한다.
+        bad = mock.Mock(return_value=subprocess.CompletedProcess([], 0, "not json", ""))
+        text, why = run_records(bad)
+        self.assertIsNone(text)
+        self.assertIn("JSON이 아닌 출력", why)
 
 
 class CmdReviewTest(unittest.TestCase):
