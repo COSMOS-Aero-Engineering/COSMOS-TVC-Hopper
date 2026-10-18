@@ -21,7 +21,7 @@ python tasks.py check
 cd sim/sim_stage1; python pd_gate.py --model hopper_attitude_ppo.zip
 ```
 
-정상 결과: `check`가 `전부 통과`로 끝나고, `pd_gate.py`가 PD 2.8°, PPO 13.9° 표를 낸다.
+정상 결과: `check`가 `전부 통과`로 끝나고, `pd_gate.py`가 PD 2.5°(평균 리턴 -4.82), PPO 13.9°(-32.25) 표를 낸다. #98이 seed→표본 대응을 바꿨기 때문에 #98 전 main(04867cb, be2e1ac에서 확인)에서는 PD 2.8°(-5.14), PPO 14.0°(-33.13)였다.
 
 ## 이어서 할 일
 

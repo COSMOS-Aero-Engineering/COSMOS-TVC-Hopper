@@ -21,7 +21,7 @@
 | 민찬·지훈 | 서보·배터리·Teensy 실측 CAD 반영 | `cad/cg/` 초안(z_cg 65.7 mm, 토크 팔 약 102 mm)의 추정 행을 CAD·저울 실측으로 바꾸고 결과를 준원에게 전달(#21의 `vane_arm_l`). 남은 서보·커플러 치수 실측 | PRD #26 · [26-cad-cg](../tasks/26-cad-cg.md) |
 | 민우 | KiCad 스키매틱 1차 | 회로도의 BNO085 SPI 연결을 정정된 핀맵과 대조: **ADDR/MOSI → 11, SDA/MISO → 12, SCL/SCK → 13**. ERC 실행 | PRD #26 · [26-kicad-imu-nets](../tasks/26-kicad-imu-nets.md) |
 | 경환 (엔지니어링, 10/17 합류) | 없음 | [처음 20분](#처음-20분)과 아래 첫 과제부터. 그다음 시우·재후와 #28 실물 시험(IMU 축·부호, DShot)을 같이 한다. #34(요 토크 팔)는 PR #63 리뷰 결과를 시우·준원과 확인한다 | PRD #28, #34 · [28-imu-axis](../tasks/28-imu-axis.md), [28-dshot-bench](../tasks/28-dshot-bench.md) |
-| 무결 (소프트웨어, 10/17 합류) | 없음 | [처음 20분](#처음-20분)과 아래 첫 과제부터. 그다음 #90: PPO가 PD보다 못한 원인을 가설 하나씩 바꿔 시험하고 표로 남긴다(PPO 기울기 13.9° vs PD 2.8°). 질문은 준원에게 | #90 · [27-sim-vane-authority](../tasks/27-sim-vane-authority.md) |
+| 무결 (소프트웨어, 10/17 합류) | 없음 | [처음 20분](#처음-20분)과 아래 첫 과제부터. 그다음 #90: PPO가 PD보다 못한 원인을 가설 하나씩 바꿔 시험하고 표로 남긴다(#98 뒤 평가 seed 0-199에서 PPO 기울기 13.9° vs PD 2.5°). 질문은 준원에게 | #90 · [27-sim-vane-authority](../tasks/27-sim-vane-authority.md) |
 | 민찬 (부장) | PR 정리, 확장 트랙 A/B 택1 원칙 확정 | 3D프린트 외주 발주(조립 일정의 병목), 실험 A(EDF 추력곡선) 안전 진행 계획 | PRD #26 |
 
 ### AI에게 내 과제를 물어볼 때
