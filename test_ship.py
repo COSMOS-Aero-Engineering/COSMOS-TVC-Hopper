@@ -217,31 +217,65 @@ class LinkTest(unittest.TestCase):
 
 
 class CmdTest(unittest.TestCase):
-    def run_wt(self, link, existing):
-        """cmd_wt를 git·gh 없이 돌린다. stdout 마지막 줄, stderr 줄 목록, worktree 경로를 돌려준다."""
+    def call_wt(self, link, existing, labels=()):
+        """cmd_wt를 git·gh 없이 돌린다. 종료 코드, stdout, stderr, 부른 명령, link_issue 가짜, 경로를 돌려준다."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"
             path = Path(tmp) / "repo-wt" / "issue-7"
             if existing:
                 path.mkdir(parents=True)
+            calls = []
 
             def fake_call(cmd, check=True, capture=False, cwd=None):
+                calls.append([str(part) for part in cmd])
                 if cmd[:2] == ["git", "rev-parse"]:
                     out = str(root / ".git")
                 elif cmd[:3] == ["gh", "issue", "view"]:
-                    out = json.dumps({"title": "[infra] x", "labels": [], "state": "OPEN"})
+                    out = json.dumps({"title": "[infra] x", "state": "OPEN",
+                                      "labels": [{"name": name} for name in labels]})
                 else:
                     out = "infra/7"
                 return subprocess.CompletedProcess(cmd, 0, out + "\n", "")
 
             out, err = io.StringIO(), io.StringIO()
+            rc = 0
             with mock.patch.object(ship, "ensure_gh_login"), \
                     mock.patch.object(ship, "call", fake_call), \
                     mock.patch.object(ship, "link_issue", side_effect=link) as linked, \
                     redirect_stdout(out), redirect_stderr(err):
-                ship.cmd_wt(argparse.Namespace(issue=7, tag=None))
-            linked.assert_called_once_with(7, root)
-            return out.getvalue().splitlines()[-1], err.getvalue().splitlines(), str(path)
+                try:
+                    ship.cmd_wt(argparse.Namespace(issue=7, tag=None))
+                except SystemExit as e:
+                    rc = e.code
+            return rc, out.getvalue(), err.getvalue(), calls, linked, root, path
+
+    def run_wt(self, link, existing):
+        """정상 경로. stdout 마지막 줄, stderr 줄 목록, worktree 경로를 돌려준다."""
+        rc, out, err, _, linked, root, path = self.call_wt(link, existing)
+        self.assertEqual(rc, 0, err)
+        linked.assert_called_once_with(7, root)
+        return out.splitlines()[-1], err.splitlines(), str(path)
+
+    def test_wt_stops_on_prd_issue(self):
+        # PRD 번호로 브랜치를 만들면 여러 명이 같은 브랜치를 쓴다(#52). worktree도 잇기도 하지 않는다.
+        for existing in (False, True):
+            with self.subTest(existing=existing):
+                rc, out, err, calls, linked, _, _ = self.call_wt(lambda *_: 0, existing,
+                                                                 labels=("prd", "cad"))
+                self.assertEqual(rc, 1)
+                self.assertEqual(out, "")
+                self.assertIn("PRD(라벨 prd)", err)
+                self.assertIn("gh issue create", err)
+                self.assertFalse(any("worktree" in cmd for cmd in calls), calls)
+                self.assertFalse(any("branch" in cmd for cmd in calls), calls)
+                linked.assert_not_called()
+
+    def test_wt_continues_on_non_prd_label(self):
+        rc, out, err, calls, linked, root, path = self.call_wt(lambda *_: 0, False, labels=("cad",))
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(out.splitlines()[-1], str(path))
+        self.assertTrue(any(cmd[3:5] == ["worktree", "add"] for cmd in calls), calls)
+        linked.assert_called_once_with(7, root)
 
     def test_wt_link_failure_does_not_block_worktree(self):
         for existing in (False, True):
