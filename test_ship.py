@@ -263,5 +263,144 @@ class CmdTest(unittest.TestCase):
             self.assertEqual(stop.exception.code, rc)
 
 
+REPO_URL = "https://github.com/o/r"
+
+
+def record(number, body="", pr=False, comments=()):
+    """`gh issue view --json RECORD_FIELDS` 응답."""
+    kind = "pull" if pr else "issues"
+    return {"number": number, "title": f"t{number}", "state": "OPEN",
+            "url": f"{REPO_URL}/{kind}/{number}", "author": {"login": "a"},
+            "createdAt": "2026-10-15T00:00:00Z", "body": body,
+            "comments": [{"author": {"login": "c"}, "createdAt": "2026-10-16T00:00:00Z", "body": b}
+                         for b in comments]}
+
+
+class FakeReviewGh:
+    """review_records가 부르는 gh 명령(`gh pr view`, `gh issue view`)에 정한 응답을 준다."""
+
+    def __init__(self, branch_pr, *records, closing=()):
+        self.branch_pr = branch_pr
+        self.records = {r["number"]: r for r in records}
+        self.closing = closing
+        self.calls = []
+
+    def __call__(self, cmd, check=True, capture=False, cwd=None, input=None):
+        self.calls.append(cmd)
+        if cmd[:3] == ["gh", "pr", "view"] and cmd[3] == "--json":
+            if self.branch_pr is None:
+                return subprocess.CompletedProcess(cmd, 1, "", "no pull requests found")
+            pr = self.records[self.branch_pr]
+            out = {"number": pr["number"], "url": pr["url"], "body": pr["body"],
+                   "closingIssuesReferences": [{"number": n, "url": u} for n, u in self.closing]}
+        elif cmd[:3] == ["gh", "pr", "view"]:
+            out = {"mergedAt": "2026-10-16T00:25:42Z",
+                   "commits": [{"oid": "6714d86abc", "authoredDate": "2026-10-15T11:48:33Z",
+                                "committedDate": "2026-10-15T11:48:33Z", "messageHeadline": "h"}]}
+        elif cmd[:3] == ["gh", "issue", "view"] and int(cmd[3]) in self.records:
+            out = self.records[int(cmd[3])]
+        else:
+            return subprocess.CompletedProcess(cmd, 1, "", "Not Found")
+        return subprocess.CompletedProcess(cmd, 0, json.dumps(out), "")
+
+    def viewed(self):
+        return [int(c[3]) for c in self.calls if c[:3] == ["gh", "issue", "view"]]
+
+
+def run_records(fake):
+    with mock.patch.object(ship, "call", fake), \
+            mock.patch.object(ship.shutil, "which", lambda name: name):
+        return ship.review_records()
+
+
+class ReviewRecordsTest(unittest.TestCase):
+    def test_pr_closing_issue_and_referenced_records(self):
+        fake = FakeReviewGh(
+            200,
+            record(200, "Closes #167\n근거: PR #19, #24, org/repo#5, #200", pr=True,
+                   comments=("리뷰 댓글",)),
+            record(167, "PR #162(#128) 감사에서 찾았다.", comments=("claimed by infra/167",)),
+            record(19, "업로드 2026-10-15", pr=True), record(24, "이슈 24"),
+            record(162, "PR 162", pr=True), record(128, "이슈 128"),
+            closing=((167, f"{REPO_URL}/issues/167"),))
+        text, summary = run_records(fake)
+        self.assertEqual(summary, "PR #200; issues it closes: #167; "
+                                  "referenced in those bodies: #19, #24, #162, #128")
+        # 다른 저장소 참조(org/repo#5)는 읽지 않는다. 이미 읽은 번호는 다시 읽지 않는다.
+        self.assertEqual(fake.viewed(), [200, 167, 19, 24, 162, 128])
+        for part in ('<github_record kind="pr" number="200">\ntitle: t200', "Closes #167",
+                     "--- comment by c at 2026-10-16T00:00:00Z ---\n리뷰 댓글",
+                     '<github_record kind="issue" number="167">', "claimed by infra/167",
+                     '<github_record kind="pr" number="19">', "업로드 2026-10-15",
+                     "merged: 2026-10-16T00:25:42Z", "commit 6714d86 authored 2026-10-15T11:48:33Z",
+                     '<github_record kind="issue" number="24">'):
+            with self.subTest(part=part):
+                self.assertIn(part, text)
+        self.assertNotIn('number="5"', text)
+        self.assertEqual(text.count("<github_record "), text.count("</github_record>"))
+
+    def test_closing_issue_in_other_repo_is_skipped(self):
+        fake = FakeReviewGh(200, record(200, "본문", pr=True), record(7, "이 저장소 7"),
+                            closing=((7, "https://github.com/x/y/issues/7"),))
+        text, summary = run_records(fake)
+        self.assertEqual(fake.viewed(), [200])
+        self.assertIn("issues it closes: -", summary)
+
+    def test_missing_reference_is_skipped(self):
+        fake = FakeReviewGh(200, record(200, "#999 #24", pr=True), record(24, "이슈 24"))
+        _, summary = run_records(fake)
+        self.assertIn("referenced in those bodies: #24", summary)
+
+    def test_reference_limit(self):
+        body = " ".join(f"#{n}" for n in range(1, ship.MAX_REFERENCED + 4))
+        fake = FakeReviewGh(500, record(500, body, pr=True),
+                            *(record(n) for n in range(1, ship.MAX_REFERENCED + 4)))
+        _, summary = run_records(fake)
+        self.assertEqual(len(fake.viewed()), 1 + ship.MAX_REFERENCED)
+        self.assertIn(f"not fetched (over {ship.MAX_REFERENCED}): #21, #22, #23", summary)
+
+    def test_no_pr_or_no_gh(self):
+        text, why = run_records(FakeReviewGh(None))
+        self.assertIsNone(text)
+        self.assertIn("PR을 찾지 못했다", why)
+        with mock.patch.object(ship.shutil, "which", lambda name: None):
+            self.assertEqual(ship.review_records(), (None, "gh가 없다"))
+
+
+class CmdReviewTest(unittest.TestCase):
+    def run_review(self, records, logged):
+        calls = []
+
+        def fake_call(cmd, check=True, capture=False, cwd=None, input=None):
+            calls.append((cmd, input))
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        out = io.StringIO()
+        with mock.patch.object(ship, "call", fake_call), \
+                mock.patch.object(ship, "review_records", return_value=records), \
+                mock.patch.object(ship, "logged_in", side_effect=logged), \
+                mock.patch.object(ship, "opencode_model", return_value="opencode/mimo-free"), \
+                redirect_stdout(out), self.assertRaises(SystemExit):
+            ship.cmd_review(argparse.Namespace(author="claude", base="origin/main"))
+        return calls[-1], out.getvalue()
+
+    def test_prompt_stays_scope_only_and_records_go_to_stdin(self):
+        prompt = ship.REVIEW_PROMPT.format(base="origin/main")
+        for logged, head in ((lambda c: c[0] == "codex", ["codex", "exec", "--sandbox", "read-only"]),
+                             (lambda c: False, ["opencode", "run"])):
+            with self.subTest(head=head):
+                (cmd, stdin), out = self.run_review(("# GitHub records", "PR #1"), logged)
+                self.assertEqual(cmd[:len(head)], head)
+                self.assertEqual(cmd[-1], prompt)
+                self.assertEqual(stdin, "# GitHub records")
+                self.assertIn("PR #1", out)
+
+    def test_without_records_review_still_runs(self):
+        (cmd, stdin), out = self.run_review((None, "gh가 없다"), lambda c: c[0] == "codex")
+        self.assertEqual(cmd[0], "codex")
+        self.assertIsNone(stdin)
+        self.assertIn("[주의]", out)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -38,6 +38,10 @@ SKILLS_SRC = ROOT / ".claude" / "skills"
 SKILLS_DST = ROOT / ".agents" / "skills"
 REVIEW_PROMPT = ("Review the changes on this branch against {base}. Report concrete findings "
                  "with file and line. Do not edit files.")
+# 리뷰어에게 표준 입력으로 넘기는 GitHub 기록(#167). Codex 리뷰어는 read-only 샌드박스라 네트워크가
+# 막혀 gh로 PR·이슈를 읽지 못한다. 기록은 리뷰 요청 문장과 따로 넘기고, 요청 문장은 범위만 둔다.
+RECORD_FIELDS = "number,title,state,url,author,createdAt,body,comments"
+MAX_REFERENCED = 20
 
 
 def die(msg):
@@ -57,10 +61,10 @@ def exe_of(name):
     return path
 
 
-def call(cmd, check=True, capture=False, cwd=None):
+def call(cmd, check=True, capture=False, cwd=None, input=None):
     say(cmd)
     r = subprocess.run([exe_of(cmd[0]), *map(str, cmd[1:])], cwd=cwd, text=True, encoding="utf-8",
-                       errors="replace", capture_output=capture)
+                       errors="replace", capture_output=capture, input=input)
     if check and r.returncode != 0:
         if capture:
             sys.stderr.write(r.stdout + r.stderr)
@@ -467,10 +471,123 @@ def opencode_model(author):
     die("OpenCode 무료 모델 중 쓸 수 있는 리뷰어를 못 찾았다. `opencode models`로 목록을 본다.")
 
 
+def gh_json(cmd):
+    """gh 명령의 JSON 출력을 읽는다. 실패하면 None."""
+    r = call(cmd, check=False, capture=True)
+    if r.returncode != 0:
+        return None
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return None
+
+
+def format_record(rec, pr_extra=None):
+    """이슈나 PR 하나를 리뷰어가 읽을 텍스트로 만든다. 본문과 댓글은 고치지 않고 그대로 둔다.
+
+    본문에도 `##` 제목이 있어서 기록 경계는 태그로 표시한다.
+    """
+    login = (rec.get("author") or {}).get("login", "?")
+    kind = "pr" if pr_extra is not None else "issue"
+    lines = [f'<github_record kind="{kind}" number="{rec["number"]}">',
+             f"title: {rec.get('title', '')}",
+             f"url: {rec.get('url', '')} | state: {rec.get('state', '')} | "
+             f"author: {login} | created: {rec.get('createdAt', '')}"]
+    if pr_extra is not None:
+        lines.append(f"merged: {pr_extra.get('mergedAt') or '-'}")
+        for c in pr_extra.get("commits") or []:
+            lines.append(f"commit {c.get('oid', '')[:7]} authored {c.get('authoredDate', '')} "
+                         f"committed {c.get('committedDate', '')}: {c.get('messageHeadline', '')}")
+    lines += ["", rec.get("body") or "(no body)"]
+    for c in rec.get("comments") or []:
+        who = (c.get("author") or {}).get("login", "?")
+        lines += ["", f"--- comment by {who} at {c.get('createdAt', '')} ---", c.get("body") or ""]
+    lines.append("</github_record>")
+    return "\n".join(lines)
+
+
+def fetch_record(n):
+    """이슈나 PR #n을 읽어 텍스트로 만든다. 못 읽으면 None."""
+    rec = gh_json(["gh", "issue", "view", str(n), "--json", RECORD_FIELDS])
+    if rec is None:
+        return None
+    pr_extra = None
+    if "/pull/" in (rec.get("url") or ""):
+        pr_extra = gh_json(["gh", "pr", "view", str(n), "--json", "mergedAt,commits"]) or {}
+    return format_record(rec, pr_extra)
+
+
+def body_refs(text):
+    """본문의 이 저장소 `#번호`를 나온 순서대로 돌려준다. 저장소 이름을 붙인 참조는 뺀다."""
+    return [int(n) for n in ISSUE_REF.findall(OTHER_REPO_REF.sub(" ", text or ""))]
+
+
+def ref_list(numbers):
+    return ", ".join(f"#{n}" for n in numbers) or "-"
+
+
+def review_records():
+    """이 브랜치 PR, 그 PR이 닫는 이슈, 두 본문이 가리키는 `#번호` 기록을 모은다(#167).
+
+    (기록 텍스트, 요약)을 돌려준다. gh가 없거나 이 브랜치의 PR이 없으면 (None, 이유)다.
+    본문이 가리키는 기록은 한 단계만, 최대 MAX_REFERENCED개를 읽는다.
+    """
+    if not shutil.which("gh"):
+        return None, "gh가 없다"
+    pr = gh_json(["gh", "pr", "view", "--json", "number,url,body,closingIssuesReferences"])
+    if pr is None:
+        return None, "이 브랜치의 PR을 찾지 못했다. PR을 연 뒤에 리뷰를 돌리면 PR·이슈 기록도 넘긴다"
+    repo = pr["url"].rsplit("/pull/", 1)[0] + "/"
+    closing = [ref["number"] for ref in pr.get("closingIssuesReferences") or []
+               if (ref.get("url") or "").startswith(repo)]
+    texts, parts, seen = [pr.get("body")], [], {pr["number"]}
+    first = fetch_record(pr["number"])
+    if first is None:
+        return None, f"PR #{pr['number']}을 읽지 못했다"
+    parts.append(first)
+    read_closing = []
+    for n in closing:
+        if n in seen:
+            continue
+        seen.add(n)
+        rec = gh_json(["gh", "issue", "view", str(n), "--json", RECORD_FIELDS])
+        if rec is not None:
+            texts.append(rec.get("body"))
+            parts.append(format_record(rec))
+            read_closing.append(n)
+    refs = []
+    for text in texts:
+        for n in body_refs(text):
+            if n not in seen and n not in refs:
+                refs.append(n)
+    skipped = refs[MAX_REFERENCED:]
+    read_refs = []
+    for n in refs[:MAX_REFERENCED]:
+        text = fetch_record(n)
+        if text is not None:
+            parts.append(text)
+            read_refs.append(n)
+    summary = (f"PR #{pr['number']}; issues it closes: {ref_list(read_closing)}; "
+               f"referenced in those bodies: {ref_list(read_refs)}")
+    if skipped:
+        summary += f"; not fetched (over {MAX_REFERENCED}): {ref_list(skipped)}"
+    header = ("# GitHub records for this branch\n\n"
+              "ship.py fetched these with gh before the review, because the review sandbox may not "
+              f"reach GitHub. Records: {summary}.\n")
+    return header + "\n\n" + "\n\n".join(parts) + "\n", summary
+
+
 def cmd_review(a):
     author = family(a.author)
     prompt = REVIEW_PROMPT.format(base=a.base)
     call(["git", "fetch", "origin", "--quiet"])
+    # 리뷰어가 PR·이슈를 직접 읽지 못해도 대조할 수 있게 기록을 표준 입력으로 넘긴다(#167).
+    # codex exec·claude -p·opencode run 셋 다 인자의 요청 문장에 표준 입력을 붙여 읽는다.
+    records, summary = review_records()
+    if records is None:
+        print(f"[주의] PR·이슈 기록을 리뷰어에게 넘기지 않는다: {summary}", flush=True)
+    else:
+        print(f"리뷰어에게 표준 입력으로 넘기는 기록: {summary}", flush=True)
     # 리뷰 요청에는 범위만 넣는다(AGENTS.md §작업 순서 6). 힌트나 체크리스트를 넣지 않는다.
     if author != "openai" and logged_in(["codex", "login", "status"]):
         reviewer, cmd = "codex", ["codex", "exec", "--sandbox", "read-only", prompt]
@@ -480,7 +597,7 @@ def cmd_review(a):
         model = opencode_model(author)
         reviewer, cmd = model, ["opencode", "run", "--agent", "plan", "-m", model, prompt]
     print(f"작성자 계열: {author} / 리뷰어: {reviewer}\n", flush=True)
-    r = call(cmd, check=False)
+    r = call(cmd, check=False, input=records)
     print(f"\nPR 템플릿 \"교차 리뷰\"에 적는다: `{reviewer}: 지적 N건, 고침 <커밋> / "
           "받아들이지 않음 <이유>`")
     sys.exit(r.returncode)
