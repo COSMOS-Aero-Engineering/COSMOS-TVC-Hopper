@@ -50,6 +50,12 @@ alpha_max_deg: 10    # 선형 근사 유효 범위 (논문 명시값, 서보 물
 # 아래 1.1e-6은 목표 정적추력을 중간값(10N)으로 잡고 역산한 잠정값 — 여전히 PLACEHOLDER다.
 # 실험 A(EDF 추력곡선 실측)가 나오면 반드시 교체할 것.
 Kf: 1.1e-6           # PLACEHOLDER(역산값), Ft = Kf * omega_t_equiv^2 (omega_t_equiv는 실제 rpm 아니고 throttle 기반 임시 스케일)
+# omega_t_per_throttle: 스로틀 → 추력 환산 상수. omega_t_equiv = throttle(0-1) * omega_t_per_throttle.
+#   단위는 임의 단위다. omega_t_equiv는 실제 rpm도 rad/s도 아니고 throttle을 키운 값일 뿐이다.
+#   Kf 1.1e-6은 이 값 3000을 전제로 역산했다: 100% 스로틀 Ft = Kf * 3000^2 = 9.9 N.
+#   둘 중 하나만 바꾸면 최대 추력이 바뀐다. hopper_aviary.py, yaw_check.py, connectome/authority.py가 이 값을 읽는다(#87).
+#   실험 A 뒤 실제 회전수 기반 추력 모델로 Kf와 함께 바꾼다
+omega_t_per_throttle: 3000.0   # 임의 단위(실제 rpm 아님), PLACEHOLDER
 
 # --- 도메인 랜덤화 (매 에피소드마다 아래 비율 범위 안에서 물리 상수를 무작위로 흔들어서 학습)
 #     목적: 지금 값들이 전부 PLACEHOLDER라 정확한 값을 모름 → 학습된 정책이 "이 근처 어딘가"의

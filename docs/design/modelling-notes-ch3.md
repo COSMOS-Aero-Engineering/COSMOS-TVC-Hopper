@@ -39,8 +39,8 @@ Chapter 3 "Modelling" (원문 18–33쪽 / PDF 24–39쪽) — `docs/design/refe
 추력:        Ft = Kf · ωt²                        (식 3.9)
 ```
 
-→ 코드 대응: `params.yaml`의 `Kf`. 단, **코드는 실제 RPM(ωt) 대신 `omega_t_equiv = throttle*3000`
-(throttle 기반 임시 스케일)을 씀** — 논문처럼 진짜 각속도가 아니다. **실험 A(EDF 추력곡선) 이후엔
+→ 코드 대응: `params.yaml`의 `Kf`. 단, **코드는 실제 RPM(ωt) 대신 `omega_t_equiv = throttle * omega_t_per_throttle`
+(throttle 기반 임시 스케일, 상수는 `params.yaml`, #87)을 씀** — 논문처럼 진짜 각속도가 아니다. **실험 A(EDF 추력곡선) 이후엔
 DShot에서 읽은 실제 RPM으로 교체해야 논문 식 그대로가 됨.** 모터 1차계(시상수 τt)는 지금 코드에
 아예 없음 — Stage 1 목표(파이프라인 검증)엔 불필요하다고 판단해 생략된 것으로 보임, 실기 이식 전엔
 넣을지 검토.
@@ -168,7 +168,7 @@ Ch.4에서 LQR 게인을 설계한다. **우리 Stage 1은 이 선형화를 안 
 |---|---|---|
 | `φ,θ,ψ,ωx,ωy,ωz` | `phi,theta,psi,wx,wy,wz` (state) | 일치 |
 | `α1..α4` | `a1..a4` → `alpha` (action×alpha_max) | 일치 |
-| `ωt` | `omega_t_equiv = throttle*3000` | **근사 — 실제 RPM 아님, 실험 A 후 교체 필요** |
+| `ωt` | `omega_t_equiv = throttle * omega_t_per_throttle` (`params.yaml`) | **근사 — 실제 RPM 아님, 실험 A 후 교체 필요** |
 | `Kf` | `params.yaml: Kf` | PLACEHOLDER |
 | `Jxx,Jyy,Jzz` | `params.yaml: Jxx,Jyy,Jzz` | PLACEHOLDER |
 | `l` | `params.yaml: vane_arm_l` | PLACEHOLDER 0.104 m(CG 추정 68 mm + 피벗 36 mm). 예전 0.048은 링 반지름이라 정의와 달랐다(#21) |
