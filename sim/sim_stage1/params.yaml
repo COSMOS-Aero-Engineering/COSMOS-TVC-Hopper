@@ -100,7 +100,8 @@ omega_t_per_throttle: 3000.0   # 임의 단위(실제 rpm 아님), PLACEHOLDER
 #   결과와 한계(회전자 상수를 랜덤화하면 이 제한만으로는 yaw_check 3번 B가 불합격)는 modelling-notes-ch3.md §3에 있다.
 #   고도(#185): altitude_check.py가 세로 운동방정식을 옆에서 적분해 잰다. 0.25/s의 호버 고도 오차 최댓값은 33.4 cm로
 #   제한 없음 30.0 cm와 3.4 cm 차이다. 착지 속도 최댓값은 0.529 m/s(제한 없음 0.521 m/s, 목표 0.5 m/s)다. 0.125/s는
-#   호버에서 1.8 m 떨어지는 seed가 있다. 그래서 0.25/s를 유지한다. ArduPilot 기본 고도 게인 기준이다. 결과는 modelling-notes-ch3.md §3
+#   호버에서 1.8 m 위로 벗어나는 seed가 있다(Kf +20 %, 스로틀을 빨리 내리지 못한다). 그래서 0.25/s를 유지한다.
+#   ArduPilot 기본 고도 게인 기준이다. 결과는 modelling-notes-ch3.md §3
 throttle_slew_rate: 0.25   # 1/s, 가정(#120 요 측정 근거, #185 고도 확인)
 
 # --- 도메인 랜덤화 (매 에피소드마다 아래 비율 범위 안에서 물리 상수를 무작위로 흔들어서 학습)
