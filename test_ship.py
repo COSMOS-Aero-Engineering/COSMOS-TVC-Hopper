@@ -324,7 +324,7 @@ class ReviewRecordsTest(unittest.TestCase):
             record(162, "PR 162", pr=True), record(128, "이슈 128"),
             closing=((167, f"{REPO_URL}/issues/167"),))
         text, summary = run_records(fake)
-        self.assertEqual(summary, "PR #200; issues it closes: #167; "
+        self.assertEqual(summary, "PR #200; closing issues: #167; "
                                   "referenced in those bodies: #19, #24, #162, #128")
         # 다른 저장소 참조(org/repo#5)는 읽지 않는다. 이미 읽은 번호는 다시 읽지 않는다.
         self.assertEqual(fake.viewed(), [200, 167, 19, 24, 162, 128])
@@ -344,12 +344,22 @@ class ReviewRecordsTest(unittest.TestCase):
                             closing=((7, "https://github.com/x/y/issues/7"),))
         text, summary = run_records(fake)
         self.assertEqual(fake.viewed(), [200])
-        self.assertIn("issues it closes: -", summary)
+        self.assertIn("closing issues: -", summary)
 
-    def test_missing_reference_is_skipped(self):
-        fake = FakeReviewGh(200, record(200, "#999 #24", pr=True), record(24, "이슈 24"))
-        _, summary = run_records(fake)
-        self.assertIn("referenced in those bodies: #24", summary)
+    def test_failed_fetches_are_reported(self):
+        # 읽지 못한 기록을 조용히 빼면 리뷰어는 근거가 빠진 것을 모른다.
+        fake = FakeReviewGh(200, record(200, "#999 #24", pr=True), record(24, "이슈 24"),
+                            closing=((167, f"{REPO_URL}/issues/167"),))
+        text, summary = run_records(fake)
+        self.assertIn("closing issues: -; referenced in those bodies: #24", summary)
+        self.assertIn("failed to fetch (not a GitHub record, or gh failed): #167, #999", summary)
+        self.assertIn(summary, text)
+
+    def test_failed_pr_metadata_is_not_shown_as_unmerged(self):
+        with mock.patch.object(ship, "gh_json", side_effect=[record(19, "본문", pr=True), None]):
+            text = ship.fetch_record(19)
+        self.assertIn("merged, commits: not available (gh pr view failed)", text)
+        self.assertNotIn("merged: -", text)
 
     def test_reference_limit(self):
         body = " ".join(f"#{n}" for n in range(1, ship.MAX_REFERENCED + 4))

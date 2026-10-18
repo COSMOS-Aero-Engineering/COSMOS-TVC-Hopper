@@ -485,7 +485,8 @@ def gh_json(cmd):
 def format_record(rec, pr_extra=None):
     """이슈나 PR 하나를 리뷰어가 읽을 텍스트로 만든다. 본문과 댓글은 고치지 않고 그대로 둔다.
 
-    본문에도 `##` 제목이 있어서 기록 경계는 태그로 표시한다.
+    본문에도 `##` 제목이 있어서 기록 경계는 태그로 표시한다. pr_extra가 `{}`이면 PR의 머지 시각과
+    커밋을 읽지 못한 것이다. 이때는 "머지 안 됨"으로 보이지 않게 읽지 못했다고 쓴다.
     """
     login = (rec.get("author") or {}).get("login", "?")
     kind = "pr" if pr_extra is not None else "issue"
@@ -493,7 +494,9 @@ def format_record(rec, pr_extra=None):
              f"title: {rec.get('title', '')}",
              f"url: {rec.get('url', '')} | state: {rec.get('state', '')} | "
              f"author: {login} | created: {rec.get('createdAt', '')}"]
-    if pr_extra is not None:
+    if pr_extra == {}:
+        lines.append("merged, commits: not available (gh pr view failed)")
+    elif pr_extra is not None:
         lines.append(f"merged: {pr_extra.get('mergedAt') or '-'}")
         for c in pr_extra.get("commits") or []:
             lines.append(f"commit {c.get('oid', '')[:7]} authored {c.get('authoredDate', '')} "
@@ -545,16 +548,18 @@ def review_records():
     if first is None:
         return None, f"PR #{pr['number']}을 읽지 못했다"
     parts.append(first)
-    read_closing = []
+    read_closing, failed = [], []
     for n in closing:
         if n in seen:
             continue
         seen.add(n)
         rec = gh_json(["gh", "issue", "view", str(n), "--json", RECORD_FIELDS])
-        if rec is not None:
-            texts.append(rec.get("body"))
-            parts.append(format_record(rec))
-            read_closing.append(n)
+        if rec is None:
+            failed.append(n)
+            continue
+        texts.append(rec.get("body"))
+        parts.append(format_record(rec))
+        read_closing.append(n)
     refs = []
     for text in texts:
         for n in body_refs(text):
@@ -564,11 +569,16 @@ def review_records():
     read_refs = []
     for n in refs[:MAX_REFERENCED]:
         text = fetch_record(n)
-        if text is not None:
+        if text is None:
+            failed.append(n)
+        else:
             parts.append(text)
             read_refs.append(n)
-    summary = (f"PR #{pr['number']}; issues it closes: {ref_list(read_closing)}; "
+    # "closes: #n"처럼 쓰면 이 요약을 PR 본문에 옮겼을 때 GitHub이 #n을 닫는 이슈로 읽는다.
+    summary = (f"PR #{pr['number']}; closing issues: {ref_list(read_closing)}; "
                f"referenced in those bodies: {ref_list(read_refs)}")
+    if failed:
+        summary += f"; failed to fetch (not a GitHub record, or gh failed): {ref_list(failed)}"
     if skipped:
         summary += f"; not fetched (over {MAX_REFERENCED}): {ref_list(skipped)}"
     header = ("# GitHub records for this branch\n\n"
