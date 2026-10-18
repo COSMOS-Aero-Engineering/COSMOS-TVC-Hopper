@@ -169,7 +169,7 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
 python ship.py wt 21                     # 이슈 #21용 폴더와 브랜치(sim/21)를 최신 main에서 만든다
 cd ../COSMOS-TVC-Hopper-wt/issue-21      # 위 명령이 출력한 폴더로 이동
 # ... 작업 ...
-python tasks.py check                    # CI가 볼 걸 미리 확인
+python tasks.py check                    # CI sim job의 check 단계와 같은 검사 (CI 전체는 아님)
 git add -A
 git commit -m "[sim] params.yaml 추력 상수 실측값 반영"
 git push -u origin HEAD
@@ -177,6 +177,10 @@ gh pr create --base main --reviewer junwonkim07
 # gh가 없으면: push 후 터미널에 뜨는 링크를 열어 웹에서 PR 생성 → 우측 Reviewers에 junwonkim07
 # 일반 부원은 CI 통과 + 김민찬 또는 김준원의 Approve를 기다린다.
 ```
+
+`check`는 CI 전체가 아니다. CI는 `check` 말고도 학습 자료 목록·내부 링크 검사와 펌웨어 PlatformIO 빌드를 따로 돌린다.
+이 둘은 `check`에 없다. 명령은 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)의 각 단계에 있다.
+`check`가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다.
 
 브랜치 이름은 `ship.py wt`가 만드는 `<커밋 태그>/<이슈 번호>` 형태다. 예: `fw/24`, `docs/30`.
 태그는 이슈 제목의 `[태그]`에서 정한다. 머지와 원격 브랜치 삭제는 김민찬 또는 김준원이 처리한다.
