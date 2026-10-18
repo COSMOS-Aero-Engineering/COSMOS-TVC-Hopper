@@ -48,10 +48,13 @@ Thumbs.db
 
 # KiCad 자동 백업과 캐시 (#75). 커밋 대상 아님. kicad/ 아래에서만 무시한다
 # .history/: KiCad 10 기본 자동 백업(증분). 저장·자동 저장마다 스냅숏을 쌓는 git 저장소다
-# *-backups/: 백업 형식이 ZIP일 때 생기는 폴더(KiCad 9 기본). 예: cosmos-avionics-backups/
+# *-backups/: 백업 형식이 ZIP일 때 생기는 폴더. 예: cosmos-avionics-backups/
+#   KiCad 9의 기본 형식이고, KiCad 9 설정을 가져온 KiCad 10도 ZIP을 쓴다
+# _autosave-*: ZIP 형식에서 저장하지 않은 변경을 몇 초 뒤 쓰는 파일. 저장하면 지워진다
 # fp-info-cache: KiCad 9 PCB 편집기가 닫을 때 쓰는 풋프린트 목록 캐시. KiCad 10.0.7에서는 생기지 않았다
 /kicad/**/.history/
 /kicad/**/*-backups/
+/kicad/**/_autosave-*
 /kicad/**/fp-info-cache
 
 # 예외: 외주 업체에 실제로 보낸 STL은 기록으로 남긴다
