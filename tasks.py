@@ -41,6 +41,7 @@ check가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다.
 순서로 실행할지"만 안다 — 둘을 섞지 않는다.
 """
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -49,6 +50,7 @@ import shutil
 import subprocess
 import sys
 import time
+import unicodedata
 from pathlib import Path
 
 def _survive_console_encoding():
@@ -619,6 +621,93 @@ def task_userpath():
     print(f"사용자 홈 폴더 경로 없음 - {len(files)}개 파일 검사")
 
 
+# 한국어 Windows에서 출력을 파일이나 파이프로 돌리면 파이썬은 cp949로 쓴다. 출력 문자열에
+# em dash(U+2014)처럼 cp949에 없는 글자가 있으면 UnicodeEncodeError로 멈춘다(#137, #147, #170, #169).
+# CI는 Linux(UTF-8)에서 돌아서 이 결함을 보지 못한다. cp949 작업이 이것을 막는다(#171).
+# 범위는 부원 PC에서 돌 수 있는 저장소의 파이썬 파일이다. .agents/skills는 정본(.claude/skills)의
+# 복사본이라 뺀다. skills 작업이 두 폴더가 같은지 본다.
+CP949_SCAN = ["*.py", "sim/**/*.py", ".claude/skills/**/*.py", "kicad/_tools/*.py", "cad/**/*.py",
+              "web/tools/*.py", "docs/learning/**/*.py", "docs/design/tools/*.py"]
+# 인자를 그대로 출력하는 호출. die는 tasks.py와 ship.py의 die()다. raise 뒤의 식도 본다.
+CP949_CALLS = {"print", "die", "sys.exit", "sys.stdout.write", "sys.stderr.write"}
+STE_KO_LINT = Path(".claude/skills/ste-ko/scripts/ste-ko-lint.py")
+
+
+def _call_name(func):
+    """호출 대상을 `sys.stdout.write` 같은 점 이름으로 바꾼다. 이름으로 쓸 수 없으면 None."""
+    parts = []
+    while isinstance(func, ast.Attribute):
+        parts.append(func.attr)
+        func = func.value
+    if not isinstance(func, ast.Name):
+        return None
+    parts.append(func.id)
+    return ".".join(reversed(parts))
+
+
+def find_non_cp949(source, filename="<source>"):
+    """출력하는 문자열 리터럴에서 cp949에 없는 글자를 찾는다. (줄, 칸, 글자, 자리) 목록을 돌려준다.
+
+    자리는 `print`, `raise` 같은 출력 자리의 이름이다. 줄과 칸은 1부터 세고, 글자가 든 리터럴이
+    시작하는 곳을 가리킨다. f-string의 고정된 부분도 본다. `file=` 인자는 출력할 글이 아니라서 뺀다.
+    변수에 담았다가 출력하는 글은 보지 않는다. 문법이 틀린 소스는 SyntaxError를 낸다.
+    """
+    # ast의 col_offset은 줄 앞부터 센 UTF-8 바이트 수다. 칸은 글자 수로 바꿔서 쓴다.
+    # 줄은 ast와 같이 \r\n, \r, \n에서 나눈다.
+    lines = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    hits = set()
+    for node in ast.walk(ast.parse(source, filename)):
+        if isinstance(node, ast.Call) and _call_name(node.func) in CP949_CALLS:
+            where = _call_name(node.func)
+            roots = [*node.args, *(k.value for k in node.keywords if k.arg != "file")]
+        elif isinstance(node, ast.Raise) and node.exc is not None:
+            where, roots = "raise", [node.exc]
+        else:
+            continue
+        for root in roots:
+            for lit in ast.walk(root):
+                if not (isinstance(lit, ast.Constant) and isinstance(lit.value, str)):
+                    continue
+                for ch in set(lit.value):
+                    try:
+                        ch.encode("cp949")
+                    except UnicodeEncodeError:
+                        line = lines[lit.lineno - 1].encode("utf-8")
+                        col = len(line[:lit.col_offset].decode("utf-8")) + 1
+                        hits.add((lit.lineno, col, ch, where))
+    return sorted(hits)
+
+
+def task_cp949():
+    """출력 문자열에 cp949에 없는 글자가 없는지 본다(#171).
+
+    userpath 작업과 같은 이유로 검사기의 단위 검사(test_cp949.py)를 먼저 돌린다.
+    찾은 글자는 그대로 출력하지 않고 U+2014 같은 코드로 쓴다. 이 출력도 cp949로 쓸 수 있어야 한다.
+    """
+    run([sys.executable, "-m", "unittest", "-q", "test_cp949"], cwd=ROOT)
+    files = [rel for rel, _ in collect_inputs(CP949_SCAN)]
+    hits = []
+    for rel in files:
+        text = (ROOT / rel).read_text(encoding="utf-8-sig")
+        try:
+            found = find_non_cp949(text, rel)
+        except SyntaxError as e:
+            die(f"{rel}:{e.lineno}: 파이썬 {sys.version.split()[0]}이 이 파일을 읽지 못했다: {e.msg}")
+        hits.extend((rel, *hit) for hit in found)
+    for rel, lineno, col, ch, where in hits:
+        name = unicodedata.name(ch, "")
+        print(f"{rel}:{lineno}:{col}: {where} 문자열에 cp949에 없는 글자 U+{ord(ch):04X} {name}",
+              flush=True)
+    if hits:
+        die(f"출력 문자열에서 cp949에 없는 글자 {len(hits)}건을 찾았다(#171).\n"
+            "     한국어 Windows에서 출력을 파일이나 파이프로 돌리면 UnicodeEncodeError로 멈춘다.\n"
+            "     em dash는 콜론이나 마침표로 바꾼다(AGENTS.md §교훈 2026-10-18).")
+    print(f"cp949에 없는 출력 글자 없음 - {len(files)}개 파일 검사")
+    # ste-ko-lint.py는 지적 메시지를 목록에 모았다가 출력해서 위 검사가 보지 못한다(#169).
+    # 그 파일의 --self-test가 메시지를 cp949로 인코딩해 본다.
+    run([sys.executable, STE_KO_LINT, "--self-test"], cwd=ROOT)
+
+
 def task_kicadver():
     """생성 회로도의 KiCad 형식 번호가 생성기와 같은지 본다(#139).
 
@@ -685,6 +774,10 @@ TASKS = {t.name: t for t in [
          inputs=["ship.py", "test_ship.py"]),
     Task("userpath", "kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 확인 (#96)", task_userpath,
          inputs=[*USER_PATH_SCAN, "test_userpath.py"]),
+    Task("cp949", "print·raise 등 출력 문자열에 cp949에 없는 글자가 없는지 확인 (#171)."
+         f" 범위: {', '.join(CP949_SCAN)}", task_cp949,
+         inputs=[*CP949_SCAN, "test_cp949.py",
+                 ".claude/skills/ste-ko/references/upstream/dictionary.md"]),
     Task("vcruntime", "Windows VC++ 런타임 확인의 단위 검사 - 가짜 응답으로 (#108)", task_vcruntime,
          inputs=["test_vcruntime.py"]),
     Task("kicadver", "생성 회로도의 KiCad 형식 번호가 생성기와 같은지 확인 (#139)", task_kicadver,
@@ -692,8 +785,8 @@ TASKS = {t.name: t for t in [
                  "test_kicad_version.py"]),
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
          " 단계 목록은 graph)", task_check,
-         deps=["skills", "shiptest", "userpath", "kicadver", "vcruntime", "compile", "sanity",
-               "gate", "yaw", "smoke", "conncheck"]),
+         deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "vcruntime", "compile",
+               "sanity", "gate", "yaw", "smoke", "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True, needs_torch=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
