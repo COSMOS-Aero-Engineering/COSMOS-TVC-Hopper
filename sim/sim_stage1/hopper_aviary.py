@@ -20,6 +20,7 @@ Week 2 물리 실험의 "구속 스탠드"(M1, 만능조인트로 위치를 고�
 EDF 회전자 항(#86): params.yaml의 rotor.enabled를 켜면 회전자 반작용 토크(−I_r·dΩ/dt, z축)와
 회전자 자이로 토크(−ω × h, 롤·피치)를 더한다. 기본값은 끔이다. 원논문은 반대로 도는 모터 2개라
 이 토크가 상쇄된다고 보고 뺐다(Jacobsen 2021 §3.2). 우리는 EDF 1개라 상쇄되지 않는다.
+켜면 추력도 1차 지연을 따르는 회전수 Ω에서 계산한다(Ft ∝ Ω², #122). 끄면 추력은 지연 없이 스로틀을 따른다.
 식과 상수 근거는 docs/design/modelling-notes-ch3.md §3의 "EDF 회전자 반작용·자이로 항".
 
 도메인 랜덤화: params.yaml의 domain_rand 설정에 따라 매 reset()마다 Jxx/Jyy/Jzz,
@@ -234,10 +235,18 @@ class HopperAttitudeEnv(gym.Env):
         alpha = np.array([a1, a2, a3, a4]) * self.alpha_max
         throttle = (throttle_norm + 1.0) / 2.0  # -1~1 -> 0~1
 
+        # 회전자 항을 켜면(#86) 회전수 Ω가 스로틀을 1차 지연으로 따라가고, 추력도 이 Ω에서 계산한다(#122).
+        # 추력에 쓰는 유효 스로틀 = Ω / omega_max. 끄면 지금처럼 스로틀을 그대로 쓴다.
+        if self.rotor_enabled:
+            rotor_omega0, rotor_omega1 = self._advance_rotor(throttle)
+            thrust_throttle = rotor_omega1 / self.rotor_omega_max
+        else:
+            thrust_throttle = throttle
+
         # 스로틀 -> 추력 (PLACEHOLDER 스케일: omega_t_equiv는 실제 rpm이 아니라
         # throttle을 상대적 회전수로 환산한 임시 값. 환산 상수는 params.yaml의 omega_t_per_throttle.
         # 실험 A 이후 실제 DShot 값 기준으로 교체)
-        omega_t_equiv = throttle * self.omega_t_per_throttle
+        omega_t_equiv = thrust_throttle * self.omega_t_per_throttle
         Ft = self.Kf * omega_t_equiv**2
 
         # 베인 선형 공력 근사 (modelling-notes-ch3.md §2.2, 식 3.16)
@@ -269,7 +278,7 @@ class HopperAttitudeEnv(gym.Env):
         theta += theta_dot * self.dt
         psi += psi_dot * self.dt
         if self.rotor_enabled:
-            wx, wy, wz = self._integrate_with_rotor(throttle, wx, wy, wz, wx_dot, wy_dot, wz_dot)
+            wx, wy, wz = self._integrate_with_rotor(rotor_omega0, rotor_omega1, wx, wy, wz, wx_dot, wy_dot, wz_dot)
         else:
             wx += wx_dot * self.dt
             wy += wy_dot * self.dt
@@ -291,24 +300,15 @@ class HopperAttitudeEnv(gym.Env):
 
         return self.state.copy(), float(reward), terminated, truncated, {}
 
-    def _integrate_with_rotor(self, throttle, wx, wy, wz, wx_dot, wy_dot, wz_dot):
-        """회전자 항을 넣어 바디 각속도를 한 스텝(dt) 적분한다(#86). step()이 rotor_enabled일 때만 부른다.
+    def _advance_rotor(self, throttle):
+        """회전자 회전수 Ω를 한 스텝(dt) 진행하고 (스텝 시작 Ω0, 스텝 끝 Ω1)을 rad/s로 돌려준다(#86, #122).
+        step()이 rotor_enabled일 때만 부른다.
 
-        식: 회전자를 품은 강체(gyrostat)의 각운동량 식
-            J·ω̇ = τ − ω × (J·ω) − ω × h − dh/dt,   h = s·I_r·Ω·e_z
-        반작용 휠 위성 식(Shahraki & Lessard 2024, arXiv:2409.19936 식 4b·4c)과 같은 꼴이다.
-        τ와 ω × (J·ω) 항은 step()이 이미 wx_dot·wy_dot·wz_dot에 넣었다. 여기서는 회전자 항 두 개만 더한다.
-
-        회전수 Ω: 목표 omega_max·throttle을 시상수 tau의 1차 지연으로 따라간다(가정, Jacobsen 2021 식 3.8 꼴).
-          에피소드 첫 스텝에서는 회전자가 이미 그 스로틀로 돌고 있었다고 둔다(가정). 구속 스탠드 시험은
-          팬을 돌린 상태에서 자세 교란을 주기 때문이다. 그래서 첫 스텝의 반작용은 0이다.
-        반작용(z축): τz = −s·I_r·(Ω1 − Ω0)/dt. 이 스텝에서 회전자가 얻은 각운동량만큼 바디가 잃는다.
-          베인 토크가 0이면 Jzz·ωz + s·I_r·Ω가 매 스텝 그대로다.
-        자이로(x·y축): τx = −h·ωy, τy = +h·ωx. 이 항만 사다리꼴(중점) 규칙으로 적분한다.
-          전진 오일러로 적분하면 스텝마다 회전 에너지가 (1 + (h·dt/J)²)배로 커져서 물리에 없는 발산이
-          생긴다(명목값에서 5초 뒤 각속도 약 4.2배). tvc-retro-propulsion의 rotor_reaction.py도 같은 이유로
-          중점 규칙을 쓴다. 사다리꼴 규칙은 자이로 항만 있을 때 ½·ωᵀJω를 그대로 지킨다.
-          h는 이 스텝의 평균 회전수 (Ω0 + Ω1)/2로 계산한다.
+        Ω는 목표 omega_max·throttle을 시상수 tau의 1차 지연으로 따라간다(가정, Jacobsen 2021 식 3.8 꼴).
+        스텝 동안 목표가 일정하다고 보고 1차 지연의 해석해로 진행한다: Ω1 = Ωc + (Ω0 − Ωc)·e^(−dt/tau).
+        에피소드 첫 스텝에서는 회전자가 이미 그 스로틀로 돌고 있었다고 둔다(가정). 구속 스탠드 시험은
+        팬을 돌린 상태에서 자세 교란을 주기 때문이다. 그래서 첫 스텝의 반작용은 0이다.
+        step()은 Ω1로 추력을 계산한다(#122). 그래서 tau = 0이면 추력이 회전자 항을 끈 경우와 같아진다.
         """
         omega_cmd = self.rotor_omega_max * float(throttle)
         if self.step_count == 0 or self.rotor_omega is None:
@@ -317,7 +317,25 @@ class HopperAttitudeEnv(gym.Env):
         decay = np.exp(-self.dt / self.rotor_tau) if self.rotor_tau > 0 else 0.0
         omega1 = omega_cmd + (omega0 - omega_cmd) * decay
         self.rotor_omega = omega1
+        return omega0, omega1
 
+    def _integrate_with_rotor(self, omega0, omega1, wx, wy, wz, wx_dot, wy_dot, wz_dot):
+        """회전자 항을 넣어 바디 각속도를 한 스텝(dt) 적분한다(#86). step()이 rotor_enabled일 때만 부른다.
+
+        식: 회전자를 품은 강체(gyrostat)의 각운동량 식
+            J·ω̇ = τ − ω × (J·ω) − ω × h − dh/dt,   h = s·I_r·Ω·e_z
+        반작용 휠 위성 식(Shahraki & Lessard 2024, arXiv:2409.19936 식 4b·4c)과 같은 꼴이다.
+        τ와 ω × (J·ω) 항은 step()이 이미 wx_dot·wy_dot·wz_dot에 넣었다. 여기서는 회전자 항 두 개만 더한다.
+
+        회전수 Ω0, Ω1: 이 스텝의 시작과 끝 회전수(rad/s). _advance_rotor()가 계산한다.
+        반작용(z축): τz = −s·I_r·(Ω1 − Ω0)/dt. 이 스텝에서 회전자가 얻은 각운동량만큼 바디가 잃는다.
+          베인 토크가 0이면 Jzz·ωz + s·I_r·Ω가 매 스텝 그대로다.
+        자이로(x·y축): τx = −h·ωy, τy = +h·ωx. 이 항만 사다리꼴(중점) 규칙으로 적분한다.
+          전진 오일러로 적분하면 스텝마다 회전 에너지가 (1 + (h·dt/J)²)배로 커져서 물리에 없는 발산이
+          생긴다(명목값에서 5초 뒤 각속도 약 4.2배). tvc-retro-propulsion의 rotor_reaction.py도 같은 이유로
+          중점 규칙을 쓴다. 사다리꼴 규칙은 자이로 항만 있을 때 ½·ωᵀJω를 그대로 지킨다.
+          h는 이 스텝의 평균 회전수 (Ω0 + Ω1)/2로 계산한다.
+        """
         s = self.rotor_spin_dir
         wz_new = wz + wz_dot * self.dt - s * self.rotor_inertia * (omega1 - omega0) / self.Jzz
 

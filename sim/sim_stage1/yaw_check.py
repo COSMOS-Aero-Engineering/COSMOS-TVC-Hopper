@@ -24,6 +24,10 @@
        해석해에서 (ωx, ωy)는 크기를 지키며 각속도 s·I_r·omega_max/Jxx로 +Z축 둘레를 돈다.
        |ω|는 상대오차 1e-4 안에서 그대로여야 한다. 0.3초 뒤 (ωx, ωy)는 해석해와
        사다리꼴 규칙의 위상 오차 한도(스텝당 (rate·dt)³/12 rad) 안에서 같아야 한다. ωz는 0이다.
+   다. 추력 지연(#122): 회전자 항을 켜면 추력도 지연된 회전수에서 나온다. 스로틀 1.0 → 0.75 계단 뒤
+       THRUST_PROBE_STEPS번째 스텝에 롤 명령을 주고 그 스텝의 Δω를 손계산과 상대오차 1e-4 안에서 비교한다.
+       손계산은 1차 지연의 해석해 u_k = 0.75 + 0.25·e^(−k·dt/tau)(u = Ω/omega_max)로 추력 Kf·(u_k·omega_t_per_throttle)²를 쓴다.
+       추력이 지연 없이 스로틀을 따르면(#122 전 모델) Δω가 (0.75/u_k)²배라서 이 검사가 실패한다.
 3. 요 PD (도메인 랜덤화 켬, 평가 seed 0-199)
    pd_gate.py의 롤·피치 PD에 요 PD(같은 게인 kp=8, kd=2)를 섞는다. 같은 seed로 두 스로틀 시나리오를 잰다.
      A: 스로틀 1.0 고정(#65와 같다). 반작용 토크는 0이고 자이로 항만 작용한다.
@@ -60,6 +64,7 @@ GYRO_W0 = 0.5           # rad/s, 자이로 손계산의 첫 롤 각속도
 GYRO_STEPS = 30         # 0.3 s
 NORM_TOL = 1e-4         # 자이로 손계산에서 |ω| 보존 허용 상대오차
 ROLL_STEP_RAD = 0.2     # 참고 지표(TC-2.5 꼴)의 첫 롤각
+THRUST_PROBE_STEPS = 5  # 추력 지연 손계산(#122): 계단 뒤 이 스텝째에 롤 명령을 준다. 명목 tau 0.05 s = 5 스텝
 
 # 베인 명령 [a1, a2, a3, a4, throttle(-1~1)]
 COMMANDS = {
@@ -83,8 +88,10 @@ def hand_geometry(p):
     return A_fin, c * (r1**2 - r0**2) / 2.0 / A_fin, np.pi * r1**2
 
 
-def hand_torque(p, action):
+def hand_torque(p, action, thrust_throttle=None):
     """베인 4장의 힘으로 몸체 토크 τ(N·m, 3벡터)를 손계산한다.
+
+    추력은 thrust_throttle(0-1)로 계산한다. 없으면 action의 스로틀을 쓴다(지연 없음).
 
     위치 pᵢ: 좌표계(AGENTS.md §프로젝트 한눈에)대로 베인 1-4는 +X, +Y, −X, −Y에 있다.
       z축에서 반경 r, 무게중심에서 아래로 l → pᵢ = (r cos θᵢ, r sin θᵢ, −l), θᵢ = 0°, 90°, 180°, 270°.
@@ -95,7 +102,7 @@ def hand_torque(p, action):
     A_fin, r, A_duct = hand_geometry(p)
     CL = p["CLalpha"] * A_fin / (2.0 * A_duct)
     alpha = np.asarray(action[:4], dtype=float) * np.deg2rad(p["alpha_max_deg"])
-    throttle = (action[4] + 1.0) / 2.0
+    throttle = (action[4] + 1.0) / 2.0 if thrust_throttle is None else thrust_throttle
     Ft = p["Kf"] * (throttle * p["omega_t_per_throttle"]) ** 2
     l = p["vane_arm_l"]
     tau = np.zeros(3)
@@ -248,6 +255,43 @@ def check_rotor_gyro(p, spin):
     return failures
 
 
+def check_thrust_lag(p, spin):
+    """다. 추력 지연(#122): 계단 뒤 THRUST_PROBE_STEPS번째 스텝에 롤 명령을 주고 Δω로 추력을 잰다.
+
+    그 스텝 전에는 베인이 0이고 무게중심 오프셋도 0이라 ωx = ωy = 0이다. ω가 h와 나란해서 자이로 항은
+    hand_delta_omega와 같은 꼴 (J − dt/2·[h]×)·Δω = dt·τ이다. h는 그 스텝의 평균 회전수로 계산한다.
+    z축에는 반작용 −s·I_r·(Ω_k − Ω_(k−1))/Jzz가 더해진다. 롤 명령은 τz를 만들지 않는다.
+    """
+    r = p["rotor"]
+    env = rotor_env(spin)
+    env.state = np.zeros(6, dtype=np.float32)
+    env.step(throttle_action(1.0))   # 첫 스텝: 회전자가 이미 omega_max로 돌고 있었다고 둔다(u = 1)
+    for _ in range(THRUST_PROBE_STEPS - 1):
+        env.step(throttle_action(THROTTLE_HOVER))
+    before = env.state.astype(float)
+    action = throttle_action(THROTTLE_HOVER, vanes=COMMANDS["롤 [1,0,1,0]"][:4])
+    obs, *_ = env.step(action)
+    got = obs[3:6].astype(float) - before[3:6]
+
+    decay = np.exp(-env.dt / r["tau"]) if r["tau"] > 0 else 0.0
+    u0, u1 = (THROTTLE_HOVER + (1.0 - THROTTLE_HOVER) * decay**k for k in (THRUST_PROBE_STEPS - 1, THRUST_PROBE_STEPS))
+    J = np.array([p["Jxx"], p["Jyy"], p["Jzz"]])
+    h = np.array([0.0, 0.0, spin * r["inertia"] * r["omega_max"] * 0.5 * (u0 + u1)])
+    want = np.linalg.solve(np.diag(J) - 0.5 * env.dt * cross_matrix(h), env.dt * hand_torque(p, action, u1))
+    want[2] -= spin * r["inertia"] * r["omega_max"] * (u1 - u0) / p["Jzz"]
+    no_lag = hand_torque(p, action)[0] / p["Jxx"] * env.dt   # 지연 없는 추력이면 나올 Δωx(참고)
+
+    where = f"추력 지연 spin_dir {spin:+d}"
+    print(f"   다. {where}: 계단 뒤 {THRUST_PROBE_STEPS}번째 스텝 u = Ω/omega_max = {u1:.4f}, "
+          f"Δω = {np.array2string(got, precision=5)}, 손계산 {np.array2string(want, precision=5)} rad/s "
+          f"(지연 없는 추력이면 Δωx ≈ {no_lag:.5f})")
+    failures = []
+    for axis, g, w in zip("xyz", got, want):
+        if not np.isfinite(g) or np.sign(g) != np.sign(w) or abs(g - w) > REL_TOL * abs(w):
+            failures.append(f"{where}: Δω{axis} = {g:.6g}, 손계산 {w:.6g} (추력이 지연된 회전수를 따르지 않음)")
+    return failures
+
+
 def check_rotor(p):
     r = p["rotor"]
     print("2. 회전자 항 손계산 (랜덤화 끔, 회전자 항 켬)")
@@ -258,6 +302,8 @@ def check_rotor(p):
         failures += check_rotor_reaction(p, spin)
     for spin in (1, -1):
         failures += check_rotor_gyro(p, spin)
+    for spin in (1, -1):
+        failures += check_thrust_lag(p, spin)
     print()
     return failures
 

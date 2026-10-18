@@ -17,7 +17,7 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 | `hopper_aviary.py` | **`HopperAttitudeEnv`** — 위치 구속(만능조인트) 상태에서 자세만 제어하는 Stage 1 환경. 뉴턴-오일러 강체 회전방정식(자이로스코픽 교차항 포함) + ZYX 오일러각 운동학을 numpy로 직접 적분. `docs/design/references/`의 논문 3장(Modelling)을 그대로 코드화한 것 |
 | `params.yaml` | 물리 상수. **CLalpha/vane_geometry/CD0/Kf/omega_t_per_throttle/mass/Jxx·Jyy·Jzz/vane_arm_l/rotor.\*(inertia·omega_max·tau·spin_dir)는 PLACEHOLDER** — 실험 A(EDF 추력곡선)·TC-0·TC-2·조립 후 실측 전까지는 추정값. 각 값의 계산 근거는 파일 주석에 있다(#27). 요 팔 r, 베인 잠긴 면적 A_fin, 배기 단면적 A_duct는 `vane_geometry`(잠김 구간 반경·시위) 하나에서 계산한다(#98, #117) |
 | `pd_gate.py` | **RL 학습 전 합격 기준**(#27): 도메인 랜덤화 켠 상태에서 PD(kp=8, kd=2)가 평가 seed 0~199에서 넘어짐 ≤ 5 %, 최종 기울기 중앙값 ≤ 5°인지. `--model`로 PPO도 같은 seed로 비교. `tasks.py check`가 매번 돌린다 |
-| `yaw_check.py` | **요 축 검사**(#65): `pd_gate.py`의 PD는 요 토크가 늘 0이라 요 경로를 못 본다. ① 베인 위치·힘 방향의 외적으로 손계산한 토크와 환경의 한 스텝 Δω를 비교한다(부호, 크기, 롤·피치 누설, 상수는 `params.yaml`에서 읽음). ② 회전자 항(#86) 손계산: 스로틀 계단에서 z축 각운동량 보존, 자유 세차를 해석해와 비교. ③ 요 PD를 섞으면 평가 seed 0-199에서 마지막 \|ψ\| ≤ 1°인지 본다. 스로틀 고정(A)과 계단 1.0 → 0.75(B)를 회전자 항 끔·켬으로 같은 seed에서 비교하고, 판정은 `rotor.enabled`를 따른다. `tasks.py check`가 매번 돌린다 |
+| `yaw_check.py` | **요 축 검사**(#65): `pd_gate.py`의 PD는 요 토크가 늘 0이라 요 경로를 못 본다. ① 베인 위치·힘 방향의 외적으로 손계산한 토크와 환경의 한 스텝 Δω를 비교한다(부호, 크기, 롤·피치 누설, 상수는 `params.yaml`에서 읽음). ② 회전자 항(#86) 손계산: 스로틀 계단에서 z축 각운동량 보존, 자유 세차와 추력 지연(#122)을 해석해와 비교. ③ 요 PD를 섞으면 평가 seed 0-199에서 마지막 \|ψ\| ≤ 1°인지 본다. 스로틀 고정(A)과 계단 1.0 → 0.75(B)를 회전자 항 끔·켬으로 같은 seed에서 비교하고, 판정은 `rotor.enabled`를 따른다. `tasks.py check`가 매번 돌린다 |
 | `sanity_check.py` | 환경이 안 깨졌는지 빠르게 확인(무작위 액션 20스텝) |
 | `train.py` | PPO(stable-baselines3) 학습 스크립트. 학습 seed 10000(평가 seed 0~199와 분리) |
 | `export_episode.py` | 에피소드 1회를 웹 대시보드 CSV 형식(`docs/design/02-web-dashboard-design.md` §4)으로 `episode_logs/`에 저장. 정책 `pd`(기준 PD)·`zero`·`ppo`, 옆에 시드·물리 상수·결과를 담은 `.meta.json`. 실물 시험 로그와 같은 3D 뷰어로 재생하기 위한 것 |
@@ -40,6 +40,7 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 - PLACEHOLDER 값을 실측치로 바꿀 때: **`params.yaml`만 교체, `hopper_aviary.py`는 안 건드림**
   (일부러 그렇게 분리해둔 것).
 - EDF 회전자 반작용·자이로 항(#86): `params.yaml`의 `rotor.enabled`로 켠다. 기본값은 끔이다.
+  켜면 추력도 1차 지연을 따르는 회전수에서 계산한다(Ft ∝ Ω², #122).
   회전자 관성·회전수·지연·회전 방향은 공개 자료로 잡은 추정값이고 랜덤화하지 않는다.
   켜면 스로틀 계단 1.0 → 0.75에서 요 PD가 불합격한다(`yaw_check.py` 3번 B). 켜기 전 대응은 #120.
   식, 상수 근거, 결과는 [`modelling-notes-ch3.md`](../docs/design/modelling-notes-ch3.md) §3의 "EDF 회전자 반작용·자이로 항".

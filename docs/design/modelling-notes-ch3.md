@@ -41,10 +41,10 @@ Chapter 3 "Modelling" (원문 18–33쪽 / PDF 24–39쪽) — `docs/design/refe
 
 → 코드 대응: `params.yaml`의 `Kf`. 단, **코드는 실제 RPM(ωt) 대신 `omega_t_equiv = throttle * omega_t_per_throttle`
 (throttle 기반 임시 스케일, 상수는 `params.yaml`, #87)을 씀** — 논문처럼 진짜 각속도가 아니다. **실험 A(EDF 추력곡선) 이후엔
-DShot에서 읽은 실제 RPM으로 교체해야 논문 식 그대로가 됨.** 추력에는 모터 1차계(시상수 τt)가 없다.
-추력은 지연 없이 스로틀에서 계산한다. 추력에도 지연을 넣을지는 #122에서 정한다. 회전자 회전수에는
-1차 지연(`params.yaml`의 `rotor.tau`)이 있다. 이 지연은 `rotor.enabled`를 켤 때만 쓰고, 회전자
-반작용·자이로 토크에만 들어간다(§3 "EDF 회전자 반작용·자이로 항", #86).
+DShot에서 읽은 실제 RPM으로 교체해야 논문 식 그대로가 됨.** 모터 1차계(시상수 τt)는 `rotor.enabled`를 켤 때만 쓴다.
+켜면 회전자 회전수 Ω가 1차 지연(`params.yaml`의 `rotor.tau`)으로 스로틀을 따라가고, 추력도 이 Ω에서 계산한다
+(Ft ∝ Ω², #122). 회전자 반작용·자이로 토크도 같은 Ω를 쓴다(§3 "EDF 회전자 반작용·자이로 항", #86).
+끄면(기본) 추력은 지연 없이 스로틀에서 계산한다.
 
 ### 2.2 베인 공력 모델 (§3.2.2) — ⚠️ 코드와 논문이 다른 지점
 
@@ -186,13 +186,37 @@ J·ω̇ = τ − ω × (J·ω) − ω × h − dh/dt
 남는 정상 요 토크는 실측으로 확인한다(#119).
 
 **회전수 모델(가정).** Ω는 목표 `omega_max`·throttle을 시상수 `tau`의 1차 지연으로 따라간다.
-환경의 추력은 Ft ∝ throttle²라서 Ft ∝ Ω²(논문 식 3.9)와 맞는다. `omega_t_equiv`(throttle·3000)는 추력 계산용
-임의 스케일이라 회전수로 쓰지 않는다. 같은 꼴의 모델: Jacobsen 식 3.8(1차계, 부록 A.4 τt = 0.0345 s),
+같은 꼴의 모델: Jacobsen 식 3.8(1차계, 부록 A.4 τt = 0.0345 s),
 tvc-retro-propulsion `propulsion_edf.py`(ω_target = throttle·ω_max, 1차 지연).
 - 에피소드 첫 스텝에서는 회전자가 이미 그 스로틀로 돌고 있었다고 둔다(가정). 구속 스탠드 시험은 팬을 돌린 상태에서
   자세 교란을 준다. 그래서 첫 스텝의 반작용은 0이다.
-- 추력은 지금처럼 지연 없이 스로틀에서 계산한다. 회전수와 추력의 지연이 서로 다르다(#122).
 - 회전수는 관측(obs)에 없다. 스위치를 켜면 정책이 못 보는 상태가 하나 생긴다(시상수 0.05 s).
+
+**추력과 회전수(#122 결정, 2026-10-18 차장 김준원).** 스위치를 켜면 추력도 지연된 회전수에서 계산한다.
+추력용 스위치를 따로 두지 않는다.
+
+```
+u  = Ω / omega_max                       유효 스로틀(0-1). 회전수가 다 따라가면 스로틀과 같다
+Ft = Kf · (u · omega_t_per_throttle)²    끈 경우의 식에서 throttle 자리에 u를 넣었다
+```
+
+- 물리로는 추력도 Ft ∝ Ω²라서 회전수와 같은 지연을 가진다(논문 식 3.8-3.9). arXiv 2504.07694는 추력 응답 지연을
+  넣은 것을 실물 이식의 핵심으로 적었다(`rl-open-source-survey.md` §4).
+- 추력은 스텝 끝 회전수 Ω1로 계산한다(`hopper_aviary.py`의 `_advance_rotor()`). 그래서 tau = 0이면 추력이 스위치를 끈
+  경우와 같다. 에피소드 첫 스텝은 회전자가 이미 돌고 있다고 두므로 이때도 같다.
+- 스위치를 끄면 추력은 지금처럼 스로틀에서 바로 계산한다. 환경 출력은 #122 전과 비트 단위로 같다
+  (seed 0-199, 무작위 행동·PD·스로틀 계단 PD 롤아웃의 SHA-256 비교, #122 PR).
+- `yaw_check.py` 2번 다: 스로틀 1.0 → 0.75 계단 뒤 5번째 스텝(명목 tau의 1배)에 롤 명령을 주고 Δω로 추력을 잰다.
+  해석해 u = 0.842에서 Δωx = 0.0907 rad/s다. 지연 없는 추력(u = 0.75)이면 0.0720 rad/s라서 검사가 실패한다.
+
+**`omega_t_per_throttle`과 `rotor.omega_max`의 관계.**
+- `omega_t_per_throttle`(3000)은 임의 단위다. `Kf`와 짝을 이뤄 최대 추력만 정한다: Kf·3000² = 9.9 N.
+- `rotor.omega_max`(3800 rad/s)는 회전수 추정값이다. 회전자 각운동량 h = s·I_r·Ω(반작용·자이로)에만 들어간다.
+- 추력 식은 u = Ω/omega_max만 쓴다. 목표 회전수가 omega_max·throttle이라 u는 omega_max와 상관없다.
+  그래서 omega_max를 바꿔도 추력은 바뀌지 않는다.
+- 두 상수를 함께 쓰면 회전수 기반 추력 계수가 나온다: Ft = Kf_Ω·Ω²,
+  Kf_Ω = Kf·(omega_t_per_throttle/omega_max)² = 1.1e-6 × (3000/3800)² = 6.86e-7 N/(rad/s)².
+  두 PLACEHOLDER에서 나온 값이라 실측값이 아니다. 실험 A에서 추력과 회전수를 함께 재면 이 값과 비교한다.
 
 **적분.** 자이로 항만 사다리꼴(중점) 규칙으로 적분한다. 나머지 항은 지금처럼 전진 오일러다.
 - 전진 오일러는 자이로 항이 있으면 스텝마다 회전 에너지를 (1 + (h·dt/J)²)배 키운다. 명목값에서 5초 동안 자유 세차를
@@ -272,7 +296,7 @@ Ch.4에서 LQR 게인을 설계한다. **우리 Stage 1은 이 선형화를 안 
 |---|---|---|
 | `φ,θ,ψ,ωx,ωy,ωz` | `phi,theta,psi,wx,wy,wz` (state) | 일치 |
 | `α1..α4` | `a1..a4` → `alpha` (action×alpha_max) | 일치 |
-| `ωt` | `omega_t_equiv = throttle * omega_t_per_throttle` (`params.yaml`) | **근사 — 실제 RPM 아님, 실험 A 후 교체 필요** |
+| `ωt` | `omega_t_equiv = throttle * omega_t_per_throttle` (`params.yaml`). 회전자 항을 켜면 throttle 대신 Ω/omega_max(#122) | **근사 — 실제 RPM 아님, 실험 A 후 교체 필요** |
 | `Kf` | `params.yaml: Kf` | PLACEHOLDER |
 | `Jxx,Jyy,Jzz` | `params.yaml: Jxx,Jyy,Jzz` | PLACEHOLDER |
 | `l` | `params.yaml: vane_arm_l` | PLACEHOLDER 0.104 m(CG 추정 68 mm + 피벗 36 mm). 예전 0.048은 링 반지름이라 정의와 달랐다(#21) |
