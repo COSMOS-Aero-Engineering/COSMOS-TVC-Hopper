@@ -8,7 +8,7 @@
 #   python tasks.py    검사·학습·빌드 실행 (내부에서 uv를 호출)
 #
 # 왜 워크스페이스인가: 지금은 멤버가 sim 하나지만, 곧 stage2 환경과 로그 분석 도구가
-# 따로 생긴다(AGENTS.md "소프트웨어 스택"). 그때 폴더마다 venv를 따로 만들면 부원 PC에서
+# 따로 생긴다(docs/design/03-control-pipeline-design.md §2). 그때 폴더마다 venv를 따로 만들면 부원 PC에서
 # gymnasium 버전이 갈라진다. 워크스페이스는 멤버가 몇 개든 uv.lock 하나로 버전을 통일한다.
 
 [tool.uv.workspace]
