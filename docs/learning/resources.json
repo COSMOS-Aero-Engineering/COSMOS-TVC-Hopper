@@ -215,7 +215,7 @@
       "url": "https://www.youtube.com/watch?v=0WCi1rhueH4",
       "scope": "프로젝트와 편집기 소개",
       "exercise": "프로젝트 파일과 회로도 파일을 구분한다.",
-      "note": "수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다.",
+      "note": "영상은 KiCad 9.0 기준이다. 설치는 KiCad 10으로 한다. KiCad 9는 팀 회로도 `cosmos-avionics.kicad_sch`를 열지 못한다([KiCad README](../../kicad/README.md), #139). 수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다.",
       "language": "영어"
     },
     {

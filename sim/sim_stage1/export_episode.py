@@ -8,7 +8,7 @@ Stage 1 에피소드를 웹 대시보드 CSV 형식(docs/design/02-web-dashboard
 - source = SIM (실측 데이터와 섞이지 않게 구분)
 - mode   = PID(PD 기준 제어기) | RL(PPO 모델) | MANUAL(무입력)
 - servo1..4 = 액션 a1..a4 그대로(-1~1), 순서 FWD/LEFT/AFT/RIGHT (01-avionics §1)
-- throttle  = 0~1 (환경 내부 변환과 같은 값)
+- throttle  = 0-1, 변화율 제한(#120) 뒤 환경이 실제로 쓴 값(step()의 info["throttle"])
 - qw..qz    = ZYX 오일러각에서 계산한 쿼터니언 (§5-3, 뷰어의 짐벌락 회피용)
 - batt_v, rpm 은 시뮬레이션에 없어서 비워 둔다
 - reward    = 그 행의 상태에서 액션을 낸 뒤 받은 보상. 마지막 행(최종 상태)은 비어 있다
@@ -113,8 +113,8 @@ def run_episode(env, policy, mode, seed):
         action = np.clip(np.asarray(policy(obs), dtype=np.float32), -1, 1)
         row = state_row(round(step * env.dt * 1000), mode, obs)
         row.update({f"servo{i + 1}": float(action[i]) for i in range(4)})
-        row["throttle"] = float((action[4] + 1.0) / 2.0)
-        obs, reward, terminated, truncated, _ = env.step(action)
+        obs, reward, terminated, truncated, info = env.step(action)
+        row["throttle"] = float(info["throttle"])   # 정책 명령이 아니라 변화율 제한 뒤 값(#120)
         row["reward"] = float(reward)
         total += reward
         rows.append(row)
@@ -135,6 +135,8 @@ def episode_params(env):
         "vane_arm_l": env.l, "vane_arm_r": env.r,
         "Kf": env.Kf,
         "cg_offset_x_m": env.cg_offset_x, "cg_offset_y_m": env.cg_offset_y,
+        # 회전자 상수도 에피소드마다 뽑는다(#121). rotor.enabled가 꺼져 있으면 환경이 쓰지 않는다
+        "rotor_inertia": env.rotor_inertia, "rotor_omega_max": env.rotor_omega_max, "rotor_tau": env.rotor_tau,
     }
 
 
@@ -178,9 +180,13 @@ def main():
             "model": args.model if args.policy == "ppo" else None,
             "seed": seed, "dt_s": env.dt, "max_steps": env.max_steps,
             "domain_rand": env.dr,
-            # 회전자 항 스위치와 상수(#86). 켜고 끈 에피소드를 meta만 보고 구별하려고 남긴다
-            "rotor": {"enabled": env.rotor_enabled, "inertia": env.rotor_inertia,
-                      "omega_max": env.rotor_omega_max, "tau": env.rotor_tau, "spin_dir": env.rotor_spin_dir},
+            # 회전자 항 스위치와 명목 상수(#86). 켜고 끈 에피소드를 meta만 보고 구별하려고 남긴다.
+            # 이번 에피소드에 뽑힌 값은 episode_params의 rotor_*에 있다(#121)
+            "rotor": {"enabled": env.rotor_enabled, "inertia": env.nominal_rotor_inertia,
+                      "omega_max": env.nominal_rotor_omega_max, "tau": env.nominal_rotor_tau,
+                      "spin_dir": env.rotor_spin_dir},
+            # 스로틀 변화율 제한(1/s, null이면 없음, #120). CSV throttle 열은 이 제한 뒤 값이다
+            "throttle_slew_rate": env.throttle_slew_rate,
             "episode_params": episode_params(env),
             "result": info,
             "git_commit": commit,

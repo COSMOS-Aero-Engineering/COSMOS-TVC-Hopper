@@ -41,7 +41,7 @@
 | ID · 단계 · 형식 · 언어 | 자료와 볼 범위 | 보고 나서 할 일 · 적용 한계 |
 |---|---|---|
 | K01 · 입문 · 글·그림 · 영어 | [KiCad 10 공식 첫 프로젝트](https://docs.kicad.org/10.0/en/getting_started_in_kicad/getting_started_in_kicad.html)<br>Schematic Editor, Electrical Rules Check | 기존 회로도를 열고 CS 넷 하나를 추적한다.<br>설치된 버전과 문서 버전을 확인한다. ERC는 실제 전압·기능 시험을 대신하지 않는다. |
-| K02 · 입문 · 영상 · 영어 | [DigiKey KiCad 9.0 1: Intro & Download](https://www.youtube.com/watch?v=0WCi1rhueH4)<br>프로젝트와 편집기 소개 | 프로젝트 파일과 회로도 파일을 구분한다.<br>수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다. |
+| K02 · 입문 · 영상 · 영어 | [DigiKey KiCad 9.0 1: Intro & Download](https://www.youtube.com/watch?v=0WCi1rhueH4)<br>프로젝트와 편집기 소개 | 프로젝트 파일과 회로도 파일을 구분한다.<br>영상은 KiCad 9.0 기준이다. 설치는 KiCad 10으로 한다. KiCad 9는 팀 회로도 `cosmos-avionics.kicad_sch`를 열지 못한다([KiCad README](../../kicad/README.md), #139). 수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다. |
 | K03 · 첫 실습 · 영상 · 영어 | [DigiKey KiCad 9.0 2: Schematic Layout](https://www.youtube.com/watch?v=0Q6gU7-QqUg)<br>심볼 선택, 배치, 값 수정, 넷 연결 | 별도 연습 프로젝트에서 커넥터 두 개를 연결한다.<br>수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다. |
 | K04 · 첫 실습 · 영상 · 영어 | [DigiKey KiCad 9.0 3: Custom Schematic Symbol](https://www.digikey.com/en/videos/d/digi-key-electronics/kicad-9-0-getting-started-part-3-create-a-custom-schematic-symbol-digikey)<br>심볼 라이브러리와 핀 속성 | 심볼 핀 번호와 실제 보드 핀 번호의 차이를 적는다.<br>수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다. |
 | K05 · 첫 실습 · 영상 · 영어 | [DigiKey KiCad 9.0 4: Finishing the Schematic](https://www.youtube.com/watch?v=KN3fHXhNkTU)<br>넷 이름, 외부 부품, ERC | ERC 오류 하나의 원인을 기록한다.<br>수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다. |
