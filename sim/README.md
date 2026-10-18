@@ -75,7 +75,7 @@ python export_episode.py --policy ppo --episodes 5        # 학습 모델 5회 (
 - #26 CAD 무게중심 추정·조립 후 CG 실측 → `vane_arm_l` 교체. 바꾼 뒤 `python pd_gate.py`로 합격 기준을 다시 확인.
 - 조립 후 질량·관성 실측 → mass/Jxx/Jyy/Jzz 반영.
 - Stage 2(전체 6DOF, 위치 자유) — 실험 A 데이터 확보 후 착수.
-- baseline 제어(PID/LQR)가 실기에서 서기 전엔 이 학습 결과를 실기에 올리지 않음 (CLAUDE.md/AGENTS.md 원칙).
+- baseline 제어(PID/LQR)가 실기에서 서기 전엔 이 학습 결과를 실기에 올리지 않음 (`AGENTS.md` §안전 원칙의 시험 순서: baseline 안정화 다음에 RL 비교).
 
 ## 선행 (완료됨, 2026-09-13)
 
