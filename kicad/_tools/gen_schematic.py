@@ -268,7 +268,9 @@ def save_with_kicad(text, cli):
                 f"kicad-cli sch upgrade failed (exit {result.returncode}). The output file "
                 f"was not changed. If kicad-cli crashes on Windows, see the known problem "
                 f"about kicad-cli in kicad/README.md.\n{result.stdout}{result.stderr}")
-        saved = sch.read_bytes().decode("utf-8")
+        # kicad-cli on Windows writes CRLF. Write LF on every OS, as .gitattributes
+        # (eol=lf) does, so the working-tree file is the same as the committed file.
+        saved = sch.read_bytes().decode("utf-8").replace("\r\n", "\n")
     if '(generator "eeschema")' not in saved[:400]:
         raise SystemExit("kicad-cli did not save the schematic again:\n"
                          f"{result.stdout}{result.stderr}")

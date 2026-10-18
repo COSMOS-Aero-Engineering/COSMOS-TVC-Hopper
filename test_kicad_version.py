@@ -12,6 +12,7 @@ CI에는 KiCad가 없다. 그래서 KiCad로 여는 확인은 PR에서 사람이
 """
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -49,7 +50,19 @@ class CommittedSchematic(unittest.TestCase):
     def test_saved_by_kicad(self):
         # kicad-cli 단계를 건너뛴 생성물을 커밋하면 여기서 걸린다. 그런 파일은 KiCad가 저장할 때
         # 수천 줄이 바뀐다(#140).
-        text = SCHEMATIC.read_bytes().decode("utf-8")
+        self.assert_saved_by_kicad(SCHEMATIC)
+
+    def test_saved_by_kicad_accepts_crlf(self):
+        # Windows KiCad가 저장하면 작업 폴더의 파일이 CRLF가 된다. git은 .gitattributes(eol=lf)로
+        # 커밋할 때 LF로 바꾸므로 diff가 없다. 이 검사도 그 파일을 통과시켜야 한다(PR #192).
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        crlf = Path(tmp.name) / SCHEMATIC.name
+        crlf.write_bytes(SCHEMATIC.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+        self.assert_saved_by_kicad(crlf)
+
+    def assert_saved_by_kicad(self, path):
+        text = path.read_bytes().decode("utf-8").replace("\r\n", "\n")
         self.assertIn('(generator "eeschema")', text[:400])
         self.assertTrue(text.endswith("\n\t(embedded_fonts no)\n)\n"), text[-200:])
 
@@ -70,6 +83,17 @@ class KicadSave(unittest.TestCase):
         text = "(kicad_sch\r\n\t(sheet_instances)\r\n)\r\n"
         self.assertEqual(gen_schematic.add_embedded_fonts(text),
                          "(kicad_sch\r\n\t(sheet_instances)\r\n\t(embedded_fonts no)\r\n)\r\n")
+
+    def test_crlf_output_of_kicad_cli_is_written_as_lf(self):
+        # Windows kicad-cli는 CRLF로 쓴다. 생성기는 커밋된 파일과 같게 LF로 써야 한다(PR #192).
+        def fake_kicad_cli(args, **kwargs):
+            Path(args[-1]).write_bytes(
+                b'(kicad_sch\r\n\t(generator "eeschema")\r\n\t(sheet_instances)\r\n)\r\n')
+            return subprocess.CompletedProcess(args, 0, "", "")
+        with mock.patch.object(gen_schematic.subprocess, "run", side_effect=fake_kicad_cli):
+            saved = gen_schematic.save_with_kicad("(kicad_sch)\n", Path("kicad-cli"))
+        self.assertEqual(saved, '(kicad_sch\n\t(generator "eeschema")\n\t(sheet_instances)\n'
+                                '\t(embedded_fonts no)\n)\n')
 
     def test_unexpected_end_stops(self):
         with self.assertRaises(SystemExit):
