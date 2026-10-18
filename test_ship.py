@@ -86,6 +86,19 @@ class ParentPrdTest(unittest.TestCase):
     def test_extra_text_and_repeated_number(self):
         self.assertEqual(ship.parent_prd(form_body("#26 (CAD), 같은 #26"))[0], 26)
 
+    def test_korean_particle_after_number(self):
+        # 파이썬 3의 `\b`는 한글을 단어 글자로 본다. `#26번`도 26으로 읽어야 한다.
+        for value in ("#26번", "#26의 하위 작업", "PRD(#26)"):
+            with self.subTest(value=value):
+                self.assertEqual(ship.parent_prd(form_body(value))[0], 26)
+
+    def test_other_repo_reference_is_not_this_repo(self):
+        for value in ("someorg/otherrepo#26", "org/my-repo.js#26", "PRD#26"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                ship.parent_prd(form_body(value))
+        # 다른 저장소 참조가 함께 있어도 이 저장소 번호 하나만 센다.
+        self.assertEqual(ship.parent_prd(form_body("#26 (org/repo#5 참고)"))[0], 26)
+
     def test_no_parent_values(self):
         for value in ("", "_No response_", "없음", "없음(PRD 아래 작업이 아니다)"):
             with self.subTest(value=value):
@@ -142,6 +155,8 @@ class LinkTest(unittest.TestCase):
         cases = {
             "형식": (issue(50, form_body("26")),),
             "번호 둘": (issue(50, form_body("#26, #28")),),
+            # 열린 PRD #26을 둔다. 다른 저장소 참조를 이 저장소의 #26으로 읽으면 잇게 된다.
+            "다른 저장소": (issue(50, form_body("someorg/otherrepo#26")), issue(26, labels=("prd",))),
             # 라벨 prd를 붙여 둔다. 자기 자신 검사가 없으면 다른 검사를 모두 지나 잇게 된다.
             "자기 자신": (issue(50, form_body("#50"), labels=("prd",)),),
             "없는 이슈": (issue(50, form_body("#999")),),

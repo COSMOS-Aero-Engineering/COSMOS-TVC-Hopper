@@ -171,13 +171,17 @@ def cmd_wt(a):
 PARENT_HEADING = "상위 PRD"  # task.yml parent-prd 칸의 label과 같아야 한다
 EMPTY_FORM_VALUE = "_No response_"  # 이슈 양식에서 칸을 비웠을 때 본문에 남는 값
 NO_PARENT_WORD = "없음"
+# 이 저장소의 이슈 번호: `#26`, `(#26)`, `#26번`, `#26의 하위`. `#` 앞에 글자·`/`·`.`·`-`가 있으면 읽지 않는다.
+# 그래서 다른 저장소 참조 `org/repo#26`을 이 저장소의 #26으로 읽지 않는다. `\b`는 쓰지 않는다. 파이썬 3에서
+# 한글도 단어 글자라서 `#26번`의 `6`과 `번` 사이에 단어 경계가 없다.
+ISSUE_REF = re.compile(r"(?<![\w/.-])#([0-9]+)")
 
 
 def parent_prd(body):
     """본문의 `### 상위 PRD` 칸을 읽는다. (PRD 번호 또는 None, 칸의 값)을 돌려준다.
 
     칸이 없거나, 비었거나, `_No response_`이거나, `없음`으로 시작하면 번호는 None이다.
-    값이 있는데 `#<번호>`가 없거나 번호가 둘 이상이면 ValueError를 낸다.
+    값이 있는데 이 저장소의 `#<번호>`(ISSUE_REF)가 없거나 번호가 둘 이상이면 ValueError를 낸다.
     """
     text = (body or "").replace("\r\n", "\n")
     m = re.search(rf"^###[ \t]+{re.escape(PARENT_HEADING)}[ \t]*$(.*?)(?=^###[ \t]|\Z)", text,
@@ -187,9 +191,10 @@ def parent_prd(body):
     value = m.group(1).strip()
     if not value or value == EMPTY_FORM_VALUE or value.startswith(NO_PARENT_WORD):
         return None, value
-    numbers = sorted({int(n) for n in re.findall(r"#(\d+)\b", value)})
+    numbers = sorted({int(n) for n in ISSUE_REF.findall(value)})
     if not numbers:
-        raise ValueError(f"`#<번호>` 형식의 번호가 없다(칸의 값: {value!r}). 예: #26")
+        raise ValueError(f"`#<번호>` 형식의 번호가 없다(칸의 값: {value!r}). 예: #26\n"
+                         "     다른 저장소 참조(`org/repo#26`)와 `PRD#26`처럼 `#` 앞에 글자가 붙은 번호는 읽지 않는다.")
     if len(numbers) > 1:
         raise ValueError(f"번호가 {len(numbers)}개다(칸의 값: {value!r}). 상위 이슈는 하나만 둘 수 있다.")
     return numbers[0], value
