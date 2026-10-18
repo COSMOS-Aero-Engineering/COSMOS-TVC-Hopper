@@ -2,10 +2,12 @@
 
 ## 현재 상태 (2026-10-17)
 
-**스키매틱은 사람이 그린 파일이 아니라 생성물이다** — `cosmos-avionics/cosmos-avionics.kicad_sch` + `.kicad_pro`.
+**스키매틱은 사람이 그린 파일이 아니라 생성물이다** — `cosmos-avionics/cosmos-avionics.kicad_sch`.
 `01-avionics-integration-final.md` §2.2(Teensy 핀맵)·§3(전원계통)을 넷리스트로 옮긴 것. 부품 20개, 넷 30개, 배선 83개.
-전부 `_tools/gen_schematic.py`가 만든다. 손으로 좌표를 찍은 곳이 없다(이 프로젝트의 "프리핸드 CAD 금지,
+`.kicad_sch` 전체를 `_tools/gen_schematic.py`가 만든다. 손으로 좌표를 찍은 곳이 없다(이 프로젝트의 "프리핸드 CAD 금지,
 코드 기반 파라메트릭 우선" 원칙을 회로도에도 그대로 적용한 것).
+같은 폴더의 `cosmos-avionics.kicad_pro`는 생성물이 아니다. KiCad가 저장한 프로젝트 파일을 커밋했고, 생성기는 이 파일을
+읽기만 한다. 이 파일이 없으면 생성기가 멈춘다.
 
 **KiCad에서 열고 편집 없이 저장해도 두 파일은 바뀌지 않는다**(#140). 생성기가 결과를 KiCad의
 `kicad-cli`로 한 번 더 저장하고, `.kicad_pro`는 KiCad가 쓴 파일을 커밋했기 때문이다. 그래서 파일 머리의
