@@ -93,9 +93,17 @@ class ParentPrdTest(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertEqual(ship.parent_prd(form_body(value))[0], 26)
 
+    def test_punctuation_before_hash(self):
+        # GitHub은 `-#26`, `.#26`, `/#26`을 #26으로 링크한다(`gh api markdown`으로 확인). 이 칸도 26으로 읽는다.
+        for value in ("-#26", ".#26", "/#26", "PRD/#26"):
+            with self.subTest(value=value):
+                self.assertEqual(ship.parent_prd(form_body(value))[0], 26)
+
     def test_other_repo_reference_is_not_this_repo(self):
-        # `PRD#26`, `#26a`: GitHub도 링크하지 않는다. 저장소 이름을 붙인 참조는 이 저장소 이름이어도 읽지 않는다.
+        # `PRD#26`, `_#26`, `#26a`: GitHub도 링크하지 않는다. 저장소 이름을 붙인 참조는 이 저장소 이름이어도 읽지 않는다.
+        # `org/repo-#26`, `org/repo.#26`: 저장소 이름이 `-`나 `.`로 끝나는 참조다. `#` 앞 글자만 보면 놓친다.
         for value in ("org/repo#26", "someorg/otherrepo#26", "org/my-repo.js#26", "PRD#26", "#26a",
+                      "_#26", "1#26", "org/repo-#26", "org/repo.#26", "org/repo#26#27",
                       "COSMOS-Aero-Engineering/COSMOS-TVC-Hopper#26"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 ship.parent_prd(form_body(value))
@@ -115,6 +123,13 @@ class ParentPrdTest(unittest.TestCase):
     def test_bad_values(self):
         for value in ("26", "PRD 27", "#26, #28"):
             with self.subTest(value=value), self.assertRaises(ValueError):
+                ship.parent_prd(form_body(value))
+
+    def test_joined_refs_are_two_numbers(self):
+        # 첫 번호만 읽으면 엉뚱한 PRD로 잇는다. GitHub은 `#26/#27`, `#26-#27`, `#26.#27`에서 둘 다 링크한다.
+        # `#26#27`은 GitHub이 #26만 링크하지만 이 칸에서는 오류로 낸다.
+        for value in ("#26/#27", "#26-#27", "#26.#27", "#26#27", "#26 (org/repo#5), #27"):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "번호가 2개다"):
                 ship.parent_prd(form_body(value))
 
 
