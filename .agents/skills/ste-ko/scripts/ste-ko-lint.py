@@ -13,12 +13,18 @@ beamonic/ste-ko 의 scripts/lint.py (MIT) 를 고쳐 쓴 것이다. 바꾼 점�
   warn  고칠 신호다. 문맥상 맞으면 그대로 둔다.
   info  근거가 있을 때만 구체화한다. 기본 출력에서 숨기고 --all 로 본다.
 
+표준 입력(`-`)은 UTF-8로 먼저 읽고, 아니면 파이썬의 표준 입력 인코딩(한국어 Windows의 파이프는
+cp949)으로 읽는다. 둘 다 아니면 종료 코드 2 를 낸다.
+
 의존성 없음. 표준 라이브러리만 쓴다.
 """
 import argparse
+import codecs
 import glob
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -364,7 +370,82 @@ def self_test():
                 m.encode("cp949")
             except UnicodeEncodeError as e:
                 raise AssertionError(f"{rule} 메시지에 cp949에 없는 글자: {m!r}") from e
+
+    # 표준 입력 디코딩. UTF-8을 먼저 읽고, 아니면 대체 인코딩으로 읽고, 둘 다 아니면 멈춘다.
+    em_utf8 = "범위 — 3~5 개다.\n"
+    assert decode_input(em_utf8.encode("utf-8"), "cp949") == (em_utf8, None)
+    assert decode_input(b"\xef\xbb\xbf" + em_utf8.encode("utf-8"), "cp949") == (em_utf8, None)
+    assert decode_input("범위는 3~5 개다.".encode("cp949"), "cp949") == ("범위는 3~5 개다.", "cp949")
+    for data, fallback in ((b"\xff\xfe\xff", "utf-8"), (b"\xff", "cp949"), (b"\xff", "없는-인코딩")):
+        try:
+            decode_input(data, fallback)
+        except UnicodeDecodeError:
+            pass
+        else:
+            raise AssertionError(f"읽지 못할 입력을 읽었다: {data!r}, {fallback}")
+
+    # 입력 인코딩이 cp949일 때 UTF-8 글을 파이프로 준다(#187). 고치기 전에는 오류 처리가 strict면
+    # UnicodeDecodeError로 멈췄다. 한국어 Windows의 파이프(surrogateescape)는 멈추지 않고 한글을
+    # 깨진 글자로 읽어서 3.2 같은 한글 규칙을 조용히 놓쳤다.
+    piped = ("결과가 화면에 보여집니다.\n" + em_utf8).encode("utf-8")
+    for io_encoding in ("cp949", "cp949:surrogateescape"):
+        env = dict(os.environ, PYTHONIOENCODING=io_encoding)
+        env.pop("PYTHONUTF8", None)
+        run = subprocess.run([sys.executable, __file__, "-", "--no-vocab"], input=piped,
+                             capture_output=True, env=env, check=False)
+        err = run.stderr.decode("cp949", "replace")
+        assert "Traceback" not in err, f"{io_encoding}: {err}"
+        assert run.returncode == 1, f"{io_encoding}: 종료 코드 {run.returncode}. {err}"
+        for want in (b"3.2\thard", b"8.1\thard"):
+            assert want in run.stdout, f"{io_encoding}: {want!r} 를 못 잡았다. {run.stdout!r}"
     print("self-test OK")
+
+
+def decode_input(data, fallback):
+    """표준 입력에서 읽은 바이트를 글로 바꾼다. (글, 쓴 대체 인코딩) 을 돌려준다.
+
+    UTF-8(BOM 포함)로 먼저 읽는다. 파일 입력과 같은 인코딩이다. UTF-8이 아니면 fallback
+    (파이썬이 표준 입력에 쓰는 인코딩. 한국어 Windows의 파이프는 cp949)으로 읽고, 그 이름을
+    돌려준다. UTF-8로 읽었으면 None 이다. 둘 다 아니면 UnicodeDecodeError 를 낸다.
+    """
+    try:
+        return data.decode("utf-8-sig"), None
+    except UnicodeDecodeError as e:
+        utf8_error = e
+    try:
+        return data.decode(fallback), fallback
+    except (UnicodeDecodeError, LookupError):
+        raise utf8_error from None
+
+
+def is_utf8(encoding):
+    """인코딩 이름이 UTF-8을 가리키는지 본다. 모르는 이름이면 False."""
+    try:
+        return codecs.lookup(encoding).name == "utf-8"
+    except LookupError:
+        return False
+
+
+def read_stdin():
+    """표준 입력을 읽는다. 읽지 못하면 원인을 stderr에 쓰고 None 을 돌려준다.
+
+    sys.stdin.read() 는 로캘 인코딩으로 읽는다. 한국어 Windows에서 파이프와 파일은 cp949로 읽어서,
+    UTF-8 글을 주면 UnicodeDecodeError 로 멈췄다. 그래서 바이트로 읽고 decode_input 으로 바꾼다.
+    """
+    stream = getattr(sys.stdin, "buffer", None)
+    if stream is None:  # io.StringIO 처럼 바이트 버퍼가 없는 표준 입력. 이미 글이다.
+        return sys.stdin.read()
+    fallback = sys.stdin.encoding or "utf-8"
+    try:
+        text, used = decode_input(stream.read(), fallback)
+    except UnicodeDecodeError as e:
+        tried = "UTF-8이" if is_utf8(fallback) else f"UTF-8도 {fallback}도"
+        print(f"<stdin>: 표준 입력을 읽지 못했다. {tried} 아니다(바이트 위치 {e.start})."
+              " 글을 UTF-8 파일로 저장하고 그 경로를 준다.", file=sys.stderr)
+        return None
+    if used:
+        print(f"<stdin>: 표준 입력이 UTF-8이 아니어서 {used}로 읽었다.", file=sys.stderr)
+    return text
 
 
 def keep_output_alive():
@@ -419,7 +500,10 @@ def main():
     results = []
     for p in a.paths:
         if p == "-":
-            results.append(("<stdin>", check_text(sys.stdin.read(), a.surface, vocab)))
+            text = read_stdin()
+            if text is None:
+                return 2
+            results.append(("<stdin>", check_text(text, a.surface, vocab)))
             continue
         for f in glob.glob(p, recursive=True) or [p]:
             if not Path(f).is_file():
