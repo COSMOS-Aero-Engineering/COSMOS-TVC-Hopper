@@ -35,12 +35,17 @@ git config user.email "본인 이메일"
 
 ```powershell
 # Windows PowerShell
-irm https://astral.sh/uv/install.ps1 | iex
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 ```bash
 # Mac / Linux
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+
+Windows 명령은 [uv 공식 설치 문서](https://docs.astral.sh/uv/getting-started/installation/)의 명령과 같다.
+`-ExecutionPolicy ByPass`를 빼지 않는다. 이 옵션이 없으면 Windows 기본 실행 정책(`Restricted`)에서 uv
+설치 스크립트가 오류를 내고 멈춘다(#99). 이 옵션은 이 명령이 새로 띄우는 PowerShell 프로세스에만
+적용된다. PC에 저장된 실행 정책은 바꾸지 않는다([Microsoft 문서](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-5.1#set-a-different-policy-for-one-session)).
 
 그다음은 어느 OS든 같다. (Mac은 **Apple Silicon만** 된다 — 고정된 torch 2.14.0에 Intel Mac용
 휠이 없다. Intel Mac이면 Windows/Linux PC를 쓰거나, 부장에게 말해서 torch 버전을 조정한다.)
@@ -115,7 +120,9 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
 정본은 [`AGENTS.md`](AGENTS.md)의 **"핵심 규칙"**과 **"작업 순서 — 이슈에서 PR까지"**다. 작업은 이슈에서
 시작하고, 이슈 번호를 브랜치 이름과 PR 본문(`Closes #번호`)에 넣는다. 처음 한 번 `python ship.py tools`로
 도구를 확인한다(Windows·Mac의 gh와 Node.js가 있는 PC의 opencode는 자동 설치, 그 밖에는 설치 방법을 출력). 이슈를 맡으면 `python ship.py wt <이슈 번호>`로 작업 폴더와
-브랜치를 만든다. 아래는 부원이 실제 작업할 때 따르는 절차다.
+브랜치를 만든다. 이슈 본문의 `### 상위 PRD` 칸에 `#<PRD 번호>`가 있으면 `wt`가 그 PRD의 하위 이슈(sub-issue)로도
+잇는다. 잇지 못하면 원인을 출력하고 폴더는 그대로 만든다. 칸을 나중에 채웠으면 `python ship.py link <이슈 번호>`를
+실행한다. 아래는 부원이 실제 작업할 때 따르는 절차다.
 
 1. **한 작업 폴더에서는 한 번에 한 세션만 Git을 조작한다.** Claude·Codex·사람 터미널이 같은 폴더에서
    동시에 브랜치를 바꾸거나 커밋하면 서로의 작업 트리를 덮어쓸 수 있다. 다른 세션이 작업 중이면 먼저
@@ -192,6 +199,7 @@ gh pr create --base main --reviewer junwonkim07
 | BNO085 값이 안 뜸 | SPI 배선 또는 PS0/PS1 모드 설정 문제 | CS=10, MOSI=11, MISO=12, SCK=13, RST=20, INT=21, WAK/PS0=22 확인. PS1은 3.3V에 묶고 전원도 3.3V만 사용. 모듈 실크가 다르면 `firmware/cosmos/imu_test/src/imu_test.ino` 상단 배선표와 실물 후면 표기를 대조 |
 | `pip install` 중 `OSError: [Errno 2] No such file or directory: ...torch\include\...` | Windows 경로 길이 260자 제한 (torch는 경로가 아주 깊다) | 저장소를 더 짧은 경로로 옮기거나(예: `C:\dev\COSMOS-TVC-Hopper`), [긴 경로 지원 활성화](https://pip.pypa.io/warnings/enable-long-paths) |
 | 설치 후 OneDrive가 몇 GB를 동기화하기 시작함 | `.venv`(torch 포함 ~1GB)가 OneDrive 폴더 안에 생겨서 | OneDrive 설정 → 백업/폴더 선택에서 `.venv` 제외. 지워도 `python tasks.py setup`으로 언제든 다시 만든다 |
+| uv 설치 명령이 `Error: PowerShell requires an execution policy in [Unrestricted, RemoteSigned, Bypass] to run uv`를 출력하고 멈춤 | `-ExecutionPolicy ByPass` 없이 `irm https://astral.sh/uv/install.ps1 \| iex`만 실행함. Windows 기본 실행 정책(`Restricted`)에서는 uv 설치 스크립트가 스스로 멈춘다 | 위 [소프트웨어팀](#소프트웨어팀)의 Windows 명령을 그대로 다시 실행한다. 오류 메시지가 권하는 `Set-ExecutionPolicy`는 하지 않아도 된다 |
 | `uv: command not found` / `uv 이(가) 없다` | uv 미설치 또는 설치 후 터미널 미재시작 | 위 [소프트웨어팀](#소프트웨어팀) 설치 명령 실행 후 터미널을 새로 연다 |
 | `환경을 uv.lock 에 맞추지 못했다` 또는 CI의 `uv sync --locked` 실패 | `pyproject.toml`만 고치고 `uv.lock`을 갱신하지 않음 | `python tasks.py lock` 후 `uv.lock`·`sim/requirements.txt`를 함께 커밋 |
 
