@@ -88,12 +88,15 @@ class ParentPrdTest(unittest.TestCase):
 
     def test_korean_particle_after_number(self):
         # 파이썬 3의 `\b`는 한글을 단어 글자로 본다. `#26번`도 26으로 읽어야 한다.
-        for value in ("#26번", "#26의 하위 작업", "PRD(#26)"):
+        # `상위#26`: GitHub도 #26으로 링크한다. `\w`가 한글을 단어 글자로 보면 놓친다.
+        for value in ("#26번", "#26의 하위 작업", "PRD(#26)", "상위#26", "#26."):
             with self.subTest(value=value):
                 self.assertEqual(ship.parent_prd(form_body(value))[0], 26)
 
     def test_other_repo_reference_is_not_this_repo(self):
-        for value in ("someorg/otherrepo#26", "org/my-repo.js#26", "PRD#26"):
+        # `PRD#26`, `#26a`: GitHub도 링크하지 않는다. 저장소 이름을 붙인 참조는 이 저장소 이름이어도 읽지 않는다.
+        for value in ("org/repo#26", "someorg/otherrepo#26", "org/my-repo.js#26", "PRD#26", "#26a",
+                      "COSMOS-Aero-Engineering/COSMOS-TVC-Hopper#26"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 ship.parent_prd(form_body(value))
         # 다른 저장소 참조가 함께 있어도 이 저장소 번호 하나만 센다.

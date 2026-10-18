@@ -173,10 +173,13 @@ def cmd_wt(a):
 PARENT_HEADING = "상위 PRD"  # task.yml parent-prd 칸의 label과 같아야 한다
 EMPTY_FORM_VALUE = "_No response_"  # 이슈 양식에서 칸을 비웠을 때 본문에 남는 값
 NO_PARENT_WORD = "없음"
-# 이 저장소의 이슈 번호: `#26`, `(#26)`, `#26번`, `#26의 하위`. `#` 앞에 글자·`/`·`.`·`-`가 있으면 읽지 않는다.
-# 그래서 다른 저장소 참조 `org/repo#26`을 이 저장소의 #26으로 읽지 않는다. `\b`는 쓰지 않는다. 파이썬 3에서
-# 한글도 단어 글자라서 `#26번`의 `6`과 `번` 사이에 단어 경계가 없다.
-ISSUE_REF = re.compile(r"(?<![\w/.-])#([0-9]+)")
+# 이 저장소의 이슈 번호를 찾는다. 읽는다: `#26`, `(#26)`, `#26번`, `#26의 하위`, `상위#26`.
+# 읽지 않는다: `org/repo#26`(이 저장소 이름이어도), `PRD#26`, `#26a`. `#` 바로 앞에 ASCII 영문자·숫자·`_`·`/`·
+# `.`·`-`가 있거나, 번호 바로 뒤에 ASCII 영문자·숫자·`_`가 있으면 번호로 보지 않는다.
+# re.ASCII를 쓰는 이유: 파이썬 3의 str 정규식에서 `\w`와 `\b`는 한글도 단어 글자로 본다. 그러면 `#26번`과
+# `상위#26`을 놓친다. `#` 앞 규칙은 GitHub 자동 링크와 같다(`상위#26`은 링크, `PRD#26`은 링크하지 않음).
+# `#26번`은 GitHub이 링크하지 않지만 이 칸에서는 읽는다(#133).
+ISSUE_REF = re.compile(r"(?<![\w/.-])#([0-9]+)(?!\w)", re.ASCII)
 
 
 def parent_prd(body):
@@ -196,7 +199,8 @@ def parent_prd(body):
     numbers = sorted({int(n) for n in ISSUE_REF.findall(value)})
     if not numbers:
         raise ValueError(f"`#<번호>` 형식의 번호가 없다(칸의 값: {value!r}). 예: #26\n"
-                         "     다른 저장소 참조(`org/repo#26`)와 `PRD#26`처럼 `#` 앞에 글자가 붙은 번호는 읽지 않는다.")
+                         "     저장소 이름을 붙인 참조(`org/repo#26`)는 이 저장소 이름이어도 읽지 않는다.\n"
+                         "     `PRD#26`, `#26a`처럼 `#` 앞이나 번호 뒤에 영문자·숫자가 붙어도 읽지 않는다.")
     if len(numbers) > 1:
         raise ValueError(f"번호가 {len(numbers)}개다(칸의 값: {value!r}). 상위 이슈는 하나만 둘 수 있다.")
     return numbers[0], value
