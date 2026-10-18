@@ -9,35 +9,124 @@ map) and SS3 (power tree). This is a documentation-grade schematic capture
 (generic connector symbols standing in for Teensy/BNO085/ESC/etc, since none
 of those have official KiCad symbols) - not a fabrication-ready PCB source.
 """
+import argparse
 import math
+import os
 import re
 import uuid as uuidlib
+from pathlib import Path
 
 from extract_symbols import extract_symbol, extract_pins
 
-KICAD = "C:/Users/mimin/AppData/Local/Programs/KiCad/10.0/share/kicad/symbols"
 PROJECT_NAME = "cosmos-avionics"
 ROOT_UUID = "b6a2f001-0000-4000-8000-000000000000"  # fixed so file is reproducible
+
+HERE = Path(__file__).resolve().parent        # kicad/_tools
+REPO_ROOT = HERE.parents[1]                   # repository root
+DEFAULT_OUT = REPO_ROOT / "kicad" / "cosmos-avionics" / f"{PROJECT_NAME}.kicad_sch"
 
 
 def u():
     return str(uuidlib.uuid4())
 
 
-# ---------- library symbols needed, and where they live ----------
-LIB_SOURCES = {
-    "Connector_Generic:Conn_01x01": (f"{KICAD}/Connector_Generic.kicad_sym", "Conn_01x01"),
-    "Connector_Generic:Conn_01x03": (f"{KICAD}/Connector_Generic.kicad_sym", "Conn_01x03"),
-    "Connector_Generic:Conn_01x04": (f"{KICAD}/Connector_Generic.kicad_sym", "Conn_01x04"),
-    "Connector_Generic:Conn_01x05": (f"{KICAD}/Connector_Generic.kicad_sym", "Conn_01x05"),
-    "Connector_Generic:Conn_01x06": (f"{KICAD}/Connector_Generic.kicad_sym", "Conn_01x06"),
-    "Connector_Generic:Conn_01x07": (f"{KICAD}/Connector_Generic.kicad_sym", "Conn_01x07"),
-    "Connector_Generic:Conn_01x08": (f"{KICAD}/Connector_Generic.kicad_sym", "Conn_01x08"),
-    "Connector_Generic:Conn_01x10": (f"{KICAD}/Connector_Generic.kicad_sym", "Conn_01x10"),
-    "Device:C": (f"{KICAD}/Device.kicad_sym", "C"),
-    "Device:Battery": (f"{KICAD}/Device.kicad_sym", "Battery"),
-    "Switch:SW_SPST": (f"{KICAD}/Switch.kicad_sym", "SW_SPST"),
+# ---------- library symbols needed (file path is resolved at run time) ----------
+LIB_FILES = {
+    "Connector_Generic": "Connector_Generic.kicad_sym",
+    "Device": "Device.kicad_sym",
+    "Switch": "Switch.kicad_sym",
 }
+
+LIB_SYMBOLS = {
+    "Connector_Generic:Conn_01x01": "Conn_01x01",
+    "Connector_Generic:Conn_01x03": "Conn_01x03",
+    "Connector_Generic:Conn_01x04": "Conn_01x04",
+    "Connector_Generic:Conn_01x05": "Conn_01x05",
+    "Connector_Generic:Conn_01x06": "Conn_01x06",
+    "Connector_Generic:Conn_01x07": "Conn_01x07",
+    "Connector_Generic:Conn_01x08": "Conn_01x08",
+    "Connector_Generic:Conn_01x10": "Conn_01x10",
+    "Device:C": "C",
+    "Device:Battery": "Battery",
+    "Switch:SW_SPST": "SW_SPST",
+}
+
+
+def _kicad_version_key(path):
+    """Sort key that orders KiCad version folders numerically: 9.0 before 10.0."""
+    m = re.search(r"KiCad[/\\]([0-9]+(?:\.[0-9]+)*)", str(path))
+    return tuple(int(part) for part in m.group(1).split(".")) if m else (0,)
+
+
+def _has_libraries(path):
+    return all((path / f).is_file() for f in LIB_FILES.values())
+
+
+def _symbol_dir_candidates():
+    """Yield places KiCad's bundled symbol libraries might live, best first."""
+    # 1. KiCad's own environment variables. An explicit KICAD_SYMBOL_DIR wins,
+    #    then the versioned names (KICAD10_SYMBOL_DIR, KICAD9_SYMBOL_DIR, ...)
+    #    from the newest major version down. Compare versions as numbers: a plain
+    #    string sort puts KICAD9 before KICAD10.
+    unversioned = os.environ.get("KICAD_SYMBOL_DIR")
+    if unversioned:
+        yield Path(unversioned)
+    versioned = [n for n in os.environ if re.fullmatch(r"KICAD\d+_SYMBOL_DIR", n)]
+    for name in sorted(versioned, key=lambda n: int(re.search(r"\d+", n).group()),
+                       reverse=True):
+        value = os.environ.get(name)
+        if value:
+            yield Path(value)
+    # 2. Common install locations, newest KiCad version first.
+    if os.name == "nt":
+        for base in (os.environ.get("LOCALAPPDATA"), os.environ.get("ProgramFiles"),
+                     os.environ.get("ProgramFiles(x86)")):
+            if not base:
+                continue
+            for pattern in ("Programs/KiCad/*/share/kicad/symbols",
+                            "KiCad/*/share/kicad/symbols"):
+                yield from sorted(Path(base).glob(pattern),
+                                  key=_kicad_version_key, reverse=True)
+    else:
+        for fixed in ("/usr/share/kicad/symbols", "/usr/local/share/kicad/symbols",
+                      "/Applications/KiCad/KiCad.app/Contents/SharedSupport/symbols"):
+            yield Path(fixed)
+        yield from sorted(
+            Path("/Applications").glob("KiCad*/KiCad.app/Contents/SharedSupport/symbols"),
+            key=_kicad_version_key, reverse=True,
+        )
+
+
+def find_symbols_dir(override):
+    """Return the directory that holds KiCad's bundled .kicad_sym files."""
+    if override:
+        path = Path(override)
+        if not _has_libraries(path):
+            raise SystemExit(
+                f"--kicad-symbols does not hold KiCad's symbol libraries: {path}\n"
+                f"  expected files: {', '.join(sorted(LIB_FILES.values()))}"
+            )
+        return path
+    for candidate in _symbol_dir_candidates():
+        try:
+            if _has_libraries(candidate):
+                return candidate
+        except OSError:
+            continue
+    raise SystemExit(
+        "KiCad's symbol libraries were not found. Pass --kicad-symbols <dir>, or set\n"
+        "KICAD_SYMBOL_DIR (or KICAD10_SYMBOL_DIR). Usual place on Windows:\n"
+        r"  %LOCALAPPDATA%\Programs\KiCad\<version>\share\kicad\symbols"
+    )
+
+
+def build_lib_sources(symbols_dir):
+    """Map lib_id -> (symbol library file, symbol name) for the parts we embed."""
+    sources = {}
+    for lib_id, symbol in LIB_SYMBOLS.items():
+        lib = lib_id.split(":")[0]
+        sources[lib_id] = (str(Path(symbols_dir) / LIB_FILES[lib]), symbol)
+    return sources
 
 # ---------- components: (ref, lib_id, value, position(x,y mm), {pin: net_or_None}) ----------
 NC = "__NC__"
@@ -100,9 +189,9 @@ COMPONENTS = [
 STUB_LEN = 5.08  # mm, one grid unit beyond the pin's own length
 
 
-def load_libs():
+def load_libs(sources):
     cache = {}
-    for lib_id, (path, name) in LIB_SOURCES.items():
+    for lib_id, (path, name) in sources.items():
         block = extract_symbol(path, name)
         pins = extract_pins(block)
         lib, sym = lib_id.split(":")
@@ -113,9 +202,9 @@ def load_libs():
     return cache
 
 
-def emit_lib_symbols(cache):
+def emit_lib_symbols(cache, sources):
     out = ["\t(lib_symbols"]
-    for lib_id in LIB_SOURCES:
+    for lib_id in sources:
         # indent each line of the block by one extra tab
         block = cache[lib_id]["block"]
         indented = "\n".join(("\t\t" + line if line else line) for line in block.split("\n"))
@@ -194,7 +283,15 @@ def emit_no_connect(pos):
 
 
 def main():
-    cache = load_libs()
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--kicad-symbols", metavar="DIR",
+                        help="KiCad symbol library directory (default: auto-detect)")
+    parser.add_argument("--out", metavar="FILE", default=str(DEFAULT_OUT),
+                        help="output .kicad_sch (default: %(default)s)")
+    args = parser.parse_args()
+
+    sources = build_lib_sources(find_symbols_dir(args.kicad_symbols))
+    cache = load_libs(sources)
     parts = []
     wires = []
     labels = []
@@ -217,7 +314,7 @@ def main():
             wires.append(emit_wire((wx, wy), (ex, ey)))
             labels.append(emit_label(net, (ex, ey), wang))
 
-    lib_symbols_block = emit_lib_symbols(cache)
+    lib_symbols_block = emit_lib_symbols(cache, sources)
 
     doc = []
     doc.append("(kicad_sch")
@@ -246,11 +343,9 @@ def main():
     doc.append("\t)")
     doc.append(")")
 
-    out_path = "C:/Users/mimin/Desktop/cosmos-tvc-hopper/kicad/cosmos-avionics/cosmos-avionics.kicad_sch"
-    import os
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(doc) + "\n")
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(doc) + "\n", encoding="utf-8")
     print(f"wrote {out_path}")
     print(f"{len(parts)} components, {len(wires)} wires, {len(labels)} labels, {len(ncs)} NC markers")
 
