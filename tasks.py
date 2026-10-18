@@ -3,7 +3,7 @@
 
     python tasks.py                 작업 목록
     python tasks.py setup           uv.lock 그대로 .venv 구성
-    python tasks.py check           CI와 같은 검사 (skills → shiptest → compile → sanity → gate → yaw → smoke → conncheck)
+    python tasks.py check           CI와 같은 검사 (skills → shiptest → userpath → compile → sanity → gate → yaw → smoke → conncheck)
     python tasks.py check --force   캐시 무시하고 전부 다시 실행
     python tasks.py graph           작업 그래프와 캐시 상태 보기
     python tasks.py lock            의존성 다시 풀고 uv.lock/requirements.txt 갱신
@@ -39,6 +39,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -186,22 +187,25 @@ def _digest(path):
     return h.hexdigest()
 
 
-def collect_inputs(patterns):
+def collect_inputs(patterns, root=None):
     """글롭 패턴들을 (저장소 기준 상대경로, 내용해시) 목록으로 펼친다.
 
     tasks.py 자신은 항상 포함한다 — 무엇을 실행할지가 여기 적혀 있으므로, 이 파일이
     바뀌면 모든 캐시가 무효가 되는 게 맞다.
+
+    root는 단위 검사가 임시 폴더를 저장소 대신 줄 때만 쓴다(test_userpath.py). 기본은 ROOT.
     """
+    root = ROOT if root is None else root
     found = set()
     for pattern in list(patterns) + ["tasks.py"]:
-        for p in ROOT.glob(pattern):
+        for p in root.glob(pattern):
             if not p.is_file():
                 continue
-            rel = p.relative_to(ROOT)
+            rel = p.relative_to(root)
             if SKIP_DIRS & set(rel.parts):
                 continue
             found.add(rel.as_posix())
-    return sorted((rel, _digest(ROOT / rel)) for rel in found)
+    return sorted((rel, _digest(root / rel)) for rel in found)
 
 
 def env_fingerprint():
@@ -409,6 +413,77 @@ def task_shiptest():
     run([sys.executable, "-m", "unittest", "test_ship"], cwd=ROOT)
 
 
+# kicad/_tools 스크립트에 작성자 PC의 사용자 홈 폴더 경로가 다시 들어오면 다른 PC에서
+# FileNotFoundError로 죽는다(#67). userpath 작업이 이것을 막는다(#96).
+USER_PATH_SCAN = ["kicad/_tools/*.py"]
+# 이 정규식과 아래 주석에는 실제 경로 예시를 쓰지 않는다. tasks.py를 검사해도 자기 자신에
+# 걸리지 않게 하려는 것이다. 걸리는 예와 안 걸리는 예는 test_userpath.py에 있다.
+USER_PATH_RE = re.compile(
+    # Windows 사용자 폴더: 드라이브 문자, 구분자(슬래시, 역슬래시, 문자열 안의 이중 역슬래시),
+    # Users 폴더. 드라이브 문자는 전부 본다. 사용자 폴더를 다른 드라이브로 옮길 수 있다.
+    # Users는 대소문자를 가리지 않는다. Windows 경로가 대소문자를 가리지 않기 때문이다.
+    r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]+(?i:users)(?![A-Za-z0-9_])"
+    # macOS 사용자 폴더. Git Bash와 WSL에서 본 Windows 사용자 폴더 경로에도 이 부분이 있다.
+    # 대소문자를 가린다. 소문자 users는 웹 API 주소에 흔하다.
+    r"|[\\/]Users[\\/]"
+    # Linux 사용자 폴더. Windows에서 WSL 안의 이 폴더를 열면 구분자가 역슬래시라서 둘 다 본다.
+    r"|[\\/]home[\\/]"
+)
+
+
+def find_user_paths(text):
+    """text에서 사용자 홈 폴더 경로를 찾는다. (줄 번호, 칸 번호, 찾은 글자) 목록을 돌려준다.
+
+    줄과 칸은 1부터 센다. 줄은 줄바꿈 문자 하나로만 나눈다. str.splitlines()는 폼 피드 같은
+    문자에서도 줄을 나눠서 편집기와 줄 번호가 달라진다. 주석도 검사한다. 주석의 경로도
+    작성자 PC에서만 맞다.
+    """
+    hits = []
+    for lineno, line in enumerate(text.split("\n"), start=1):
+        for m in USER_PATH_RE.finditer(line):
+            hits.append((lineno, m.start() + 1, m.group()))
+    return hits
+
+
+def scan_user_paths(root, patterns):
+    """patterns에 걸리는 root 아래 파일을 검사한다. (검사한 파일 목록, 찾은 목록)을 돌려준다.
+
+    찾은 목록의 한 항목은 (저장소 기준 상대경로, 줄 번호, 칸 번호, 찾은 글자)다.
+
+    파일 목록은 collect_inputs()로 만든다. 작업의 inputs 선언과 검사 대상이 어긋나지 않게
+    하려는 것이다. collect_inputs()가 늘 넣는 tasks.py는 검사 대상이 아니라서 뺀다.
+    """
+    files = [rel for rel, _ in collect_inputs(patterns, root) if rel != "tasks.py"]
+    hits = []
+    for rel in files:
+        # read_text는 줄바꿈 \r\n과 \r을 \n으로 바꿔 읽는다. 그래서 Windows 파일도 줄 번호가 맞다.
+        text = (root / rel).read_text(encoding="utf-8", errors="replace")
+        hits.extend((rel, *hit) for hit in find_user_paths(text))
+    return files, hits
+
+
+def task_userpath():
+    """kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 본다(#96).
+
+    검사기가 고장 나서 아무것도 못 찾으면 이 작업은 조용히 통과한다. 그래서 검사기 자체의
+    단위 검사(test_userpath.py)를 먼저 돌린다.
+    """
+    run([sys.executable, "-m", "unittest", "-q", "test_userpath"], cwd=ROOT)
+    files, hits = scan_user_paths(ROOT, USER_PATH_SCAN)
+    if not files:
+        # 폴더를 옮기거나 지우면 검사할 파일이 0개가 되고 검사가 늘 통과한다. 그렇게 두지 않는다.
+        die(f"검사할 파일을 찾지 못했다: {', '.join(USER_PATH_SCAN)}\n"
+            "     폴더를 옮겼다면 tasks.py의 USER_PATH_SCAN을 고칠 것.")
+    for rel, lineno, col, match in hits:
+        # 파일:줄:칸: 형식이다. 편집기와 CI 로그 도구가 이 형식으로 해당 줄을 연다.
+        print(f"{rel}:{lineno}:{col}: 사용자 홈 폴더 경로 '{match}'", flush=True)
+    if hits:
+        die(f"kicad/_tools에서 사용자 홈 폴더 경로 {len(hits)}건을 찾았다(#96).\n"
+            "     작성자 PC에서만 있는 경로라 다른 PC에서 스크립트가 죽는다(#67).\n"
+            "     스크립트 위치(Path(__file__)) 기준 경로, 명령행 인자, 환경변수 중 하나로 바꿀 것.")
+    print(f"사용자 홈 폴더 경로 없음 - {len(files)}개 파일 검사")
+
+
 def task_check():
     print("\n전부 통과. PR 올려도 된다.")
 
@@ -464,9 +539,12 @@ TASKS = {t.name: t for t in [
          inputs=[".claude/skills/**/*", ".agents/skills/**/*", "ship.py"]),
     Task("shiptest", "ship.py 단위 검사 - gh 없이 가짜 응답으로 (#109)", task_shiptest,
          inputs=["ship.py", "test_ship.py"]),
-    Task("check", "CI와 같은 검사 - skills + shiptest + compile + sanity + gate + yaw + smoke"
-         " + conncheck", task_check,
-         deps=["skills", "shiptest", "compile", "sanity", "gate", "yaw", "smoke", "conncheck"]),
+    Task("userpath", "kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 확인 (#96)", task_userpath,
+         inputs=[*USER_PATH_SCAN, "test_userpath.py"]),
+    Task("check", "CI와 같은 검사 - skills + shiptest + userpath + compile + sanity + gate + yaw"
+         " + smoke + conncheck", task_check,
+         deps=["skills", "shiptest", "userpath", "compile", "sanity", "gate", "yaw", "smoke",
+               "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
