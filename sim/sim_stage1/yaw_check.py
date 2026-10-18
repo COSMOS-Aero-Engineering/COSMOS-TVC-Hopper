@@ -352,7 +352,9 @@ def check_yaw_pd(rotor_switch):
                     failures.append(f"{where}: 요를 섞은 뒤 롤·피치 판정 불합격 (기준: 넘어짐 ≤ {MAX_CRASH * 100:.0f} %, "
                                     f"중앙값 ≤ {MAX_MEDIAN_TILT_DEG:.0f}°)")
     print(f"\n   초기 |ψ| 최댓값 {initial_max:.2f}°")
-    print(f"   참고(TC-2.5 꼴, 랜덤화 끔): 롤만 {ROLL_STEP_RAD} rad 기울였을 때 피치 최대 |θ| — "
+    # print에 em dash처럼 cp949에 없는 문자를 쓰지 않는다. 한국어 Windows에서 출력을 파일로 돌리면
+    # UnicodeEncodeError로 멈춘다(tasks.py _survive_console_encoding 참고)
+    print(f"   참고(TC-2.5 꼴, 랜덤화 끔): 롤만 {ROLL_STEP_RAD} rad 기울였을 때 피치 최대 |θ|: "
           f"회전자 항 끔 {roll_step_pitch_peak(False):.3f}°, 켬 spin_dir +1 {roll_step_pitch_peak(True, 1):.3f}°, "
           f"-1 {roll_step_pitch_peak(True, -1):.3f}°")
     return failures
