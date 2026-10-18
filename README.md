@@ -114,7 +114,7 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
 
 ### 엔지니어링팀
 
-캘리퍼스로 잰 부품 실측값은 `cad/measurements.md`에 기록하고, CAD 파라미터(`cad/hopper_params.scad`)에 반영한 뒤 커밋한다. 무게중심 추정은 `python cad/cg/cg_estimate.py`. 배선은 [`docs/design/01-avionics-integration-final.md`](docs/design/01-avionics-integration-final.md) §2·§4가 기준이다(`docs/execution/bench-wiring.svg`는 구버전).
+캘리퍼스로 잰 부품 실측값은 `cad/measurements.md`에 기록하고, CAD 파라미터(`cad/hopper_params.scad`)에 반영한 뒤 커밋한다. 무게중심 추정은 `python cad/cg/cg_estimate.py`. CAD 검증 echo 확인은 `python tasks.py cad`(OpenSCAD 필요, CI도 PR마다 돌린다). 배선은 [`docs/design/01-avionics-integration-final.md`](docs/design/01-avionics-integration-final.md) §2·§4가 기준이다(`docs/execution/bench-wiring.svg`는 구버전).
 
 작업 폴더: `cad/`(파라메트릭 CAD), `kicad/`(회로도), `data/`(실험 로그).
 

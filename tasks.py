@@ -13,6 +13,7 @@ check와 CI: CI(.github/workflows/ci.yml)의 sim job이 `python tasks.py check`�
 CI는 그 밖에 학습 자료 목록·내부 링크 검사와 펌웨어 PlatformIO 빌드를 ci.yml에서 직접 돌린다.
 이 둘은 check에 없다. 로컬에서 check를 통과해도 이 둘은 따로 확인한다(명령은 ci.yml).
 check가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다.
+check의 cad 작업은 OpenSCAD가 필요하다. 없는 PC에서는 건너뛰고, CI는 OpenSCAD를 설치해서 돌린다(#61).
 
 왜 Makefile이 아니라 이 파일인가: 팀 개발 환경이 Windows 위주인데 Windows엔 `make`가 기본으로
 없다. 반면 파이썬은 소프트웨어팀이 어차피 설치해야 한다. 표준 라이브러리만 쓰므로 추가 설치도
@@ -49,6 +50,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import unicodedata
 from pathlib import Path
@@ -364,6 +366,8 @@ def cache_key(task, dep_keys):
         h.update(digest.encode())
     if task.uses_env:
         h.update(env_fingerprint().encode())
+    if task.tool:
+        h.update(task.tool().encode())
     return h.hexdigest()
 
 
@@ -413,9 +417,16 @@ def cache_write(name, key):
 # 작업 정의
 # ─────────────────────────────────────────────────────────────────────────────
 
+# 작업 함수가 이 값을 돌려주면 "실행할 수 없어서 건너뛰었다"는 뜻이다. execute()는 이 결과를
+# 캐시하지 않는다. 캐시하면 도구를 설치한 뒤에도 검사가 캐시 히트로 계속 빠진다.
+SKIPPED = object()
+# 이번 실행에서 건너뛴 작업 이름. main()이 마지막에 알린다.
+SKIPPED_TASKS = []
+
+
 class Task:
     def __init__(self, name, doc, run=None, deps=(), inputs=(), outputs=(),
-                 cacheable=True, uses_env=False, needs_torch=False):
+                 cacheable=True, uses_env=False, tool=None, needs_torch=False):
         self.name = name
         self.doc = doc
         self.run = run or (lambda: None)
@@ -424,6 +435,7 @@ class Task:
         self.outputs = tuple(outputs)     # 이 파일들이 없으면 캐시가 맞아도 다시 만든다
         self.cacheable = cacheable
         self.uses_env = uses_env          # .venv 상태를 캐시 키에 포함할지
+        self.tool = tool                  # 외부 도구의 경로·버전 문자열을 돌려주는 함수. 캐시 키에 넣는다
         self.needs_torch = needs_torch    # torch를 불러오는지. Windows에서 VC++ 런타임을 먼저 확인한다(#108)
 
 
@@ -621,6 +633,145 @@ def task_userpath():
     print(f"사용자 홈 폴더 경로 없음 - {len(files)}개 파일 검사")
 
 
+# CAD 검증 echo(#61). hopper_params.scad 맨 아래 echo()가 조립 정합성을 계산하고, 문제가 있으면
+# 문구에 "!!"를 넣는다. 예전에는 사람이 OpenSCAD 콘솔을 열어야만 이 경고를 봤다.
+CAD_SCAD = ROOT / "cad" / "hopper_params.scad"
+# 두 모드를 다 돌린다. echo는 모드와 관계없이 나오지만, 없는 모듈·변수 경고는 그 모드의 조립
+# 분기를 실행해야 나온다.
+CAD_MODES = ("preview", "print")
+OPENSCAD_HOW = (
+    "https://openscad.org/downloads.html\n"
+    "           Windows: 설치 파일로 설치한다. 기본 폴더(C:\\Program Files\\OpenSCAD)에 두면 자동으로 찾는다.\n"
+    "           Ubuntu:  sudo apt-get install openscad\n"
+    "           다른 폴더에 두었으면 환경변수 OPENSCAD에 openscad 실행 파일 경로를 넣는다."
+)
+
+
+def find_openscad():
+    """실제로 실행되는 OpenSCAD 경로를 돌려준다. 없으면 None.
+
+    찾는 순서: 환경변수 OPENSCAD, PATH의 openscad, Windows 기본 설치 폴더.
+    Windows에서 설치 폴더에 실행 파일만 남고 설치가 깨진 일이 있었다(cad/README.md, 2026-09-18).
+    그래서 파일이 있는지만 보지 않고 `--version`이 성공하는지 본다.
+    """
+    cands = [os.environ.get("OPENSCAD"), shutil.which("openscad")]
+    if os.name == "nt":
+        for base in (os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)")):
+            if base:
+                cands.append(str(Path(base) / "OpenSCAD" / "openscad.exe"))
+    for cand in cands:
+        if cand and Path(cand).is_file() and openscad_version(cand) is not None:
+            return cand
+    return None
+
+
+def openscad_version(exe):
+    """`exe --version`의 출력을 돌려준다. 실패하면 None.
+
+    OpenSCAD 2021.01은 Linux와 Windows 모두 버전을 stderr에 쓴다. 그래서 stdout과 stderr를 합친다.
+    """
+    try:
+        r = subprocess.run([exe, "--version"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return (r.stdout + r.stderr).strip() if r.returncode == 0 else None
+
+
+def openscad_fingerprint():
+    """cad 작업의 캐시 키에 넣는 OpenSCAD 경로와 버전.
+
+    이 값이 키에 없으면 한 번 통과한 뒤 OpenSCAD를 지우거나 바꿔도 cad가 캐시 히트로 통과한다.
+    없으면 "no-openscad"다. 그러면 키가 달라져서 cad가 다시 돌고 [건너뜀]을 출력한다.
+    """
+    exe = find_openscad()
+    return f"{exe}\n{openscad_version(exe)}" if exe else "no-openscad"
+
+
+def scan_cad_output(text):
+    """OpenSCAD 출력에서 (ECHO 줄, "!!" 경고가 있는 ECHO 줄, WARNING·ERROR 줄)을 돌려준다.
+
+    OpenSCAD는 없는 변수·모듈을 WARNING으로만 알리고 exit 0으로 끝난다. 그런 echo는 값이
+    undef라서 "!!" 판정이 틀릴 수 있다. 그래서 WARNING도 실패로 본다.
+    """
+    lines = [line.strip() for line in text.splitlines()]
+    echoes = [line for line in lines if line.startswith("ECHO:")]
+    alarms = [line for line in echoes if "!!" in line]
+    problems = [line for line in lines if line.startswith(("WARNING:", "ERROR:"))]
+    return echoes, alarms, problems
+
+
+def check_cad_file(exe, scad, workdir):
+    """scad를 CAD_MODES마다 OpenSCAD로 실행하고 실패 이유 목록을 돌려준다. 빈 목록이면 통과다.
+
+    `-o <파일>.echo`는 echo() 출력과 경고를 텍스트 파일로 쓴다(OpenSCAD 매뉴얼, 명령행 사용).
+    판정은 이 파일과 stderr를 같이 읽는다. Windows의 openscad.exe는 stderr를 비워 둘 수 있다.
+    형상(CGAL) 계산은 하지 않는다. 그래서 파일 하나에 1초 안쪽으로 끝난다.
+    """
+    failures = []
+    for mode in CAD_MODES:
+        out = Path(workdir) / f"{mode}.echo"
+        out.unlink(missing_ok=True)
+        cmd = [exe, "-D", f'render_mode="{mode}"', "-o", str(out), str(scad)]
+        print(f"\n$ {' '.join(cmd)}", flush=True)
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=600)
+        except subprocess.TimeoutExpired:
+            failures.append(f"{mode}: OpenSCAD가 600초 안에 끝나지 않았다.")
+            continue
+        text = out.read_text(encoding="utf-8", errors="replace") if out.exists() else ""
+        echoes, alarms, problems = scan_cad_output(text)
+        # stderr에도 같은 줄이 나올 수 있다. 같은 줄을 두 번 세지 않는다.
+        problems += [p for p in scan_cad_output(r.stderr)[2] if p not in problems]
+        print(f"{mode}: echo {len(echoes)}줄, '!!' 경고 {len(alarms)}건, "
+              f"WARNING·ERROR {len(problems)}건 (exit {r.returncode})", flush=True)
+        for line in alarms + problems:
+            # die()는 stderr로 쓴다. flush하지 않으면 CI 로그에서 이 줄이 [중단] 뒤에 찍힌다.
+            print(f"  {line}", flush=True)
+        if r.returncode != 0:
+            tail = r.stderr.strip()[-1000:]
+            failures.append(f"{mode}: OpenSCAD가 exit {r.returncode}로 끝났다." + (f"\n{tail}" if tail else ""))
+        elif not out.exists():
+            failures.append(f"{mode}: OpenSCAD가 exit 0이지만 {out.name}을 만들지 않았다.")
+        elif not echoes:
+            # 검사기가 아무것도 읽지 못하면 늘 통과한다. echo가 0줄이면 실패로 본다.
+            failures.append(f"{mode}: echo가 0줄이다. 검증 echo()를 지웠거나 출력을 읽지 못했다.")
+        if alarms:
+            failures.append(f"{mode}: '!!' 경고 {len(alarms)}건")
+        if problems:
+            failures.append(f"{mode}: WARNING·ERROR {len(problems)}건")
+    return failures
+
+
+def task_cad():
+    """hopper_params.scad의 검증 echo에 "!!" 경고나 OpenSCAD 경고가 없는지 본다(#61).
+
+    OpenSCAD가 없는 PC에서는 이유와 설치 방법을 출력하고 건너뛴다. 건너뛴 결과는 캐시하지
+    않는다. CI(환경변수 CI가 있음)에서는 건너뛰지 않고 실패한다. CI가 OpenSCAD 설치 단계를
+    잃으면 이 검사가 조용히 빠지기 때문이다. ci.yml의 sim job이 OpenSCAD를 설치한다.
+
+    검사기 자체의 단위 검사(test_cadcheck.py)를 먼저 돌린다.
+    """
+    run([sys.executable, "-m", "unittest", "-q", "test_cadcheck"], cwd=ROOT)
+    exe = find_openscad()
+    if not exe:
+        if os.environ.get("CI"):
+            die("CI에서 OpenSCAD를 찾지 못했다. ci.yml sim job의 OpenSCAD 설치 단계를 확인할 것.\n"
+                f"     설치: {OPENSCAD_HOW}")
+        print("[건너뜀] cad - OpenSCAD를 찾지 못했다. CI는 이 검사를 돌린다.\n"
+              f"     설치: {OPENSCAD_HOW}")
+        return SKIPPED
+    if not CAD_SCAD.is_file():
+        die(f"{CAD_SCAD.relative_to(ROOT)}이 없다. 파일을 옮겼다면 tasks.py의 CAD_SCAD를 고칠 것.")
+    with tempfile.TemporaryDirectory() as tmp:
+        failures = check_cad_file(exe, CAD_SCAD, tmp)
+    if failures:
+        die("CAD 검증 실패:\n     " + "\n     ".join(failures) +
+            f"\n     {CAD_SCAD.relative_to(ROOT)}를 고친 뒤 다시 실행할 것.")
+    print("CAD 검증 echo 통과 - '!!' 경고와 OpenSCAD 경고 없음")
+
+
 # 한국어 Windows에서 출력을 파일이나 파이프로 돌리면 파이썬은 cp949로 쓴다. 출력 문자열에
 # em dash(U+2014)처럼 cp949에 없는 글자가 있으면 UnicodeEncodeError로 멈춘다(#137, #147, #170, #169).
 # CI는 Linux(UTF-8)에서 돌아서 이 결함을 보지 못한다. cp949 작업이 이것을 막는다(#171).
@@ -774,6 +925,8 @@ TASKS = {t.name: t for t in [
          inputs=["ship.py", "test_ship.py"]),
     Task("userpath", "kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 확인 (#96)", task_userpath,
          inputs=[*USER_PATH_SCAN, "test_userpath.py"]),
+    Task("cad", "CAD 검증 echo에 '!!' 경고·OpenSCAD 경고가 없는지 확인, OpenSCAD 없으면 건너뜀 (#61)",
+         task_cad, inputs=["cad/hopper_params.scad", "test_cadcheck.py"], tool=openscad_fingerprint),
     Task("cp949", "print·raise 등 출력 문자열에 cp949에 없는 글자가 없는지 확인 (#171)."
          f" 범위: {', '.join(CP949_SCAN)}", task_cp949,
          inputs=[*CP949_SCAN, "test_cp949.py",
@@ -785,8 +938,8 @@ TASKS = {t.name: t for t in [
                  "test_kicad_version.py"]),
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
          " 단계 목록은 graph)", task_check,
-         deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "vcruntime", "compile",
-               "sanity", "gate", "yaw", "smoke", "conncheck"]),
+         deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "cad", "vcruntime",
+               "compile", "sanity", "gate", "yaw", "smoke", "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True, needs_torch=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
@@ -848,7 +1001,10 @@ def execute(name, opts, memo, done):
         return
 
     print(f"[실행] {name} - {task.doc}")
-    task.run()
+    if task.run() is SKIPPED:
+        SKIPPED_TASKS.append(name)
+        done.add(name)
+        return
     if task.cacheable:
         # 실행 전 키가 아니라 '실행 후' 키를 저장한다. uses_env 작업은 실행 과정에서
         # .venv가 만들어지거나 갱신될 수 있어서, 실행 전 키를 저장하면 다음 번에 절대
@@ -903,6 +1059,9 @@ def main():
 
     ensure_env(opts.task)
     execute(opts.task, opts, {}, set())
+    # check가 캐시 히트면 task_check는 돌지 않는다. 그래서 건너뛴 작업은 여기서 알린다.
+    if SKIPPED_TASKS:
+        print(f"\n건너뛴 작업: {', '.join(SKIPPED_TASKS)}. 이유는 위 [건너뜀] 줄을 본다. CI는 이 작업도 돌린다.")
     return 0
 
 
