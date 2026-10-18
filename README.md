@@ -188,6 +188,7 @@ gh pr create --base main --reviewer junwonkim07
 | `git push` 시 로그인 창이 반복됨 | Git Credential Manager 인증 만료 | 뜨는 브라우저 창에서 GitHub 로그인 재시도. 안 뜨면 Settings → Developer settings → Personal access tokens에서 토큰 생성 후 비밀번호 칸에 붙여넣기 |
 | Teensy가 USB에 아예 안 잡힘(장치 관리자에 안 뜸, 빨간 LED만 깜빡임) | 충전 전용 USB 케이블 | 데이터 전송이 되는 케이블로 바꾼다. 다른 보드를 같은 케이블에 꽂아 PC가 인식하는지 먼저 본다(2026-10-15 실제 원인) |
 | PowerShell에서 `cd 폴더 && pio run`이 오류 | Windows PowerShell 5.1은 `&&`를 지원하지 않음 | `;`로 잇는다: `cd 폴더; pio run` |
+| macOS에서 `pio run -t upload`가 `Unable find Teensy Loader.  (p)  Is the Teensy Loader application running?`로 실패(빌드는 `SUCCESS`) | 기본 업로드 방식 `teensy-gui`가 Teensy Loader 앱과 연결하지 못함 | `pio run -e teensy40_cli -t upload`로 업로드한다(`teensy-cli` 방식, #91). macOS 실물 업로드는 아직 확인하지 않았다. Apple Silicon Mac에서는 Rosetta 2가 필요할 것으로 보인다(`teensy_loader_cli` 실행 파일이 x86_64 전용, 확인 필요) |
 | Teensy 업로드 시 보드가 안 잡힘 | USB 드라이버 미인식 또는 프로그램 버튼 타이밍 | PlatformIO가 필요한 툴체인은 자동 설치하지만 Windows에서 드라이버가 안 잡히면 [PJRC Teensy Loader](https://www.pjrc.com/teensy/loader_win10.html) 드라이버만 별도 설치, 업로드 시작 직후 보드의 프로그램 버튼 눌러주기(버튼 손상 시 접점 순간 단락으로 대체 가능) |
 | BNO085 값이 안 뜸 | SPI 배선 또는 PS0/PS1 모드 설정 문제 | CS=10, MOSI=11, MISO=12, SCK=13, RST=20, INT=21, WAK/PS0=22 확인. PS1은 3.3V에 묶고 전원도 3.3V만 사용. 모듈 실크가 다르면 `firmware/cosmos/imu_test/src/imu_test.ino` 상단 배선표와 실물 후면 표기를 대조 |
 | `pip install` 중 `OSError: [Errno 2] No such file or directory: ...torch\include\...` | Windows 경로 길이 260자 제한 (torch는 경로가 아주 깊다) | 저장소를 더 짧은 경로로 옮기거나(예: `C:\dev\COSMOS-TVC-Hopper`), [긴 경로 지원 활성화](https://pip.pypa.io/warnings/enable-long-paths) |

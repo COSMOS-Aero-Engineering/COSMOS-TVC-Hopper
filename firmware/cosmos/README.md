@@ -31,8 +31,16 @@
 cd firmware/cosmos/imu_test        # 또는 throttle_serial
 pio run                            # 컴파일만
 pio run -t upload                  # Teensy에 업로드
+pio run -e teensy40_cli -t upload  # macOS에서 Teensy에 업로드 (#91)
 pio device monitor -b 115200       # 시리얼 모니터
 ```
+
+macOS에서 `pio run -t upload`가 `Unable find Teensy Loader.`로 실패한 사례가 있다(#91). 기본 업로드 방식
+`teensy-gui`는 Teensy Loader 앱과 연결해야 하기 때문이다. 그래서 각 `platformio.ini`에 업로드 방식만
+`teensy-cli`로 바꾼 env `teensy40_cli`를 두었다. env를 지정하지 않은 명령은 `default_envs = teensy40`이라
+예전처럼 `teensy40` env만 처리한다(Windows·CI 동작 그대로). macOS 실물 업로드는 아직 확인하지 않았다.
+`teensy_loader_cli`의 macOS 실행 파일은 x86_64 전용이라 Apple Silicon Mac에서는 Rosetta 2가 필요할 것으로
+보인다(확인 필요).
 
 VSCode PlatformIO 익스텐션 쓰면 왼쪽 개미 아이콘(PlatformIO 사이드바)에서 같은 동작을 버튼으로 — 이번에
 SW팀이 오늘 설치한 그 익스텐션.
