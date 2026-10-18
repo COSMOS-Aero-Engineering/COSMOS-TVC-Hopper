@@ -69,3 +69,5 @@ void loop() {
     Serial.println(yaw, 1);
   }
 }
+
+#error "임시 실패 시험(#103): firmware — 전체가 실패하는지 본다. 다음 커밋에서 되돌린다."
