@@ -6,7 +6,8 @@ Week 2 물리 실험의 "구속 스탠드"(M1, 만능조인트로 위치를 고�
 우리 기체 구조·좌표계·베인 4개짜리 토크 방정식을 그대로 쓰는 "진짜" 첫 RL 환경.
 
 ⚠️ 아직 실험 A(EDF 추력곡선)·구속 스탠드 실측 전이라 params.yaml의 물리 상수
-   (Jxx/Jyy/Jzz, CLalpha, vane_geometry, A_duct, Kf, vane_arm_l)는 PLACEHOLDER 상태. 지금 단계 목표는:
+   (Jxx/Jyy/Jzz, CLalpha, vane_geometry, Kf, omega_t_per_throttle, vane_arm_l)는 PLACEHOLDER 상태.
+   지금 단계 목표는:
      "RL 학습 파이프라인이 우리 기체의 실제 상태/액션 구조에 맞춰 정상적으로 도는가"
    를 확인하는 것 — 절대적인 학습 성능 숫자 자체는 아직 의미 없음.
    Week 2에서 실측값이 나오는 대로 params.yaml만 교체하면 이 코드는 그대로 재사용됨.
@@ -19,10 +20,16 @@ Week 2 물리 실험의 "구속 스탠드"(M1, 만능조인트로 위치를 고�
 EDF 회전자 항(#86): params.yaml의 rotor.enabled를 켜면 회전자 반작용 토크(−I_r·dΩ/dt, z축)와
 회전자 자이로 토크(−ω × h, 롤·피치)를 더한다. 기본값은 끔이다. 원논문은 반대로 도는 모터 2개라
 이 토크가 상쇄된다고 보고 뺐다(Jacobsen 2021 §3.2). 우리는 EDF 1개라 상쇄되지 않는다.
+켜면 추력도 1차 지연을 따르는 회전수 Ω에서 계산한다(Ft ∝ Ω², #122). 끄면 추력은 지연 없이 스로틀을 따른다.
 식과 상수 근거는 docs/design/modelling-notes-ch3.md §3의 "EDF 회전자 반작용·자이로 항".
 
+스로틀 변화율 제한(#120): params.yaml의 throttle_slew_rate(1/s)로 스로틀 명령이 한 스텝에 바뀌는 양을
+±throttle_slew_rate·dt로 자른다. 회전자 항 스위치와 상관없이 늘 쓴다. 펌웨어도 같은 제한을 쓴다(마스터 설계 §8.1).
+제한 뒤 실제로 쓴 스로틀은 step()의 info["throttle"]에 있다. 이 값은 관측(obs)에 없다.
+
 도메인 랜덤화: params.yaml의 domain_rand 설정에 따라 매 reset()마다 Jxx/Jyy/Jzz,
-베인 모멘트암(l,r), Kf, 무게중심-추력축 오프셋을 그 범위 안에서 무작위로 다시 뽑는다.
+베인 모멘트암(l,r), Kf, 무게중심-추력축 오프셋, 회전자 상수(inertia·omega_max·tau, #121)를
+그 범위 안에서 무작위로 다시 뽑는다.
 지금은 애초에 실측 전 PLACEHOLDER 값들이라 "정확한 한 점"을 맞추는 게 의미가 없고,
 "이 근처 분포 전체"에서 버티는 정책을 학습해두는 게 나중에 실측값이 들어왔을 때도,
 그리고 실제 기체로 이식할 때도(PID와의 정량 비교 실험, CLAUDE.md 참고) 더 안전하다.
@@ -50,7 +57,17 @@ EPISODE_STREAMS = (
     "vane_arm_l", "vane_arm_r",
     "Kf",
     "cg_offset_x", "cg_offset_y",
+    "rotor_inertia", "rotor_omega_max", "rotor_tau",   # #121
 )
+
+# 회전자 상수의 랜덤화 분포(#121). 범위는 params.yaml domain_rand의 <이름>_range([아래, 위])에 있다.
+# True = 로그 균등(ln 값이 균등. 비율마다 같은 확률), False = 균등.
+#   inertia: 범위가 7배(5e-6 - 3.5e-5)라 로그 균등. 명목 1e-5 아래를 뽑을 확률이 36 %다(균등이면 17 %)
+#   omega_max: 범위가 1.29배(3100 - 4000)라 두 분포의 차이가 작다. 균등
+#   tau: 시상수(척도 값)이고 범위가 5배(0.03 - 0.15)라 로그 균등. 0.06 s 위를 뽑을 확률이 57 %다(균등이면 75 %)
+# 근거: Peng et al. 2018(arXiv:1710.06537)은 질량·감쇠·마찰·게인을 로그로, 나머지를 균등으로 뽑았다.
+#   OpenAI 2018(arXiv:1808.00177) 표 1도 감쇠·액추에이터 게인을 loguniform으로 뽑았다.
+ROTOR_RAND_LOG = {"rotor_inertia": True, "rotor_omega_max": False, "rotor_tau": True}
 
 
 def stream_id(name: str) -> int:
@@ -64,18 +81,21 @@ if len(set(STREAM_IDS.values())) != len(STREAM_IDS):
 
 
 def vane_geometry(p: dict) -> dict:
-    """베인 잠김 구간 하나(params.yaml의 vane_geometry)에서 요 팔 r, 잠긴 면적 A_fin, 종횡비 AR을 계산한다(#98).
+    """베인 잠김 구간 하나(params.yaml의 vane_geometry)에서 요 팔 r, 잠긴 면적 A_fin, 종횡비 AR,
+    배기 단면적 A_duct를 계산한다(#98, #117).
 
     잠김 구간은 반경 inner_r-outer_r, 시위는 chord다. 축방향 유속이 이 구간에서 균일하다고 본다.
-      r     = (inner_r + outer_r) / 2       z축 → 베인 압력중심 반경(m). 요 토크 팔이다
-      A_fin = (outer_r - inner_r) · chord   베인 1장이 제트에 잠긴 면적(m^2)
-      AR    = (outer_r - inner_r) / chord   종횡비. params.yaml의 CLalpha 주석에서 쓴다
+      r      = (inner_r + outer_r) / 2       z축 → 베인 압력중심 반경(m). 요 토크 팔이다
+      A_fin  = (outer_r - inner_r) · chord   베인 1장이 제트에 잠긴 면적(m^2)
+      AR     = (outer_r - inner_r) / chord   종횡비. params.yaml의 CLalpha 주석에서 쓴다
+      A_duct = π · outer_r²                  배기 단면적(m^2). 제트 반지름 outer_r인 원 전체다(#117 결정 (a)).
+                                             꼬리 원뿔(허브) 단면은 빼지 않는다
     mm 값을 1e3, 1e6으로 나눠서 m, m^2로 바꾼다. 곱하기(1e-3) 대신 나누기를 쓰면 명목값이
     소수 리터럴 0.018, 7.0e-4와 비트 단위로 같다.
     """
-    for old in ("A_fin", "vane_arm_r"):
+    for old, since in (("A_fin", "#98"), ("vane_arm_r", "#98"), ("A_duct", "#117")):
         if old in p:
-            raise ValueError(f"params.yaml에서 {old} 줄을 지울 것. 이 값은 vane_geometry에서 계산한다(#98). "
+            raise ValueError(f"params.yaml에서 {old} 줄을 지울 것. 이 값은 vane_geometry에서 계산한다({since}). "
                              "두 줄을 같이 두면 두 출처가 어긋날 수 있다.")
     g = p["vane_geometry"]
     inner, outer, chord = float(g["inner_r_mm"]), float(g["outer_r_mm"]), float(g["chord_mm"])
@@ -83,23 +103,25 @@ def vane_geometry(p: dict) -> dict:
         raise ValueError(f"vane_geometry가 잘못됐다: 0 ≤ inner_r_mm({inner}) < outer_r_mm({outer}), "
                          f"chord_mm({chord}) > 0 이어야 한다.")
     span = outer - inner
-    return {"r": (inner + outer) / 2.0 / 1e3, "A_fin": span * chord / 1e6, "AR": span / chord}
+    return {"r": (inner + outer) / 2.0 / 1e3, "A_fin": span * chord / 1e6, "AR": span / chord,
+            "A_duct": np.pi * outer**2 / 1e6}
 
 
 def vane_lift_gain(p: dict) -> float:
     """베인 1장의 측력/추력 비율 기울기 CL(1/rad). F = Ft · CL · alpha (논문 식 3.16).
 
-    CL = CLalpha · A_fin / (2 · A_duct). A_fin은 vane_geometry()에서 계산한다.
+    CL = CLalpha · A_fin / (2 · A_duct). A_fin과 A_duct는 vane_geometry()에서 계산한다.
     한 축 베인 2장의 최대 측력 2·CL·alpha_max·Ft가
     제트 운동량 상한 Ft·sin(alpha_max)를 넘으면 과대 추정이므로 ValueError를 낸다
     (docs/design/rl-open-source-survey.md §2).
     """
-    CL = p["CLalpha"] * vane_geometry(p)["A_fin"] / (2.0 * p["A_duct"])
+    g = vane_geometry(p)
+    CL = p["CLalpha"] * g["A_fin"] / (2.0 * g["A_duct"])
     alpha_max = np.deg2rad(p["alpha_max_deg"])
     if 2.0 * CL * alpha_max > np.sin(alpha_max):
         raise ValueError(
             f"베인 측력 과대 추정: 축당 2·CL·alpha_max = {2.0 * CL * alpha_max:.4f}·Ft > "
-            f"sin(alpha_max) = {np.sin(alpha_max):.4f}·Ft. params.yaml의 CLalpha/vane_geometry/A_duct를 확인할 것."
+            f"sin(alpha_max) = {np.sin(alpha_max):.4f}·Ft. params.yaml의 CLalpha/vane_geometry를 확인할 것."
         )
     return float(CL)
 
@@ -124,6 +146,13 @@ class HopperAttitudeEnv(gym.Env):
         self.nominal_r = vane_geometry(p)["r"]
         self.nominal_Kf = p["Kf"]
         self.omega_t_per_throttle = p["omega_t_per_throttle"]   # 랜덤화하지 않는다
+        # 스로틀 변화율 제한(#120). 스로틀(0-1)이 1초에 바뀔 수 있는 최댓값(1/s). null이면 제한하지 않는다.
+        # 키가 없으면 KeyError를 낸다. 제한이 조용히 꺼지지 않게 하려고 기본값을 두지 않았다.
+        rate = p["throttle_slew_rate"]
+        self.throttle_slew_rate = None if rate is None else float(rate)
+        if self.throttle_slew_rate is not None and not self.throttle_slew_rate > 0:
+            raise ValueError(f"throttle_slew_rate = {rate}: 0보다 커야 한다. 제한을 끄려면 null로 둔다.")
+        self.throttle_applied = None   # 직전 스텝에 실제로 쓴 스로틀(0-1). 에피소드 첫 step()에서 정한다
         self.CL = vane_lift_gain(p)
         self.CD0 = p["CD0"]
         self.alpha_max = np.deg2rad(p["alpha_max_deg"])
@@ -132,19 +161,23 @@ class HopperAttitudeEnv(gym.Env):
 
         # EDF 회전자(#86). 상수는 늘 읽는다. step()은 rotor_enabled가 참일 때만 회전자 토크를 넣는다.
         # yaw_check.py는 스위치와 상관없이 rotor_enabled를 바꿔서 끈 경우와 켠 경우를 비교한다.
-        # 상수는 랜덤화하지 않는다(params.yaml rotor 블록 주석).
+        # inertia·omega_max·tau는 명목값이다. 랜덤화를 켜면 reset()이 에피소드마다 다시 뽑는다(#121). spin_dir는 뽑지 않는다.
         rotor = p.get("rotor", {})
         self.rotor_enabled = bool(rotor.get("enabled", False))
-        self.rotor_inertia = float(rotor.get("inertia", 0.0))      # kg·m²
-        self.rotor_omega_max = float(rotor.get("omega_max", 0.0))  # rad/s, 스로틀 100 %
-        self.rotor_tau = float(rotor.get("tau", 0.0))              # s
+        self.nominal_rotor_inertia = float(rotor.get("inertia", 0.0))      # kg·m²
+        self.nominal_rotor_omega_max = float(rotor.get("omega_max", 0.0))  # rad/s, 스로틀 100 %
+        self.nominal_rotor_tau = float(rotor.get("tau", 0.0))              # s
         self.rotor_spin_dir = int(rotor.get("spin_dir", 1))
         if self.rotor_spin_dir not in (1, -1):
             raise ValueError(f"rotor.spin_dir = {self.rotor_spin_dir}: +1 또는 -1이어야 한다.")
-        if min(self.rotor_inertia, self.rotor_omega_max, self.rotor_tau) < 0:
+        if min(self.nominal_rotor_inertia, self.nominal_rotor_omega_max, self.nominal_rotor_tau) < 0:
             raise ValueError("rotor.inertia, rotor.omega_max, rotor.tau는 0 이상이어야 한다.")
-        if self.rotor_enabled and not (self.rotor_inertia > 0 and self.rotor_omega_max > 0):
+        if self.rotor_enabled and not (self.nominal_rotor_inertia > 0 and self.nominal_rotor_omega_max > 0):
             raise ValueError("rotor.enabled가 true인데 rotor.inertia나 rotor.omega_max가 0이다.")
+        self.rotor_inertia = self.nominal_rotor_inertia      # 이번 에피소드 값. reset()이 정한다
+        self.rotor_omega_max = self.nominal_rotor_omega_max
+        self.rotor_tau = self.nominal_rotor_tau
+        self.rotor_ranges = self._rotor_ranges()
         self.rotor_omega = None   # rad/s, 회전자 회전수. 에피소드 첫 step()에서 정한다
 
         self.dt = dt
@@ -191,6 +224,29 @@ class HopperAttitudeEnv(gym.Env):
         seq = np.random.SeedSequence([STREAM_IDS[name], self.episode_seed])
         return np.random.Generator(np.random.PCG64(seq))
 
+    def _rotor_ranges(self):
+        """params.yaml domain_rand의 회전자 상수 범위를 읽고 검사한다(#121). {이름: (아래, 위)}.
+
+        범위 키가 없으면 그 값은 명목값으로 둔다. 랜덤화를 켜면 범위는 명목값을 품어야 한다. 실측 뒤 명목값만 고치고
+        범위를 그대로 두면 랜덤화가 명목값을 한 번도 뽑지 않는 어긋남이 생기기 때문이다.
+        랜덤화를 끄면 범위를 쓰지 않으므로 검사하지 않는다. 그래서 domain_rand.enabled가 false이면
+        rotor.tau = 0(지연 없음)도 범위를 고치지 않고 쓸 수 있다.
+        """
+        ranges = {}
+        check = bool(self.dr.get("enabled", False))
+        for name in ROTOR_RAND_LOG:
+            bounds = self.dr.get(f"{name}_range")
+            if bounds is None:
+                continue
+            lo, hi = (float(b) for b in bounds)
+            nominal = getattr(self, f"nominal_{name}")
+            if check and not (0.0 < lo <= nominal <= hi):
+                raise ValueError(f"domain_rand.{name}_range = [{lo:g}, {hi:g}]: 0 < 아래 ≤ 명목값({nominal:g}) ≤ 위 "
+                                 f"이어야 한다. params.yaml의 rotor 명목값과 범위를 함께 고칠 것. "
+                                 f"이 값을 랜덤화하지 않으려면 domain_rand.{name}_range 줄을 지운다.")
+            ranges[name] = (lo, hi)
+        return ranges
+
     def _randomize_episode_params(self):
         """도메인 랜덤화 — 이번 에피소드에서 쓸 물리 상수를 명목값 주변에서 다시 뽑는다."""
         if not self.dr.get("enabled", False):
@@ -199,6 +255,9 @@ class HopperAttitudeEnv(gym.Env):
             self.Kf = self.nominal_Kf
             self.cg_offset_x = 0.0
             self.cg_offset_y = 0.0
+            self.rotor_inertia = self.nominal_rotor_inertia
+            self.rotor_omega_max = self.nominal_rotor_omega_max
+            self.rotor_tau = self.nominal_rotor_tau
             return
 
         def jitter(name, nominal, rel_range):
@@ -222,16 +281,38 @@ class HopperAttitudeEnv(gym.Env):
         self.cg_offset_x = self._rng("cg_offset_x").uniform(-cg_offset_max_m, cg_offset_max_m)
         self.cg_offset_y = self._rng("cg_offset_y").uniform(-cg_offset_max_m, cg_offset_max_m)
 
+        # 회전자 상수(#121): [아래, 위] 범위에서 값마다 자기 난수 흐름으로 뽑는다. 분포는 ROTOR_RAND_LOG.
+        # rotor.enabled가 꺼져 있어도 뽑는다. 흐름이 따로라 다른 값의 표본은 바뀌지 않고, 끄면 쓰지 않는다.
+        for name, nominal in (("rotor_inertia", self.nominal_rotor_inertia),
+                              ("rotor_omega_max", self.nominal_rotor_omega_max),
+                              ("rotor_tau", self.nominal_rotor_tau)):
+            if name not in self.rotor_ranges:
+                value = nominal
+            elif ROTOR_RAND_LOG[name]:
+                lo, hi = self.rotor_ranges[name]
+                value = float(np.exp(self._rng(name).uniform(np.log(lo), np.log(hi))))
+            else:
+                value = float(self._rng(name).uniform(*self.rotor_ranges[name]))
+            setattr(self, name, value)
+
     def step(self, action):
         action = np.clip(action, self.action_space.low, self.action_space.high)
         a1, a2, a3, a4, throttle_norm = action
         alpha = np.array([a1, a2, a3, a4]) * self.alpha_max
-        throttle = (throttle_norm + 1.0) / 2.0  # -1~1 -> 0~1
+        throttle = self._limit_throttle((throttle_norm + 1.0) / 2.0)  # -1~1 -> 0~1, 그다음 변화율 제한(#120)
+
+        # 회전자 항을 켜면(#86) 회전수 Ω가 스로틀을 1차 지연으로 따라가고, 추력도 이 Ω에서 계산한다(#122).
+        # 추력에 쓰는 유효 스로틀 = Ω / omega_max. 끄면 지금처럼 스로틀을 그대로 쓴다.
+        if self.rotor_enabled:
+            rotor_omega0, rotor_omega1 = self._advance_rotor(throttle)
+            thrust_throttle = rotor_omega1 / self.rotor_omega_max
+        else:
+            thrust_throttle = throttle
 
         # 스로틀 -> 추력 (PLACEHOLDER 스케일: omega_t_equiv는 실제 rpm이 아니라
         # throttle을 상대적 회전수로 환산한 임시 값. 환산 상수는 params.yaml의 omega_t_per_throttle.
         # 실험 A 이후 실제 DShot 값 기준으로 교체)
-        omega_t_equiv = throttle * self.omega_t_per_throttle
+        omega_t_equiv = thrust_throttle * self.omega_t_per_throttle
         Ft = self.Kf * omega_t_equiv**2
 
         # 베인 선형 공력 근사 (modelling-notes-ch3.md §2.2, 식 3.16)
@@ -263,7 +344,7 @@ class HopperAttitudeEnv(gym.Env):
         theta += theta_dot * self.dt
         psi += psi_dot * self.dt
         if self.rotor_enabled:
-            wx, wy, wz = self._integrate_with_rotor(throttle, wx, wy, wz, wx_dot, wy_dot, wz_dot)
+            wx, wy, wz = self._integrate_with_rotor(rotor_omega0, rotor_omega1, wx, wy, wz, wx_dot, wy_dot, wz_dot)
         else:
             wx += wx_dot * self.dt
             wy += wy_dot * self.dt
@@ -283,26 +364,32 @@ class HopperAttitudeEnv(gym.Env):
         terminated = bool(crashed)
         truncated = self.step_count >= self.max_steps
 
-        return self.state.copy(), float(reward), terminated, truncated, {}
+        return self.state.copy(), float(reward), terminated, truncated, {"throttle": float(throttle)}
 
-    def _integrate_with_rotor(self, throttle, wx, wy, wz, wx_dot, wy_dot, wz_dot):
-        """회전자 항을 넣어 바디 각속도를 한 스텝(dt) 적분한다(#86). step()이 rotor_enabled일 때만 부른다.
+    def _limit_throttle(self, throttle_cmd):
+        """스로틀 변화율 제한(#120). 이번 스텝에 실제로 쓸 스로틀(0-1)을 돌려준다.
 
-        식: 회전자를 품은 강체(gyrostat)의 각운동량 식
-            J·ω̇ = τ − ω × (J·ω) − ω × h − dh/dt,   h = s·I_r·Ω·e_z
-        반작용 휠 위성 식(Shahraki & Lessard 2024, arXiv:2409.19936 식 4b·4c)과 같은 꼴이다.
-        τ와 ω × (J·ω) 항은 step()이 이미 wx_dot·wy_dot·wz_dot에 넣었다. 여기서는 회전자 항 두 개만 더한다.
+        직전 스텝의 스로틀에서 ±throttle_slew_rate·dt 안으로 자른다. 올릴 때와 내릴 때 같은 제한이다.
+        에피소드 첫 스텝은 자르지 않는다. 회전자와 같은 가정이다: 팬이 이미 그 스로틀로 돌고 있었다.
+        명령이 그대로면 min(max(x, x − d), x + d) = x라서 스로틀을 고정한 결과는 제한이 없을 때와 비트 단위로 같다.
+        """
+        if self.step_count == 0 or self.throttle_applied is None or self.throttle_slew_rate is None:
+            throttle = throttle_cmd
+        else:
+            d = self.throttle_slew_rate * self.dt
+            throttle = min(max(throttle_cmd, self.throttle_applied - d), self.throttle_applied + d)
+        self.throttle_applied = throttle
+        return throttle
 
-        회전수 Ω: 목표 omega_max·throttle을 시상수 tau의 1차 지연으로 따라간다(가정, Jacobsen 2021 식 3.8 꼴).
-          에피소드 첫 스텝에서는 회전자가 이미 그 스로틀로 돌고 있었다고 둔다(가정). 구속 스탠드 시험은
-          팬을 돌린 상태에서 자세 교란을 주기 때문이다. 그래서 첫 스텝의 반작용은 0이다.
-        반작용(z축): τz = −s·I_r·(Ω1 − Ω0)/dt. 이 스텝에서 회전자가 얻은 각운동량만큼 바디가 잃는다.
-          베인 토크가 0이면 Jzz·ωz + s·I_r·Ω가 매 스텝 그대로다.
-        자이로(x·y축): τx = −h·ωy, τy = +h·ωx. 이 항만 사다리꼴(중점) 규칙으로 적분한다.
-          전진 오일러로 적분하면 스텝마다 회전 에너지가 (1 + (h·dt/J)²)배로 커져서 물리에 없는 발산이
-          생긴다(명목값에서 5초 뒤 각속도 약 4.2배). tvc-retro-propulsion의 rotor_reaction.py도 같은 이유로
-          중점 규칙을 쓴다. 사다리꼴 규칙은 자이로 항만 있을 때 ½·ωᵀJω를 그대로 지킨다.
-          h는 이 스텝의 평균 회전수 (Ω0 + Ω1)/2로 계산한다.
+    def _advance_rotor(self, throttle):
+        """회전자 회전수 Ω를 한 스텝(dt) 진행하고 (스텝 시작 Ω0, 스텝 끝 Ω1)을 rad/s로 돌려준다(#86, #122).
+        step()이 rotor_enabled일 때만 부른다.
+
+        Ω는 목표 omega_max·throttle을 시상수 tau의 1차 지연으로 따라간다(가정, Jacobsen 2021 식 3.8 꼴).
+        스텝 동안 목표가 일정하다고 보고 1차 지연의 해석해로 진행한다: Ω1 = Ωc + (Ω0 − Ωc)·e^(−dt/tau).
+        에피소드 첫 스텝에서는 회전자가 이미 그 스로틀로 돌고 있었다고 둔다(가정). 구속 스탠드 시험은
+        팬을 돌린 상태에서 자세 교란을 주기 때문이다. 그래서 첫 스텝의 반작용은 0이다.
+        step()은 Ω1로 추력을 계산한다(#122). 그래서 tau = 0이면 추력이 회전자 항을 끈 경우와 같아진다.
         """
         omega_cmd = self.rotor_omega_max * float(throttle)
         if self.step_count == 0 or self.rotor_omega is None:
@@ -311,7 +398,25 @@ class HopperAttitudeEnv(gym.Env):
         decay = np.exp(-self.dt / self.rotor_tau) if self.rotor_tau > 0 else 0.0
         omega1 = omega_cmd + (omega0 - omega_cmd) * decay
         self.rotor_omega = omega1
+        return omega0, omega1
 
+    def _integrate_with_rotor(self, omega0, omega1, wx, wy, wz, wx_dot, wy_dot, wz_dot):
+        """회전자 항을 넣어 바디 각속도를 한 스텝(dt) 적분한다(#86). step()이 rotor_enabled일 때만 부른다.
+
+        식: 회전자를 품은 강체(gyrostat)의 각운동량 식
+            J·ω̇ = τ − ω × (J·ω) − ω × h − dh/dt,   h = s·I_r·Ω·e_z
+        반작용 휠 위성 식(Shahraki & Lessard 2024, arXiv:2409.19936 식 4b·4c)과 같은 꼴이다.
+        τ와 ω × (J·ω) 항은 step()이 이미 wx_dot·wy_dot·wz_dot에 넣었다. 여기서는 회전자 항 두 개만 더한다.
+
+        회전수 Ω0, Ω1: 이 스텝의 시작과 끝 회전수(rad/s). _advance_rotor()가 계산한다.
+        반작용(z축): τz = −s·I_r·(Ω1 − Ω0)/dt. 이 스텝에서 회전자가 얻은 각운동량만큼 바디가 잃는다.
+          베인 토크가 0이면 Jzz·ωz + s·I_r·Ω가 매 스텝 그대로다.
+        자이로(x·y축): τx = −h·ωy, τy = +h·ωx. 이 항만 사다리꼴(중점) 규칙으로 적분한다.
+          전진 오일러로 적분하면 스텝마다 회전 에너지가 (1 + (h·dt/J)²)배로 커져서 물리에 없는 발산이
+          생긴다(명목값에서 5초 뒤 각속도 약 4.2배). tvc-retro-propulsion의 rotor_reaction.py도 같은 이유로
+          중점 규칙을 쓴다. 사다리꼴 규칙은 자이로 항만 있을 때 ½·ωᵀJω를 그대로 지킨다.
+          h는 이 스텝의 평균 회전수 (Ω0 + Ω1)/2로 계산한다.
+        """
         s = self.rotor_spin_dir
         wz_new = wz + wz_dot * self.dt - s * self.rotor_inertia * (omega1 - omega0) / self.Jzz
 
