@@ -6,7 +6,7 @@ Week 2 물리 실험의 "구속 스탠드"(M1, 만능조인트로 위치를 고�
 우리 기체 구조·좌표계·베인 4개짜리 토크 방정식을 그대로 쓰는 "진짜" 첫 RL 환경.
 
 ⚠️ 아직 실험 A(EDF 추력곡선)·구속 스탠드 실측 전이라 params.yaml의 물리 상수
-   (Jxx/Jyy/Jzz, CLalpha, A_fin, A_duct, Kf, vane_arm_l)는 PLACEHOLDER 상태. 지금 단계 목표는:
+   (Jxx/Jyy/Jzz, CLalpha, vane_geometry, A_duct, Kf, vane_arm_l)는 PLACEHOLDER 상태. 지금 단계 목표는:
      "RL 학습 파이프라인이 우리 기체의 실제 상태/액션 구조에 맞춰 정상적으로 도는가"
    를 확인하는 것 — 절대적인 학습 성능 숫자 자체는 아직 의미 없음.
    Week 2에서 실측값이 나오는 대로 params.yaml만 교체하면 이 코드는 그대로 재사용됨.
@@ -26,7 +26,13 @@ EDF 회전자 항(#86): params.yaml의 rotor.enabled를 켜면 회전자 반작�
 지금은 애초에 실측 전 PLACEHOLDER 값들이라 "정확한 한 점"을 맞추는 게 의미가 없고,
 "이 근처 분포 전체"에서 버티는 정책을 학습해두는 게 나중에 실측값이 들어왔을 때도,
 그리고 실제 기체로 이식할 때도(PID와의 정량 비교 실험, CLAUDE.md 참고) 더 안전하다.
+
+seed 재현 범위(#98): reset()은 gymnasium의 np_random에서 에피소드 seed 하나만 뽑는다. 초기 자세와
+랜덤화하는 값은 이름마다 따로 난수 흐름을 쓴다(EPISODE_STREAMS). 그래서 값을 더하거나 빼거나 뽑는
+순서를 바꿔도 같은 seed의 다른 값과 초기 자세는 그대로다. 랜덤화를 꺼도 초기 자세는 같다.
+같은 numpy·gymnasium 버전(uv.lock)에서만 보장한다. #98 전 커밋의 로그는 그 커밋에서만 재현된다.
 """
+import hashlib
 import os
 from typing import Optional
 
@@ -35,20 +41,65 @@ import numpy as np
 import yaml
 from gymnasium import spaces
 
+# 에피소드마다 뽑는 값의 이름(#98). 이름 하나가 독립 난수 흐름 하나의 키다.
+# 새로 랜덤화하는 값은 여기에 이름을 더하고 self._rng("이름")에서 뽑는다.
+# 이름을 바꾸면 그 값의 seed별 표본만 바뀐다. 다른 값의 표본은 그대로다.
+EPISODE_STREAMS = (
+    "initial_attitude",
+    "Jxx", "Jyy", "Jzz",
+    "vane_arm_l", "vane_arm_r",
+    "Kf",
+    "cg_offset_x", "cg_offset_y",
+)
+
+
+def stream_id(name: str) -> int:
+    """이름 → 32비트 정수 키. 파이썬 hash()는 프로세스마다 값이 달라서(PYTHONHASHSEED) 쓰지 않는다."""
+    return int.from_bytes(hashlib.blake2b(name.encode("utf-8"), digest_size=4).digest(), "little")
+
+
+STREAM_IDS = {name: stream_id(name) for name in EPISODE_STREAMS}
+if len(set(STREAM_IDS.values())) != len(STREAM_IDS):
+    raise RuntimeError("EPISODE_STREAMS의 두 이름이 같은 32비트 키를 받았다. 둘 중 하나의 이름을 바꿀 것.")
+
+
+def vane_geometry(p: dict) -> dict:
+    """베인 잠김 구간 하나(params.yaml의 vane_geometry)에서 요 팔 r, 잠긴 면적 A_fin, 종횡비 AR을 계산한다(#98).
+
+    잠김 구간은 반경 inner_r-outer_r, 시위는 chord다. 축방향 유속이 이 구간에서 균일하다고 본다.
+      r     = (inner_r + outer_r) / 2       z축 → 베인 압력중심 반경(m). 요 토크 팔이다
+      A_fin = (outer_r - inner_r) · chord   베인 1장이 제트에 잠긴 면적(m^2)
+      AR    = (outer_r - inner_r) / chord   종횡비. params.yaml의 CLalpha 주석에서 쓴다
+    mm 값을 1e3, 1e6으로 나눠서 m, m^2로 바꾼다. 곱하기(1e-3) 대신 나누기를 쓰면 명목값이
+    소수 리터럴 0.018, 7.0e-4와 비트 단위로 같다.
+    """
+    for old in ("A_fin", "vane_arm_r"):
+        if old in p:
+            raise ValueError(f"params.yaml에서 {old} 줄을 지울 것. 이 값은 vane_geometry에서 계산한다(#98). "
+                             "두 줄을 같이 두면 두 출처가 어긋날 수 있다.")
+    g = p["vane_geometry"]
+    inner, outer, chord = float(g["inner_r_mm"]), float(g["outer_r_mm"]), float(g["chord_mm"])
+    if not (0.0 <= inner < outer and chord > 0.0):
+        raise ValueError(f"vane_geometry가 잘못됐다: 0 ≤ inner_r_mm({inner}) < outer_r_mm({outer}), "
+                         f"chord_mm({chord}) > 0 이어야 한다.")
+    span = outer - inner
+    return {"r": (inner + outer) / 2.0 / 1e3, "A_fin": span * chord / 1e6, "AR": span / chord}
+
 
 def vane_lift_gain(p: dict) -> float:
     """베인 1장의 측력/추력 비율 기울기 CL(1/rad). F = Ft · CL · alpha (논문 식 3.16).
 
-    CL = CLalpha · A_fin / (2 · A_duct). 한 축 베인 2장의 최대 측력 2·CL·alpha_max·Ft가
+    CL = CLalpha · A_fin / (2 · A_duct). A_fin은 vane_geometry()에서 계산한다.
+    한 축 베인 2장의 최대 측력 2·CL·alpha_max·Ft가
     제트 운동량 상한 Ft·sin(alpha_max)를 넘으면 과대 추정이므로 ValueError를 낸다
     (docs/design/rl-open-source-survey.md §2).
     """
-    CL = p["CLalpha"] * p["A_fin"] / (2.0 * p["A_duct"])
+    CL = p["CLalpha"] * vane_geometry(p)["A_fin"] / (2.0 * p["A_duct"])
     alpha_max = np.deg2rad(p["alpha_max_deg"])
     if 2.0 * CL * alpha_max > np.sin(alpha_max):
         raise ValueError(
             f"베인 측력 과대 추정: 축당 2·CL·alpha_max = {2.0 * CL * alpha_max:.4f}·Ft > "
-            f"sin(alpha_max) = {np.sin(alpha_max):.4f}·Ft. params.yaml의 CLalpha/A_fin/A_duct를 확인할 것."
+            f"sin(alpha_max) = {np.sin(alpha_max):.4f}·Ft. params.yaml의 CLalpha/vane_geometry/A_duct를 확인할 것."
         )
     return float(CL)
 
@@ -70,7 +121,7 @@ class HopperAttitudeEnv(gym.Env):
         # domain_rand 범위 안에서 다시 뽑은 self.Jxx/self.Jyy/... 로 덮어씀
         self.nominal_Jxx, self.nominal_Jyy, self.nominal_Jzz = p["Jxx"], p["Jyy"], p["Jzz"]
         self.nominal_l = p["vane_arm_l"]
-        self.nominal_r = p["vane_arm_r"]
+        self.nominal_r = vane_geometry(p)["r"]
         self.nominal_Kf = p["Kf"]
         self.omega_t_per_throttle = p["omega_t_per_throttle"]   # 랜덤화하지 않는다
         self.CL = vane_lift_gain(p)
@@ -113,16 +164,32 @@ class HopperAttitudeEnv(gym.Env):
         self.observation_space = spaces.Box(low=-high, high=high, dtype=np.float32)
 
         self.state = np.zeros(6, dtype=np.float32)
+        self.episode_seed = None  # reset()이 정한다. 이번 에피소드의 모든 난수 흐름이 여기서 나온다
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+        # np_random에서는 에피소드 seed 하나만 뽑는다(#98). seed 없이 reset()해도 다음 에피소드가
+        # 결정적으로 이어지고, 값을 더하거나 빼도 np_random을 쓰는 횟수(1회)는 그대로다.
+        self.episode_seed = int(self.np_random.integers(2**64, dtype=np.uint64))
         self._randomize_episode_params()
         # 완전 수평에서 시작하면 학습할 게 없으므로 초기 교란을 줌
         # (구속 스탠드 실험에서 손으로 살짝 기울여 놓고 시작하는 것과 같은 셋업)
-        phi, theta, psi = self.np_random.uniform(-0.3, 0.3, size=3)
+        phi, theta, psi = self._rng("initial_attitude").uniform(-0.3, 0.3, size=3)
         self.state = np.array([phi, theta, psi, 0.0, 0.0, 0.0], dtype=np.float32)
         self.step_count = 0
         return self.state.copy(), {}
+
+    def _rng(self, name):
+        """이번 에피소드에서 name 값만 쓰는 난수 생성기(#98).
+
+        numpy 병렬 난수 문서의 권장대로 흐름 키를 바뀌지 않는 seed 앞에 둔 정수 열
+        [키, 에피소드 seed]로 SeedSequence를 만든다. 키는 늘 32비트 한 워드라 (키, seed) 쌍이 겹치지 않는다.
+        비트 생성기는 PCG64로 고정한다. default_rng는 기본 비트 생성기가 바뀔 수 있다(numpy 호환성 정책).
+        """
+        if name not in STREAM_IDS:
+            raise KeyError(f"난수 흐름 {name!r}가 없다. EPISODE_STREAMS에 이름을 먼저 더할 것.")
+        seq = np.random.SeedSequence([STREAM_IDS[name], self.episode_seed])
+        return np.random.Generator(np.random.PCG64(seq))
 
     def _randomize_episode_params(self):
         """도메인 랜덤화 — 이번 에피소드에서 쓸 물리 상수를 명목값 주변에서 다시 뽑는다."""
@@ -134,26 +201,26 @@ class HopperAttitudeEnv(gym.Env):
             self.cg_offset_y = 0.0
             return
 
-        def jitter(nominal, rel_range):
-            # nominal * (1 + U(-rel_range, +rel_range))
-            return nominal * (1.0 + self.np_random.uniform(-rel_range, rel_range))
+        def jitter(name, nominal, rel_range):
+            # nominal * (1 + U(-rel_range, +rel_range)), name 값의 난수 흐름에서 뽑는다
+            return nominal * (1.0 + self._rng(name).uniform(-rel_range, rel_range))
 
-        self.Jxx = jitter(self.nominal_Jxx, self.dr.get("Jxx_range", 0.0))
-        self.Jyy = jitter(self.nominal_Jyy, self.dr.get("Jyy_range", 0.0))
-        self.Jzz = jitter(self.nominal_Jzz, self.dr.get("Jzz_range", 0.0))
+        self.Jxx = jitter("Jxx", self.nominal_Jxx, self.dr.get("Jxx_range", 0.0))
+        self.Jyy = jitter("Jyy", self.nominal_Jyy, self.dr.get("Jyy_range", 0.0))
+        self.Jzz = jitter("Jzz", self.nominal_Jzz, self.dr.get("Jzz_range", 0.0))
 
         # l(무게중심 → 베인 피벗 세로 거리)과 r(z축 → 베인 압력중심 반경)은 다른 치수라 따로 흔든다(#34).
         # vane_arm_r_range가 없으면 예전처럼 vane_arm_range를 쓴다.
         arm_range = self.dr.get("vane_arm_range", 0.0)
-        self.l = jitter(self.nominal_l, arm_range)
-        self.r = jitter(self.nominal_r, self.dr.get("vane_arm_r_range", arm_range))
+        self.l = jitter("vane_arm_l", self.nominal_l, arm_range)
+        self.r = jitter("vane_arm_r", self.nominal_r, self.dr.get("vane_arm_r_range", arm_range))
 
-        self.Kf = jitter(self.nominal_Kf, self.dr.get("Kf_range", 0.0))
+        self.Kf = jitter("Kf", self.nominal_Kf, self.dr.get("Kf_range", 0.0))
 
         # 무게중심-추력축 오프셋 → 추력 방향으로 일정한 잔류 토크(bias)를 만듦
         cg_offset_max_m = self.dr.get("cg_offset_mm", 0.0) / 1000.0
-        self.cg_offset_x = self.np_random.uniform(-cg_offset_max_m, cg_offset_max_m)
-        self.cg_offset_y = self.np_random.uniform(-cg_offset_max_m, cg_offset_max_m)
+        self.cg_offset_x = self._rng("cg_offset_x").uniform(-cg_offset_max_m, cg_offset_max_m)
+        self.cg_offset_y = self._rng("cg_offset_y").uniform(-cg_offset_max_m, cg_offset_max_m)
 
     def step(self, action):
         action = np.clip(action, self.action_space.low, self.action_space.high)

@@ -41,9 +41,10 @@ Chapter 3 "Modelling" (원문 18–33쪽 / PDF 24–39쪽) — `docs/design/refe
 
 → 코드 대응: `params.yaml`의 `Kf`. 단, **코드는 실제 RPM(ωt) 대신 `omega_t_equiv = throttle * omega_t_per_throttle`
 (throttle 기반 임시 스케일, 상수는 `params.yaml`, #87)을 씀** — 논문처럼 진짜 각속도가 아니다. **실험 A(EDF 추력곡선) 이후엔
-DShot에서 읽은 실제 RPM으로 교체해야 논문 식 그대로가 됨.** 모터 1차계(시상수 τt)는 지금 코드에
-아예 없음 — Stage 1 목표(파이프라인 검증)엔 불필요하다고 판단해 생략된 것으로 보임, 실기 이식 전엔
-넣을지 검토.
+DShot에서 읽은 실제 RPM으로 교체해야 논문 식 그대로가 됨.** 추력에는 모터 1차계(시상수 τt)가 없다.
+추력은 지연 없이 스로틀에서 계산한다. 추력에도 지연을 넣을지는 #122에서 정한다. 회전자 회전수에는
+1차 지연(`params.yaml`의 `rotor.tau`)이 있다. 이 지연은 `rotor.enabled`를 켤 때만 쓰고, 회전자
+반작용·자이로 토크에만 들어간다(§3 "EDF 회전자 반작용·자이로 항", #86).
 
 ### 2.2 베인 공력 모델 (§3.2.2) — ⚠️ 코드와 논문이 다른 지점
 
@@ -115,7 +116,7 @@ F1, F2, F3, F4 = self.CLalpha * Ft * alpha
 **바디 프레임 토크** (Fig 3.7, l=COM~베인 조인트 거리, r=z축~베인 중심 거리). 원저자 MATLAB의 값도
 `l = 0.0947 m`(세로 거리), `r = 0.04 m`다. 우리 `vane_arm_l`은 #27에서 링 반지름 48 mm를
 세로 거리 104 mm(`01-avionics-integration-final.md` §8.4)로 고쳤다. `vane_arm_r`은 #34에서 링 반지름 48 mm를
-베인 압력중심 반경 18 mm(추정)로 고쳤다:
+베인 압력중심 반경 18 mm(추정)로 고쳤다. #98부터 r은 `params.yaml`의 `vane_geometry`(잠김 구간 4-32 mm)에서 계산한다:
 
 ```
 τx = (F1+F3)·l
@@ -240,6 +241,11 @@ I_r 계산. 회전하는 부분은 임펠러와 아웃러너 모터의 캔(자�
 - 자이로 항은 롤·피치를 묶는다. 롤만 0.2 rad 기울인 초기조건(랜덤화 끔)에서 피치가 최대 1.45° 움직였다(끔: 0°).
   pd_gate.py 판정(넘어짐 0 %, 최종 기울기 중앙값 2.8°)은 켜도 그대로 합격했다.
 - 그래서 스위치를 켜면 `yaw_check.py`가 시나리오 B에서 불합격한다. 켜기 전에 대응 방법을 정해야 한다(#120).
+- 위 표, 279°, 2.8°는 #98 전 숫자다. #98이 seed→표본 대응을 바꿔서 같은 명령의 결과가 달라졌다(2026-10-18, PR #112).
+  - 마지막 |ψ| 최댓값: A 끔 2.6e-7°, A 켬 +1 / −1 3.4e-7° / 3.3e-7°, B 끔 4.6e-7°, B 켬 +1 / −1 134° / 163°.
+  - B 켬 +1 / −1: 마지막 |ψ| > 1° seed 57 / 60, 넘어짐 4.0 % / 4.5 %, 도중 |ψ| 최댓값 248° / 244°.
+  - 회전자 항을 켠 `pd_gate.py`의 PD: spin_dir +1, −1 모두 넘어짐 0 %, 최종 기울기 중앙값 2.5°로 합격했다.
+  - 결론(시나리오 B 불합격)은 그대로다.
 
 ## 4. 병진 동역학 (§3.4) — Stage 1엔 미사용, Stage 2용 참고
 
@@ -267,9 +273,9 @@ Ch.4에서 LQR 게인을 설계한다. **우리 Stage 1은 이 선형화를 안 
 | `Kf` | `params.yaml: Kf` | PLACEHOLDER |
 | `Jxx,Jyy,Jzz` | `params.yaml: Jxx,Jyy,Jzz` | PLACEHOLDER |
 | `l` | `params.yaml: vane_arm_l` | PLACEHOLDER 0.104 m(CG 추정 68 mm + 피벗 36 mm). 예전 0.048은 링 반지름이라 정의와 달랐다(#21) |
-| `r` | `params.yaml: vane_arm_r` | PLACEHOLDER 0.018 m(z축 → 베인 압력중심. `A_fin`과 같은 가정: 베인 r 4-32 mm 잠김, 균일 유속, #34). 허브 차폐 효과는 근거가 없어 `vane_arm_r_range` ±25 %로 덮는다. 예전 0.048은 링 반지름이었다 |
+| `r` | `hopper_aviary.py: vane_geometry()` ← `params.yaml: vane_geometry` | PLACEHOLDER 0.018 m(z축 → 베인 압력중심. `A_fin`과 같은 입력: 베인 r 4-32 mm 잠김, 균일 유속, #34·#98). 허브 차폐 효과는 근거가 없어 `vane_arm_r_range` ±25 %로 덮는다. 예전 0.048은 링 반지름이었다 |
 | `CLα` (raw, 유한 날개) | `params.yaml: CLalpha` | PLACEHOLDER 1.637/rad, §2.2 결정 참고 |
-| `A_fin, A_duct` | `params.yaml: A_fin, A_duct` | PLACEHOLDER, 배기 내경 실측 필요 |
+| `A_fin, A_duct` | `A_fin`: `vane_geometry()` ← `params.yaml: vane_geometry`(#98), `A_duct`: `params.yaml: A_duct` | PLACEHOLDER, 배기 내경 실측 필요 |
 | `CL = CLα·A_fin/(2A_duct)` (lumped) | `hopper_aviary.py: vane_lift_gain()` → `self.CL` | 일치(#27), 제트 운동량 상한 검사 포함 |
 | `CD0` | `params.yaml: CD0` | 원저자 뭉쳐진 값, 동역학 코드에서 안 씀 |
 | `τx,τy,τz` | `tau_x,tau_y,tau_z` | 일치 |
