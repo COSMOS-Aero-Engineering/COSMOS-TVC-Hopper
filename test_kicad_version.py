@@ -102,6 +102,16 @@ class KicadSave(unittest.TestCase):
         with mock.patch.object(gen_schematic, "kicad_cli_version", return_value="10.0.6"):
             self.assertEqual(gen_schematic.find_kicad_cli(str(cli), None), (cli, "10.0.6"))
 
+    def test_relative_kicad_cli_becomes_absolute(self):
+        # kicad-cli는 임시 폴더를 작업 폴더로 삼아 돈다. 상대 경로를 그대로 두면 못 찾는다.
+        folder = Path(self._tmp_dir())
+        (folder / "kicad-cli").write_text("", encoding="utf-8")
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(folder)
+        with mock.patch.object(gen_schematic, "kicad_cli_version", return_value="10.0.7"):
+            cli, _ = gen_schematic.find_kicad_cli("kicad-cli", None)
+        self.assertEqual(cli, (folder / "kicad-cli").absolute())
+
     def _tmp_dir(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

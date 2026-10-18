@@ -230,7 +230,9 @@ def find_kicad_cli(override, symbols_dir):
             "--kicad-cli <file>. Usual place on Windows:",
             r"  %LOCALAPPDATA%\Programs\KiCad\10.0\bin\kicad-cli.exe",
         ]))
-    cli = candidates[0]
+    # save_with_kicad() runs kicad-cli in a temporary folder, so a relative path
+    # would point into that folder.
+    cli = candidates[0].absolute()
     version = kicad_cli_version(cli)
     wanted = SCH_GENERATOR_VERSION.split(".")[0]
     if version.split(".")[0] != wanted:
