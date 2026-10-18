@@ -427,7 +427,7 @@ def check_servo(p):
         got.append(float(env.vane_alpha[0]))
         want.append(min(start + k * rate * env.dt, alpha_max))
     err = float(np.max(np.abs(np.array(got) - np.array(want))))
-    print(f"   마. (3) 속도 제한 {np.degrees(rate):g}°/s(tau 0): −{np.degrees(alpha_max):g}° → +{np.degrees(alpha_max):g}° 계단, "
+    print(f"   마. (3) 속도 제한 {np.degrees(rate):g}°/s(tau 0): -{np.degrees(alpha_max):g}° → +{np.degrees(alpha_max):g}° 계단, "
           f"{n} 스텝 동안 손계산과 차이 최대 {err:.1e} rad")
     if not err <= 1e-9:
         failures.append(f"마. 서보 속도 제한: 베인각이 손계산 경사와 {err:.3g} rad 다르다")
