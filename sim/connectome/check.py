@@ -129,8 +129,9 @@ def main() -> int:
           f"5초 가동각 {auth['reachable_deg']:.1f}도 / 초기교란 {auth['needed_deg']:.0f}도 "
           f"= 여유 {auth['ratio']:.2f}배")
     if auth["ratio"] < 2.0:
-        print("       ^ 권한 부족 상태다. 실험 A로 params.yaml 의 Kf 를 채우기 전까지")
-        print("         비교군 간 우열은 읽으면 안 된다 (authority.py 참고).")
+        # 원인을 Kf로 단정하지 않는다. Kf가 맞아도 베인 상수나 Jxx 때문에 부족할 수 있다(#129).
+        print("       ^ 권한 부족 상태다. python sim/connectome/authority.py 의 경고가 적은 상수를")
+        print("         확인하기 전까지 비교군 간 우열은 읽으면 안 된다.")
 
     print()
     if FAILURES:
