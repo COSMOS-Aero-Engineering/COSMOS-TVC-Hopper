@@ -124,8 +124,9 @@ def uv():
 def child_env():
     """자식 프로세스도 같은 이유(cp949)로 죽지 않게 한다.
 
-    sanity_check.py·train.py 출력에도 em dash가 들어 있어서, 위 _survive_console_encoding()은
-    이 파일의 출력만 지켜준다. 자식에게는 PYTHONIOENCODING으로 같은 정책을 물려준다 —
+    위 _survive_console_encoding()은 이 파일의 출력만 지켜준다. sim/ 스크립트의 print 문자열에서
+    cp949에 없는 문자(em dash 등)는 뺐다(#137, #147). 그래도 라이브러리 출력이나 경로처럼 글자를
+    고를 수 없는 출력이 있다. 그래서 자식에게는 PYTHONIOENCODING으로 같은 정책을 물려준다.
     인코딩은 부모(또는 사용자가 이미 정한 값)와 같게 두고, 오류 처리만 replace로 맞춘다.
     """
     env = os.environ.copy()

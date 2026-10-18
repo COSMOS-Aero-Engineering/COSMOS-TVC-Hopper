@@ -40,7 +40,7 @@ FAILURES: list[str] = []
 
 def check(label: str, condition: bool, detail: str = "") -> None:
     mark = "OK  " if condition else "실패"
-    print(f"  [{mark}] {label}" + (f" — {detail}" if detail else ""))
+    print(f"  [{mark}] {label}" + (f": {detail}" if detail else ""))
     if not condition:
         FAILURES.append(label)
 

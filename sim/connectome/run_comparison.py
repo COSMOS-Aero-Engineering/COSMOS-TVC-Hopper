@@ -111,7 +111,7 @@ def main() -> int:
     results: dict[str, dict] = {}
 
     if not a.skip_pd:
-        print("[A] PD baseline — 게인 격자탐색")
+        print("[A] PD baseline: 게인 격자탐색")
         _, gains, m = tune(HopperAttitudeEnv, run_episodes, episodes=20)
         m = run_episodes(PDController(**gains), HopperAttitudeEnv(), episodes=30)
         m.update({"seeds": 1, "mean_reward_std": 0.0, "curve": [], "gains": gains})
@@ -140,14 +140,14 @@ def main() -> int:
     # 곡선은 학습 중에 찍느라 10 에피소드만 쓴다. 위 표는 30 에피소드다 —
     # 에피소드 집합이 달라서 두 숫자를 직접 비교하면 안 된다(곡선은 같은 비교군 안에서
     # 시간에 따른 변화를 보는 용도). 헷갈리기 쉬워서 개수를 같이 찍는다.
-    print(f"\n[학습곡선 — 시드 0, {EvalCurve.EPISODES} 에피소드 기준 "
+    print(f"\n[학습곡선: 시드 0, {EvalCurve.EPISODES} 에피소드 기준 "
           f"(위 표는 30 에피소드라 값이 직접 비교되지 않는다)]")
     for name, m in results.items():
         if m["curve"]:
             pts = " ".join(f"{s // 1000}k:{r:.0f}" for s, r in m["curve"])
             print(f"  {name:<18} {pts}")
 
-    print("\n※ params.yaml 이 아직 PLACEHOLDER다 — 위 절대 수치는 파이프라인 확인용이고,")
+    print("\n※ params.yaml 이 아직 PLACEHOLDER다. 위 절대 수치는 파이프라인 확인용이고,")
     print("  실험 A로 물리 상수를 채운 뒤 같은 명령을 다시 돌린 결과가 본 실험이다.")
     if underpowered:
         print("  특히 제어권한이 부족한 상태라 네 비교군의 우열은 아직 읽으면 안 된다.")
