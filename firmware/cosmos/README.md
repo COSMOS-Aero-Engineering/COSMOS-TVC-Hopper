@@ -83,6 +83,8 @@ SW팀이 오늘 설치한 그 익스텐션.
    (#24, `AGENTS.md` §안전 원칙).
 4. 통합 펌웨어(전체 제어 루프) 만들 때 `imu_test`(SPI)와 `throttle_serial`의 초기화·배선 코드를 재사용 — 가장
    먼저 고칠 곳은 `src/control.cpp`의 프로펄전 믹서(원본은 모터 2개 전제, 우리는 EDF 1개라 오히려 단순해짐).
+   제어 루프에는 스로틀 변화율 제한을 넣는다. 값과 규칙(킬스위치는 제한 없이 바로 0)은
+   `docs/design/00-hopper-master-design.md` §8.1의 8번에 있다(#120).
 5. 자이로 정차 보정 필요해지면(`docs/design/00-hopper-master-design.md` §6.7) `dshot.cpp`의 RPM
    텔레메트리 읽는 부분부터 확인.
 

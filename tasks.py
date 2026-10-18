@@ -582,6 +582,14 @@ def task_cp949():
     run([sys.executable, STE_KO_LINT, "--self-test"], cwd=ROOT)
 
 
+def task_kicadver():
+    """생성 회로도의 KiCad 형식 번호가 생성기와 같은지 본다(#139).
+
+    KiCad가 없어도 돈다. KiCad로 실제로 여는 확인은 kicad/README.md의 kicad-cli 명령으로 한다.
+    """
+    run([sys.executable, "-m", "unittest", "-q", "test_kicad_version"], cwd=ROOT)
+
+
 def task_check():
     print("\n전부 통과. PR 올려도 된다.")
 
@@ -621,7 +629,7 @@ TASKS = {t.name: t for t in [
     Task("sanity", "환경이 살아 있는지 20스텝 확인", task_sanity, inputs=SIM_IN, uses_env=True),
     Task("gate", "RL 전 합격 기준 - 랜덤화 켠 PD 200 에피소드 (#27)", task_gate, inputs=SIM_IN,
          uses_env=True),
-    Task("yaw", "요 축 검사 - 토크·회전자 항 손계산 + 요 PD 200 seed × 6조건(스로틀 고정·계단, 회전자 항 끔·켬) (#65, #86)",
+    Task("yaw", "요 축 검사 - 토크·회전자 항·스로틀 변화율 손계산 + 요 PD 200 seed × 6조건(스로틀 고정·계단, 회전자 항 끔·켬) (#65, #86, #120)",
          task_yaw,
          inputs=SIM_IN, uses_env=True),
     Task("smoke", "SB3-환경 연결 확인 (256스텝, 학습 아님)", task_smoke, inputs=SIM_IN,
@@ -643,10 +651,13 @@ TASKS = {t.name: t for t in [
          f" 범위: {', '.join(CP949_SCAN)}", task_cp949,
          inputs=[*CP949_SCAN, "test_cp949.py",
                  ".claude/skills/ste-ko/references/upstream/dictionary.md"]),
+    Task("kicadver", "생성 회로도의 KiCad 형식 번호가 생성기와 같은지 확인 (#139)", task_kicadver,
+         inputs=["kicad/_tools/*.py", "kicad/cosmos-avionics/*.kicad_sch",
+                 "test_kicad_version.py"]),
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
          " 단계 목록은 graph)", task_check,
-         deps=["skills", "shiptest", "userpath", "cp949", "compile", "sanity", "gate", "yaw", "smoke",
-               "conncheck"]),
+         deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "compile", "sanity", "gate",
+               "yaw", "smoke", "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
