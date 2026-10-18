@@ -494,7 +494,7 @@ def task_userpath():
 
 
 def task_kicadver():
-    """생성 회로도의 KiCad 형식 번호가 생성기와 같은지 본다(#139).
+    """생성 회로도의 KiCad 형식 번호가 생성기와 같고, KiCad가 저장한 형식인지 본다(#139, #140).
 
     KiCad가 없어도 돈다. KiCad로 실제로 여는 확인은 kicad/README.md의 kicad-cli 명령으로 한다.
     """
@@ -558,7 +558,7 @@ TASKS = {t.name: t for t in [
          inputs=["ship.py", "test_ship.py"]),
     Task("userpath", "kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 확인 (#96)", task_userpath,
          inputs=[*USER_PATH_SCAN, "test_userpath.py"]),
-    Task("kicadver", "생성 회로도의 KiCad 형식 번호가 생성기와 같은지 확인 (#139)", task_kicadver,
+    Task("kicadver", "생성 회로도의 KiCad 형식 번호와 저장 형식 확인 (#139, #140)", task_kicadver,
          inputs=["kicad/_tools/*.py", "kicad/cosmos-avionics/*.kicad_sch",
                  "test_kicad_version.py"]),
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
