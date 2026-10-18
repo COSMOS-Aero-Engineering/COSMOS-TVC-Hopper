@@ -185,6 +185,8 @@ def main():
             "rotor": {"enabled": env.rotor_enabled, "inertia": env.nominal_rotor_inertia,
                       "omega_max": env.nominal_rotor_omega_max, "tau": env.nominal_rotor_tau,
                       "spin_dir": env.rotor_spin_dir},
+            # 스로틀 변화율 제한(1/s, null이면 없음, #120). CSV throttle 열은 이 제한 뒤 값이다
+            "throttle_slew_rate": env.throttle_slew_rate,
             "episode_params": episode_params(env),
             "result": info,
             "git_commit": commit,
