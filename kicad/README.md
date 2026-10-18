@@ -204,6 +204,10 @@ python kicad/_tools/validate_sch.py      # 구조 자체검증(문법/넷 연결
 위치를 훑어 찾는다. 출력 파일 위치는 `--out <파일>`로 바꾼다(기본은 위 `.kicad_sch`).
 `validate_sch.py`에 파일 경로를 인자로 주면 그 파일을 검사한다(기본은 같은 회로도).
 
+`_tools/*.py`에 사용자 홈 폴더 경로(Windows `Users`, Linux `home`, macOS `Users` 아래)가 다시 들어오면
+`python tasks.py check`가 실패한다. `userpath` 작업이 `파일:줄:칸`을 출력하므로 그 줄을 위 방식
+(스크립트 위치 기준 경로, 인자, 환경변수)으로 바꾼다(#96).
+
 **#66을 고치기 전에 다시 생성하면 같은 결함이 있는 파일이 나온다.** 지금 재생성은 "고치는 일"이 아니다.
 이 스크립트의 검사는 문법 수준이다 — 괄호 균형, `lib_id` 선언, UUID 중복. **넷 검사는 레이블 글자 수를 세는
 것이라 실제 연결을 보지 않는다.** 연결을 확인하려면 `kicad-cli sch export netlist`와 ERC를 돌린다.
