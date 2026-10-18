@@ -101,10 +101,10 @@ class ScanTree(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def write(self, rel, text, newline="\n"):
+    def write(self, rel, text, newline="\n", encoding="utf-8"):
         path = self.root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(text.replace("\n", newline).encode("utf-8"))
+        path.write_bytes(text.replace("\n", newline).encode(encoding))
 
     def test_reports_file_and_line_only_inside_scan_scope(self):
         self.write("kicad/_tools/clean.py", "import os\n")
@@ -114,6 +114,13 @@ class ScanTree(unittest.TestCase):
         files, hits = tasks.scan_user_paths(self.root, tasks.USER_PATH_SCAN)
         self.assertEqual(files, ["kicad/_tools/clean.py", "kicad/_tools/dirty.py"])
         self.assertEqual(hits, [("kicad/_tools/dirty.py", 2, 10, "C:/Users")])
+
+    def test_bom_does_not_shift_first_line_column(self):
+        # PowerShell 5.1의 Out-File -Encoding utf8은 파일 앞에 BOM을 붙인다. 편집기는 BOM을
+        # 칸으로 세지 않는다. 그래서 BOM이 있어도 1줄 칸 번호가 BOM이 없을 때와 같아야 한다.
+        self.write("kicad/_tools/bom.py", "KICAD = 'C:/Users/x'\n", encoding="utf-8-sig")
+        _, hits = tasks.scan_user_paths(self.root, tasks.USER_PATH_SCAN)
+        self.assertEqual(hits, [("kicad/_tools/bom.py", 1, 10, "C:/Users")])
 
     def run_task(self):
         out, err = io.StringIO(), io.StringIO()

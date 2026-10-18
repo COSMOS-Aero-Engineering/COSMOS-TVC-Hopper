@@ -457,7 +457,9 @@ def scan_user_paths(root, patterns):
     hits = []
     for rel in files:
         # read_text는 줄바꿈 \r\n과 \r을 \n으로 바꿔 읽는다. 그래서 Windows 파일도 줄 번호가 맞다.
-        text = (root / rel).read_text(encoding="utf-8", errors="replace")
+        # utf-8-sig는 파일 맨 앞의 BOM을 빼고 읽고, BOM이 없는 파일은 utf-8과 같게 읽는다.
+        # utf-8로 읽으면 BOM이 글자 하나로 남아서 1줄 칸 번호가 편집기보다 1 크다.
+        text = (root / rel).read_text(encoding="utf-8-sig", errors="replace")
         hits.extend((rel, *hit) for hit in find_user_paths(text))
     return files, hits
 
