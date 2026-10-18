@@ -139,8 +139,10 @@ def cmd_wt(a):
         die(f"이슈 #{a.issue}가 열려 있지 않다({info['state']}).")
     if path.exists():
         branch = call(["git", "-C", path, "branch", "--show-current"], capture=True).stdout.strip()
-        print(f"이미 있는 worktree를 쓴다. 브랜치: {branch}", file=sys.stderr)
+        print("이미 있는 worktree를 쓴다.", file=sys.stderr)
         link_after_wt(a.issue, root)
+        # 새 worktree와 같다: 끝에서 둘째 줄은 브랜치, 마지막 줄은 경로다.
+        print(f"브랜치: {branch}", file=sys.stderr)
         print(path)
         return
     tag = a.tag or issue_tag(info)
@@ -291,7 +293,7 @@ def link_issue(n, cwd=None):
 
 
 def link_after_wt(n, cwd):
-    """wt 끝에 부른다. 잇지 못해도 worktree는 이미 만들었으므로 wt를 실패로 끝내지 않는다."""
+    """wt 끝에 부른다. 잇지 못해도 worktree는 이미 있으므로 wt를 실패로 끝내지 않는다."""
     print(f"\n상위 PRD 잇기 (python ship.py link {n}):", file=sys.stderr, flush=True)
     try:
         rc = link_issue(n, cwd)
@@ -299,7 +301,7 @@ def link_after_wt(n, cwd):
         print(f"[잇지 않음] 예상하지 못한 오류: {e!r}", file=sys.stderr)
         rc = 1
     if rc != 0:
-        print("[주의] worktree는 만들었다. 위 안내대로 고친 뒤 다음 명령을 다시 실행한다: "
+        print("[주의] worktree는 그대로 쓴다. 위 안내대로 고친 뒤 다음 명령을 다시 실행한다: "
               f"python ship.py link {n}", file=sys.stderr, flush=True)
 
 

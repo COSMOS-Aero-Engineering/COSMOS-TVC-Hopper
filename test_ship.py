@@ -200,7 +200,7 @@ class LinkTest(unittest.TestCase):
 
 class CmdTest(unittest.TestCase):
     def run_wt(self, link, existing):
-        """cmd_wt를 git·gh 없이 돌린다. stdout 마지막 줄과 worktree 경로를 돌려준다."""
+        """cmd_wt를 git·gh 없이 돌린다. stdout 마지막 줄, stderr 줄 목록, worktree 경로를 돌려준다."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"
             path = Path(tmp) / "repo-wt" / "issue-7"
@@ -216,21 +216,25 @@ class CmdTest(unittest.TestCase):
                     out = "infra/7"
                 return subprocess.CompletedProcess(cmd, 0, out + "\n", "")
 
-            out = io.StringIO()
+            out, err = io.StringIO(), io.StringIO()
             with mock.patch.object(ship, "ensure_gh_login"), \
                     mock.patch.object(ship, "call", fake_call), \
                     mock.patch.object(ship, "link_issue", side_effect=link) as linked, \
-                    redirect_stdout(out), redirect_stderr(io.StringIO()):
+                    redirect_stdout(out), redirect_stderr(err):
                 ship.cmd_wt(argparse.Namespace(issue=7, tag=None))
             linked.assert_called_once_with(7, root)
-            return out.getvalue().splitlines()[-1], str(path)
+            return out.getvalue().splitlines()[-1], err.getvalue().splitlines(), str(path)
 
     def test_wt_link_failure_does_not_block_worktree(self):
         for existing in (False, True):
             for link in (lambda *_: 1, RuntimeError("network down")):
                 with self.subTest(existing=existing, link=link):
-                    last, path = self.run_wt(link, existing)
+                    last, err, path = self.run_wt(link, existing)
                     self.assertEqual(last, path)
+                    # ship-issue 스킬 3단계: 경로 바로 앞 줄이 브랜치 이름이다. link 출력은 그 앞에 둔다.
+                    self.assertEqual(err[-1], "브랜치: infra/7")
+                    self.assertTrue(any(line.startswith("[주의] worktree는 그대로 쓴다.")
+                                        for line in err), err)
 
     def test_link_command_exit_code(self):
         for rc in (0, 1):
