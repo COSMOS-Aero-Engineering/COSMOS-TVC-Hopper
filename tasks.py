@@ -185,6 +185,119 @@ def uv_run(args, cwd=None):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Windows: torch가 쓰는 VC++ 런타임 확인 (#108)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 새 Windows PC에는 Microsoft Visual C++ 재배포 패키지가 없을 수 있다. 그러면 torch가 c10.dll을
+# 불러오지 못하고 `OSError: [WinError 126]`으로 멈춘다. torch를 쓰는 작업이 돌기 전에 이것을 찾아서,
+# 영어 오류 대신 설치 명령을 보여 준다.
+#
+# 내려받기 주소: https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist 의 x64 고정 링크.
+# winget 패키지 ID: microsoft/winget-pkgs 저장소의 manifests/m/Microsoft/VCRedist/2015+/x64.
+VC_INSTALL_CMD = "winget install --id Microsoft.VCRedist.2015+.x64 --exact --source winget"
+VC_INSTALL_URL = "https://aka.ms/vc14/vc_redist.x64.exe"
+
+# .venv의 파이썬으로 실행하는 검사 코드. 이 파이썬이 torch를 불러오는 파이썬이다. tasks.py를
+# 실행한 파이썬으로 검사하면 결과가 다를 수 있다. 실행 파일 폴더와 32/64비트가 다를 수 있기 때문이다.
+#
+# DLL 목록: torch 2.14.0 Windows 휠의 c10.dll이 가져오는 VC++ 런타임 DLL 세 개다. torch/__init__.py도
+# c10.dll을 불러오기 전에 이 세 이름을 같은 순서로 불러 보고, ARM64에서는 vcruntime140_1.dll을
+# 건너뛴다. 이 DLL은 torch 휠(torch/lib)에 들어 있지 않다.
+#
+# 찾는 방법은 torch/__init__.py의 _load_dll_libraries()와 같게 한다. torch가 실제로 실패할 때만
+# 멈추려는 것이다. torch는 아래 순서로 찾는다.
+#   1) torch/lib, <venv>/Library/bin 같은 폴더를 os.add_dll_directory로 더한 뒤, 실행 파일 폴더,
+#      더한 폴더, System32에서 찾는다. ctypes 기본값(winmode=None)이 이 방식이다.
+#   2) 못 찾으면 더한 폴더를 PATH 앞에 붙이고 Windows 표준 검색 순서로 다시 찾는다. 표준 검색
+#      순서는 PATH까지 본다. winmode=0이 이 방식이다.
+# torch는 CUDA 빌드에서만 CUDA 폴더를 더한다. 우리 torch는 CPU 빌드라서 그 폴더는 뺐다.
+VC_PROBE = """\
+import ctypes, importlib.util, json, os, platform, sys, sysconfig
+spec = importlib.util.find_spec("torch")
+userbase = sysconfig.get_config_var("userbase")
+dirs = [
+    os.path.join(os.path.dirname(spec.origin), "lib") if spec and spec.origin else "",
+    os.path.join(sys.exec_prefix, "Library", "bin"),
+    os.path.join(sys.base_exec_prefix, "Library", "bin") if sys.exec_prefix != sys.base_exec_prefix else "",
+    os.path.join(userbase, "Library", "bin") if userbase else "",
+    os.path.join(sys.exec_prefix, "bin"),
+]
+dirs = [d for d in dirs if d and os.path.exists(d)]
+for d in dirs:
+    os.add_dll_directory(d)
+os.environ["PATH"] = os.pathsep.join(dirs + [os.environ.get("PATH", "")])
+names = ["vcruntime140.dll", "msvcp140.dll"]
+if platform.machine() != "ARM64":
+    names.append("vcruntime140_1.dll")
+missing = []
+for name in names:
+    try:
+        ctypes.WinDLL(name)
+    except OSError:
+        try:
+            ctypes.WinDLL(name, winmode=0)
+        except OSError:
+            missing.append(name)
+print(json.dumps(missing))
+"""
+
+
+def venv_python():
+    return VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+def probe_vc_runtime(python):
+    """python으로 VC_PROBE를 실행해 찾지 못한 DLL 이름 목록을 돌려준다.
+
+    검사 자체를 하지 못하면(파이썬 실행 실패, 시간 초과, 알 수 없는 출력) None을 돌려준다.
+    """
+    try:
+        result = subprocess.run([str(python), "-I", "-c", VC_PROBE], capture_output=True,
+                                text=True, encoding="utf-8", errors="replace", timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    lines = (result.stdout or "").strip().splitlines()
+    try:
+        missing = json.loads(lines[-1])
+    except (IndexError, ValueError):
+        return None
+    if not isinstance(missing, list) or not all(isinstance(n, str) for n in missing):
+        return None
+    return missing
+
+
+def ensure_vc_runtime(windows=None):
+    """Windows에서 torch에 필요한 VC++ 런타임 DLL이 없으면 설치 방법을 출력하고 멈춘다(#108).
+
+    Windows가 아니면 아무것도 하지 않는다. 검사 자체를 하지 못하면 경고만 하고 진행한다.
+    검사 코드가 틀려서 멀쩡한 PC를 막는 것보다, torch가 원래 오류를 내게 두는 편이 낫다.
+    windows는 단위 검사(test_vcruntime.py)가 Linux에서 Windows 경로를 돌릴 때만 준다.
+    """
+    if windows is None:
+        windows = os.name == "nt"
+    if not windows:
+        return
+    missing = probe_vc_runtime(venv_python())
+    if missing is None:
+        print("\n[경고] Microsoft Visual C++ 재배포 패키지가 있는지 확인하지 못했다. 그대로 진행한다.\n"
+              "     torch가 c10.dll 오류(WinError 126)로 멈추면 PowerShell에서 아래 명령으로 설치한다.\n"
+              f"     {VC_INSTALL_CMD}", file=sys.stderr, flush=True)
+        return
+    if missing:
+        die("torch에 필요한 Microsoft Visual C++ 재배포 패키지(x64)가 이 PC에 없다(#108).\n"
+            f"     찾지 못한 DLL: {', '.join(missing)}\n"
+            "     이대로 실행하면 torch가 c10.dll을 불러오지 못하고 OSError [WinError 126]으로 멈춘다.\n"
+            "     1) PowerShell에서 설치한다:\n"
+            f"          {VC_INSTALL_CMD}\n"
+            "        winget이 없다는 오류가 나면 아래 파일을 받아 실행한다:\n"
+            f"          {VC_INSTALL_URL}\n"
+            "     2) 관리자 권한 확인 창(UAC)이 뜨면 \"예\"를 누른다.\n"
+            "     3) 설치가 끝나면 방금 실행한 python tasks.py 명령을 다시 실행한다.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 입력 해시 캐시
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -302,7 +415,7 @@ def cache_write(name, key):
 
 class Task:
     def __init__(self, name, doc, run=None, deps=(), inputs=(), outputs=(),
-                 cacheable=True, uses_env=False):
+                 cacheable=True, uses_env=False, needs_torch=False):
         self.name = name
         self.doc = doc
         self.run = run or (lambda: None)
@@ -311,12 +424,16 @@ class Task:
         self.outputs = tuple(outputs)     # 이 파일들이 없으면 캐시가 맞아도 다시 만든다
         self.cacheable = cacheable
         self.uses_env = uses_env          # .venv 상태를 캐시 키에 포함할지
+        self.needs_torch = needs_torch    # torch를 불러오는지. Windows에서 VC++ 런타임을 먼저 확인한다(#108)
 
 
 def task_setup():
     # ensure_env와 같은 판정(--locked)을 쓴다. setup만 --frozen이면 낡은 lock으로
     # 환경이 만들어지고, 정작 check와 CI는 그 lock을 거부하는 엇갈림이 생긴다.
     sync_to_lock(verbose=True)
+    # 새 Windows PC는 여기까지 성공하고 check의 smoke에서야 torch 오류로 멈췄다(#108).
+    # 설치를 마쳤다고 알리기 전에 VC++ 런타임부터 확인한다.
+    ensure_vc_runtime()
     activate = r".venv\Scripts\activate" if os.name == "nt" else "source .venv/bin/activate"
     print(
         "\n설치 완료. 확인하려면:  python tasks.py check"
@@ -420,6 +537,15 @@ def task_shiptest():
     .venv가 필요 없다. ship.py처럼 표준 라이브러리만 쓰므로 이 파이썬으로 바로 돌린다.
     """
     run([sys.executable, "-m", "unittest", "test_ship"], cwd=ROOT)
+
+
+def task_vcruntime():
+    """Windows VC++ 런타임 확인(#108)의 단위 검사(test_vcruntime.py).
+
+    실제 확인은 Windows에서만 돌아서 CI(Linux)에서는 늘 건너뛴다. 그래서 검사 코드와 판정을
+    가짜 DLL 로더와 가짜 응답으로 여기서 돌린다. 표준 라이브러리만 쓰므로 .venv가 필요 없다.
+    """
+    run([sys.executable, "-m", "unittest", "test_vcruntime"], cwd=ROOT)
 
 
 # kicad/_tools 스크립트에 작성자 PC의 사용자 홈 폴더 경로가 다시 들어오면 다른 PC에서
@@ -622,7 +748,8 @@ SIM_IN = ["sim/sim_stage1/*.py", "sim/sim_stage1/*.yaml", *DEPS_IN]
 CONN_IN = ["sim/connectome/*.py", *SIM_IN]
 
 TASKS = {t.name: t for t in [
-    Task("setup", "uv.lock 그대로 .venv 구성", task_setup, inputs=DEPS_IN, cacheable=False),
+    Task("setup", "uv.lock 그대로 .venv 구성 (Windows는 VC++ 재배포 패키지도 확인, #108)", task_setup,
+         inputs=DEPS_IN, cacheable=False),
     Task("lock", "의존성 재해석 - uv.lock + sim/requirements.txt 갱신", task_lock, cacheable=False),
     Task("compile", "파이썬 문법 체크", task_compile,
          inputs=["sim/**/*.py", "test_*.py", "ship.py", *DEPS_IN], uses_env=True),
@@ -633,14 +760,14 @@ TASKS = {t.name: t for t in [
          task_yaw,
          inputs=SIM_IN, uses_env=True),
     Task("smoke", "SB3-환경 연결 확인 (256스텝, 학습 아님)", task_smoke, inputs=SIM_IN,
-         uses_env=True),
+         uses_env=True, needs_torch=True),
     Task("connectome", "커넥톰 그래프 생성 (합성 + 셔플 대조군)", task_connectome,
          inputs=CONN_IN,
          outputs=["sim/connectome/graphs/synthetic.npz",
                   "sim/connectome/graphs/synthetic_shuffled.npz"],
          uses_env=True),
     Task("conncheck", "커넥톰 정책망 점검 (그래프/셔플/수치/SB3연결)", task_conncheck,
-         inputs=CONN_IN, uses_env=True),
+         inputs=CONN_IN, uses_env=True, needs_torch=True),
     Task("skills", "Codex용 스킬 복사본이 정본과 같은지 확인 (#39)", task_skills,
          inputs=[".claude/skills/**/*", ".agents/skills/**/*", "ship.py"]),
     Task("shiptest", "ship.py 단위 검사 - gh 없이 가짜 응답으로 (#109)", task_shiptest,
@@ -651,15 +778,17 @@ TASKS = {t.name: t for t in [
          f" 범위: {', '.join(CP949_SCAN)}", task_cp949,
          inputs=[*CP949_SCAN, "test_cp949.py",
                  ".claude/skills/ste-ko/references/upstream/dictionary.md"]),
+    Task("vcruntime", "Windows VC++ 런타임 확인의 단위 검사 - 가짜 응답으로 (#108)", task_vcruntime,
+         inputs=["test_vcruntime.py"]),
     Task("kicadver", "생성 회로도의 KiCad 형식 번호가 생성기와 같은지 확인 (#139)", task_kicadver,
          inputs=["kicad/_tools/*.py", "kicad/cosmos-avionics/*.kicad_sch",
                  "test_kicad_version.py"]),
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
          " 단계 목록은 graph)", task_check,
-         deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "compile", "sanity", "gate",
-               "yaw", "smoke", "conncheck"]),
+         deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "vcruntime", "compile",
+               "sanity", "gate", "yaw", "smoke", "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
-         uses_env=True),
+         uses_env=True, needs_torch=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
          inputs=["docs/presentation/build_deck.js", "docs/presentation/speaker-notes.md"],
          outputs=["docs/presentation/cosmos-info-session.pptx"]),
@@ -692,10 +821,17 @@ def ensure_env(name):
 
     먼저 환경을 만들어 두면 이 실행 내내 env_fingerprint()가 고정되고, 캐시는
     "이 환경 + 이 입력으로 이미 통과했는가"라는 한 가지 질문에만 답하게 된다.
+
+    torch를 쓰는 작업이 있으면 환경을 맞춘 직후 VC++ 런타임도 확인한다(#108). torch 작업
+    바로 앞이 아니라 여기서 하는 이유: check에서 smoke는 gate·yaw 뒤에 돈다. 그 앞에서 멈춰야
+    부원이 기다리지 않고 바로 설치 명령을 본다.
     """
-    if not any(TASKS[n].uses_env for n in needed_tasks(name)):
+    needed = needed_tasks(name)
+    if not any(TASKS[n].uses_env for n in needed):
         return
     sync_to_lock(verbose=not (VENV / "pyvenv.cfg").exists())
+    if any(TASKS[n].needs_torch for n in needed):
+        ensure_vc_runtime()
 
 
 def execute(name, opts, memo, done):
