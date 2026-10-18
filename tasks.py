@@ -526,6 +526,9 @@ def find_non_cp949(source, filename="<source>"):
     시작하는 곳을 가리킨다. f-string의 고정된 부분도 본다. `file=` 인자는 출력할 글이 아니라서 뺀다.
     변수에 담았다가 출력하는 글은 보지 않는다. 문법이 틀린 소스는 SyntaxError를 낸다.
     """
+    # ast의 col_offset은 줄 앞부터 센 UTF-8 바이트 수다. 칸은 글자 수로 바꿔서 쓴다.
+    # 줄은 ast와 같이 \r\n, \r, \n에서 나눈다.
+    lines = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     hits = set()
     for node in ast.walk(ast.parse(source, filename)):
         if isinstance(node, ast.Call) and _call_name(node.func) in CP949_CALLS:
@@ -543,7 +546,9 @@ def find_non_cp949(source, filename="<source>"):
                     try:
                         ch.encode("cp949")
                     except UnicodeEncodeError:
-                        hits.add((lit.lineno, lit.col_offset + 1, ch, where))
+                        line = lines[lit.lineno - 1].encode("utf-8")
+                        col = len(line[:lit.col_offset].decode("utf-8")) + 1
+                        hits.add((lit.lineno, col, ch, where))
     return sorted(hits)
 
 

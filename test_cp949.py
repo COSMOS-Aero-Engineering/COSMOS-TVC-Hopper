@@ -61,6 +61,15 @@ class FindNonCp949(unittest.TestCase):
         hits = tasks.find_non_cp949(f'print("{EM}")\n')
         self.assertEqual([(h[0], h[1]) for h in hits], [(1, 7)])
 
+    def test_column_counts_characters_not_bytes(self):
+        # ast의 col_offset은 UTF-8 바이트 수다. 한글은 한 글자가 3바이트라서 바이트로 세면
+        # 27이 나온다. `x = "한글한글"; print(` 18글자 뒤의 따옴표가 19번째 칸이다.
+        hits = tasks.find_non_cp949(f'x = "한글한글"; print("{EM}")\n')
+        self.assertEqual([(h[0], h[1]) for h in hits], [(1, 19)])
+        # 줄 바꿈이 \r\n이어도 같은 줄을 센다.
+        hits = tasks.find_non_cp949(f'y = 1\r\nx = "한글한글"; print("{EM}")\r\n')
+        self.assertEqual([(h[0], h[1]) for h in hits], [(2, 19)])
+
     def test_syntax_error_is_raised(self):
         with self.assertRaises(SyntaxError):
             tasks.find_non_cp949("print(\n")
