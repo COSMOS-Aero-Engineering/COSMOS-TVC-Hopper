@@ -303,7 +303,7 @@ def cache_write(name, key):
 # 작업 함수가 이 값을 돌려주면 "실행할 수 없어서 건너뛰었다"는 뜻이다. execute()는 이 결과를
 # 캐시하지 않는다. 캐시하면 도구를 설치한 뒤에도 검사가 캐시 히트로 계속 빠진다.
 SKIPPED = object()
-# 이번 실행에서 건너뛴 작업 이름. check가 마지막에 알린다.
+# 이번 실행에서 건너뛴 작업 이름. main()이 마지막에 알린다.
 SKIPPED_TASKS = []
 
 
@@ -625,8 +625,6 @@ def task_cad():
 
 
 def task_check():
-    if SKIPPED_TASKS:
-        print(f"\n건너뛴 작업: {', '.join(SKIPPED_TASKS)}. 이유는 위 [건너뜀] 줄을 본다. CI는 이 작업도 돌린다.")
     print("\n전부 통과. PR 올려도 된다.")
 
 
@@ -801,6 +799,9 @@ def main():
 
     ensure_env(opts.task)
     execute(opts.task, opts, {}, set())
+    # check가 캐시 히트면 task_check는 돌지 않는다. 그래서 건너뛴 작업은 여기서 알린다.
+    if SKIPPED_TASKS:
+        print(f"\n건너뛴 작업: {', '.join(SKIPPED_TASKS)}. 이유는 위 [건너뜀] 줄을 본다. CI는 이 작업도 돌린다.")
     return 0
 
 
