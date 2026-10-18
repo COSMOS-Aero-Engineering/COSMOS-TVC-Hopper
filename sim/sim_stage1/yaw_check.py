@@ -394,24 +394,28 @@ def check_servo(p):
         print(f"   마. (1) 1차 지연: tau {tau:g} s에서 속도 제한이 먼저 걸리거나 지연이 없어 해석해 비교를 건너뜀")
 
     # (2) 데드밴드: 0.5 명령으로 멈출 때까지 보낸 뒤 데드밴드의 절반, 2배만큼 명령을 바꾼다
-    env = servo_env(p)
-    for _ in range(int(np.ceil(max(1.0, 20.0 * tau) / env.dt))):
-        env.step(vane_action(0.5))
-    # 1차 지연은 오차가 데드밴드 안에 들어오는 스텝에 멈춘다. 그래서 멈춘 베인각은 명령보다 최대 데드밴드만큼 모자란다
-    rest = float(env.vane_alpha[0])
-    short = 0.5 * alpha_max - rest
-    env.step(vane_action((rest + 0.5 * band) / alpha_max))   # 현재 베인각에서 데드밴드의 절반
-    small = float(env.vane_alpha[0]) - rest
-    env.step(vane_action((rest + 2.0 * band) / alpha_max))   # 현재 베인각에서 데드밴드의 2배
-    large = float(env.vane_alpha[0]) - rest
-    print(f"   마. (2) 데드밴드 {np.degrees(band):g}°: 명령 {np.degrees(0.5 * alpha_max):g}°에서 멈춘 베인각은 {np.degrees(short):.3f}° 모자란다. "
-          f"베인각 +{np.degrees(0.5 * band):.3f}° 명령 → 베인 {np.degrees(small):+.2e}°, +{np.degrees(2.0 * band):.3f}° 명령 → 베인 {np.degrees(large):+.2e}°")
-    if not 0.0 <= short < band + 1e-12:
-        failures.append(f"마. 서보 데드밴드: 멈춘 베인각이 명령보다 {np.degrees(short):.3g}° 모자란다 (0 이상 데드밴드 미만이어야 한다)")
-    if band > 0 and small != 0.0:
-        failures.append(f"마. 서보 데드밴드: 데드밴드 안의 명령 변화에 베인이 {np.degrees(small):.3g}° 움직였다")
-    if not large > 0:
-        failures.append(f"마. 서보 데드밴드: 데드밴드 밖의 명령 변화에 베인이 움직이지 않았다 ({np.degrees(large):.3g}°)")
+    # 데드밴드가 0이면 1차 지연은 유한 스텝 안에 멈추지 않는다. 멈춘 베인각을 비교할 수 없어서 건너뛴다
+    if band <= 0:
+        print("   마. (2) 데드밴드: deadband_deg 0이라 검사를 건너뜀")
+    else:
+        env = servo_env(p)
+        for _ in range(int(np.ceil(max(1.0, 20.0 * tau) / env.dt))):
+            env.step(vane_action(0.5))
+        # 1차 지연은 오차가 데드밴드 안에 들어오는 스텝에 멈춘다. 그래서 멈춘 베인각은 명령보다 최대 데드밴드만큼 모자란다
+        rest = float(env.vane_alpha[0])
+        short = 0.5 * alpha_max - rest
+        env.step(vane_action((rest + 0.5 * band) / alpha_max))   # 현재 베인각에서 데드밴드의 절반
+        small = float(env.vane_alpha[0]) - rest
+        env.step(vane_action((rest + 2.0 * band) / alpha_max))   # 현재 베인각에서 데드밴드의 2배
+        large = float(env.vane_alpha[0]) - rest
+        print(f"   마. (2) 데드밴드 {np.degrees(band):g}°: 명령 {np.degrees(0.5 * alpha_max):g}°에서 멈춘 베인각은 {np.degrees(short):.3f}° 모자란다. "
+              f"베인각 +{np.degrees(0.5 * band):.3f}° 명령 → 베인 {np.degrees(small):+.2e}°, +{np.degrees(2.0 * band):.3f}° 명령 → 베인 {np.degrees(large):+.2e}°")
+        if not 0.0 <= short < band + 1e-12:
+            failures.append(f"마. 서보 데드밴드: 멈춘 베인각이 명령보다 {np.degrees(short):.3g}° 모자란다 (0 이상 데드밴드 미만이어야 한다)")
+        if small != 0.0:
+            failures.append(f"마. 서보 데드밴드: 데드밴드 안의 명령 변화에 베인이 {np.degrees(small):.3g}° 움직였다")
+        if not large > 0:
+            failures.append(f"마. 서보 데드밴드: 데드밴드 밖의 명령 변화에 베인이 움직이지 않았다 ({np.degrees(large):.3g}°)")
 
     # (3) 속도 제한: tau = 0이면 1차 지연이 없어 계단이 속도 제한만으로 경사가 된다
     env = servo_env(p)
