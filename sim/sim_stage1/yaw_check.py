@@ -293,7 +293,7 @@ def check_thrust_lag(p, spin):
     where = f"추력 지연 spin_dir {spin:+d}"
     print(f"   다. {where}: 계단 뒤 {THRUST_PROBE_STEPS}번째 스텝 u = Ω/omega_max = {u1:.4f}, "
           f"Δω = {np.array2string(got, precision=5)}, 손계산 {np.array2string(want, precision=5)} rad/s "
-          f"(지연 없는 추력이면 Δωx ≈ {no_lag:.5f})")
+          f"(지연 없는 추력이면 Δωx 약 {no_lag:.5f})")
     failures = []
     for axis, g, w in zip("xyz", got, want):
         if not np.isfinite(g) or np.sign(g) != np.sign(w) or abs(g - w) > REL_TOL * abs(w):
