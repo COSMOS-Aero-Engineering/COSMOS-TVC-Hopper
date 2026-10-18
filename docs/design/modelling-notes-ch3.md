@@ -106,6 +106,9 @@ F1, F2, F3, F4 = self.CLalpha * Ft * alpha
 - 우리 값: `CL = CLα·A_fin/(2·A_duct)`를 `hopper_aviary.py`의 `vane_lift_gain()`이 계산한다.
   CLα는 2D 6.194/rad에 Helmbold 저종횡비 보정(AR 1.12)을 한 1.637/rad, A_fin = 28 × 25 mm(제트 안에 잠긴 부분),
   A_duct = π·32² mm²(64 mm 공칭). → CL = 0.178/rad. 계산 근거는 `params.yaml` 주석.
+- `A_fin`과 `A_duct`는 둘 다 `params.yaml`의 `vane_geometry`에서 계산한다(#98, #117). `A_duct` = π·outer_r²(원 전체,
+  꼬리 원뿔 단면을 빼지 않음)다. 배기 내경을 실측하면 `outer_r_mm` 하나만 고친다. `CLα`는 TC-2 실측 회귀로 바꿀 입력이라
+  AR에서 계산하지 않는다(#117 결정, 2026-10-18 차장 김준원).
 - 상한: 한 축 측력 2·CL·α_max·Ft = 0.062·Ft로, 제트 운동량 상한 Ft·sin(10°) = 0.174·Ft의 36 %다.
   `vane_lift_gain()`은 상한을 넘는 값이 들어오면 ValueError를 낸다.
 - 민감도(#27 PR): CL이 이 추정의 0.5배면 PD 합격 기준(중앙값 ≤ 5°)을 겨우 넘지 못한다(5.65°).
@@ -275,7 +278,7 @@ Ch.4에서 LQR 게인을 설계한다. **우리 Stage 1은 이 선형화를 안 
 | `l` | `params.yaml: vane_arm_l` | PLACEHOLDER 0.104 m(CG 추정 68 mm + 피벗 36 mm). 예전 0.048은 링 반지름이라 정의와 달랐다(#21) |
 | `r` | `hopper_aviary.py: vane_geometry()` ← `params.yaml: vane_geometry` | PLACEHOLDER 0.018 m(z축 → 베인 압력중심. `A_fin`과 같은 입력: 베인 r 4-32 mm 잠김, 균일 유속, #34·#98). 허브 차폐 효과는 근거가 없어 `vane_arm_r_range` ±25 %로 덮는다. 예전 0.048은 링 반지름이었다 |
 | `CLα` (raw, 유한 날개) | `params.yaml: CLalpha` | PLACEHOLDER 1.637/rad, §2.2 결정 참고 |
-| `A_fin, A_duct` | `A_fin`: `vane_geometry()` ← `params.yaml: vane_geometry`(#98), `A_duct`: `params.yaml: A_duct` | PLACEHOLDER, 배기 내경 실측 필요 |
+| `A_fin, A_duct` | `vane_geometry()` ← `params.yaml: vane_geometry`. `A_fin`(#98) = 잠김 스팬 × 시위, `A_duct`(#117) = π·outer_r² | PLACEHOLDER, 배기 내경 실측 필요 |
 | `CL = CLα·A_fin/(2A_duct)` (lumped) | `hopper_aviary.py: vane_lift_gain()` → `self.CL` | 일치(#27), 제트 운동량 상한 검사 포함 |
 | `CD0` | `params.yaml: CD0` | 원저자 뭉쳐진 값, 동역학 코드에서 안 씀 |
 | `τx,τy,τz` | `tau_x,tau_y,tau_z` | 일치 |

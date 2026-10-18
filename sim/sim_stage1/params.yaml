@@ -16,19 +16,20 @@ Jzz: 0.002           # kg*m^2, PLACEHOLDER — 세로축 관성모멘트, 가장
 vane_arm_l: 0.104    # m, PLACEHOLDER — 위 계산값
 
 # 베인 잠김 구간(#98): 베인 1장이 제트에 잠기는 반경 구간 inner_r-outer_r과 시위 chord.
-#   요 팔 r, 잠긴 면적 A_fin, 종횡비 AR은 전부 이 세 값에서 나온다. hopper_aviary.py의 vane_geometry()가 계산한다.
-#   예전에는 vane_arm_r과 A_fin을 따로 적어서 한쪽만 고치면 조용히 어긋날 수 있었다(#34의 0.048 m가 그런 버그였다).
+#   요 팔 r, 잠긴 면적 A_fin, 종횡비 AR, 배기 단면적 A_duct는 전부 이 세 값에서 나온다. hopper_aviary.py의 vane_geometry()가 계산한다.
+#   예전에는 vane_arm_r, A_fin, A_duct를 따로 적어서 한쪽만 고치면 조용히 어긋날 수 있었다(#34의 0.048 m가 그런 버그였다).
 #   축방향 유속이 잠김 구간에서 균일하다고 본다.
-#     r     = (inner_r + outer_r) / 2      요 모멘트암 = z축 → 베인 압력중심 반경 → (4+32)/2 = 18 mm = 0.018 m
-#     A_fin = (outer_r - inner_r) · chord  베인 1장의 잠긴 면적 → 28 mm × 25 mm = 7.0e-4 m^2
-#     AR    = (outer_r - inner_r) / chord  종횡비, 아래 CLalpha 주석에서 쓴다 → 1.12
+#     r      = (inner_r + outer_r) / 2      요 모멘트암 = z축 → 베인 압력중심 반경 → (4+32)/2 = 18 mm = 0.018 m
+#     A_fin  = (outer_r - inner_r) · chord  베인 1장의 잠긴 면적 → 28 mm × 25 mm = 7.0e-4 m^2
+#     AR     = (outer_r - inner_r) / chord  종횡비, 아래 CLalpha 주석에서 쓴다 → 1.12
+#     A_duct = π · outer_r²                 배기 단면적 = 제트 반지름 outer_r인 원 전체 → π·32² mm² = 3.21699e-3 m^2 (#117)
 #   꼬리 원뿔(허브) 뒤 안쪽은 실제로 유속이 작아 압력중심이 바깥으로 갈 수 있다(허브 지름 근거 없음, 추정).
 #   그 불확실성은 domain_rand.vane_arm_r_range로 덮는다. 예전 r 0.048 m는 베인 링 반지름이라 정의와 달랐다.
 #   실측값은 아직 없다. 배기 내경·허브 지름을 실측하면 이 블록만 고친다.
 vane_geometry:
   inner_r_mm: 4.0    # 설계값(실측 아님) — cad/hopper_params.scad의 vane_inner_r(베인 안쪽 끝)
   outer_r_mm: 32.0   # 추정값(실측 아님) — 제트 반지름 = 64 mm급 EDF 공칭 지름 / 2. 배기 내경 실측 필요.
-                     #   CAD 베인은 반경 41 mm까지 뻗지만 32 mm 바깥은 제트 밖이라 뺐다. 아래 A_duct도 같은 32 mm를 쓴다
+                     #   CAD 베인은 반경 41 mm까지 뻗지만 32 mm 바깥은 제트 밖이라 뺐다. A_duct도 이 값에서 계산한다(#117)
   chord_mm: 25.0     # 설계값(실측 아님) — cad/hopper_params.scad의 vane_chord
 
 # --- 베인 공력 (modelling-notes-ch3.md §2.2의 (B) 기하 기반) ---
@@ -41,14 +42,14 @@ vane_geometry:
 #   종횡비 AR = 1.12 (vane_geometry의 잠긴 스팬 28 mm / 시위 25 mm)
 #   Helmbold 저종횡비 보정 a = a0 / (sqrt(1 + (a0/(pi·AR))^2) + a0/(pi·AR)) = 1.637/rad
 #   베인을 고립된 날개로 본 값이다. 덕트 벽의 끝판 효과는 넣지 않았다(넣으면 커진다).
-#   코드는 이 값을 AR에서 다시 계산하지 않는다. TC-2 실측 회귀로 바꿀 입력이기 때문이다.
+#   코드는 이 값을 AR에서 다시 계산하지 않는다. TC-2 실측 회귀로 바꿀 입력이기 때문이다(#117에서 입력으로 두기로 정했다).
 #   TC-2 전에 vane_geometry를 바꾸면 이 값도 위 식으로 다시 계산해서 고친다.
 CLalpha: 1.637       # 1/rad, PLACEHOLDER — TC-2(베인각별 복원 모멘트) 실측 회귀로 교체
-# A_fin(베인 1장의 잠긴 면적)은 위 vane_geometry에서 계산한다(7.0e-4 m^2). 여기에 따로 적지 않는다.
-# A_duct: 배기 단면적. 64 mm급 EDF 공칭 지름으로 원 전체 넓이를 잡았다(pi·0.032^2).
-#   반지름 32 mm는 vane_geometry.outer_r_mm와 같은 추정이다. 배기 내경을 실측하면 둘을 함께 고친다.
-#   모터 꼬리 원뿔 단면을 빼면 A_duct가 작아지고 CL이 커진다 — 실측 전에는 작은 쪽 CL을 쓴다.
-A_duct: 3.217e-3     # m^2, PLACEHOLDER — EDF 배기 내경·꼬리 원뿔 지름 실측 필요
+# A_fin(베인 1장의 잠긴 면적)과 A_duct(배기 단면적)는 위 vane_geometry에서 계산한다. 여기에 따로 적지 않는다.
+#   A_duct = π·outer_r² = π·0.032² = 3.21699e-3 m^2(#117). 예전에는 A_duct: 3.217e-3을 따로 적어서
+#   outer_r_mm만 고치면 A_duct가 조용히 어긋날 수 있었다. 이제 배기 내경을 실측하면 outer_r_mm 하나만 고친다.
+#   원 전체 넓이다. 모터 꼬리 원뿔(허브) 단면을 빼면 A_duct가 작아지고 CL이 커진다 — 허브 지름 실측(#118) 전에는 작은 쪽 CL을 쓴다.
+#   A_duct 줄을 다시 쓰면 hopper_aviary.py가 ValueError를 낸다(두 출처가 생기므로).
 # 상한: 한 축 베인 2장의 측력 합 2·CL·alpha_max·Ft는 Ft·sin(alpha_max)를 넘지 못한다(제트 운동량).
 #   지금 값: 0.0621·Ft, 상한 0.1736·Ft의 36%. hopper_aviary.py가 넘으면 ValueError를 낸다.
 CD0: 0.001054        # PLACEHOLDER — 원저자 MATLAB의 뭉쳐진 값(raw는 부록 B.3의 0.0145). 지금 동역학 코드는 안 쓴다
