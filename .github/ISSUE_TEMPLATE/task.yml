@@ -7,6 +7,15 @@ body:
       value: |
         이 이슈는 `ste-ko` 스킬(`.claude/skills/ste-ko/SKILL.md`)을 불러온 뒤 쓴다. 제목 태그는 `cad`/`fw`/`sim`/`web`/`kicad`/`data`/`docs`/`infra` 중 하나다.
         작업 순서는 `AGENTS.md` §작업 순서를 따른다. 팀별 PRD는 이 양식 대신 `AGENTS.md` §일하는 방식의 PRD 형식으로 쓴다.
+  - type: input
+    id: parent-prd
+    attributes:
+      label: 상위 PRD
+      description: >-
+        이 작업이 속한 PRD 이슈 번호(예: `#26`). PRD 아래 작업이 아니면 비운다.
+        이 양식은 상위 이슈(sub-issue)를 지정하지 못한다. `python ship.py wt <이 이슈 번호>`가 worktree를 만들 때 이 칸을 읽어 PRD의 sub-issue로 잇는다.
+        칸을 나중에 고쳤으면 `python ship.py link <이 이슈 번호>`를 실행한다. 웹에서는 PRD 이슈의 "Create sub-issue" 옆 메뉴에서 "Add existing issue"로 이 이슈를 고른다.
+      placeholder: "#26"
   - type: textarea
     id: purpose
     attributes:

@@ -7,12 +7,13 @@
     python ship.py capped 8G -- <명령...>  메모리 상한을 걸고 명령 실행
     python ship.py review --author claude  작성한 모델과 다른 계열의 모델로 교차 리뷰
     python ship.py skills [--check]        .claude/skills를 .agents/skills(Codex용)로 복사, --check는 비교만
+    python ship.py link <이슈 번호>        본문 "### 상위 PRD" 칸의 PRD 아래 sub-issue로 잇기 (wt도 부른다)
 
 왜 이 파일이 있나: 김준원의 서버에는 `wt`, `capped`, `codex`가 깔려 있지만 부원 PC(Windows 위주)에는
 없다. 없다고 그 단계를 빼면 사람마다 작업 순서가 달라진다. 그래서 같은 동작을 표준 라이브러리만으로
 여기 구현하고, 없는 외부 도구는 처음 쓸 때 설치한다. 설치할 수 없는 경우(Linux의 gh는 관리자 권한
-필요, Node.js가 없으면 opencode)는 설치 방법을 출력하고 멈춘다. Windows의 `capped`는 상한을 걸지
-못하고 경고만 낸다.
+필요, Node.js가 없으면 opencode)는 설치 방법을 출력하고 멈춘다. Windows의 `capped`는 Job Object로
+상한을 건다. 이 동작은 GitHub Windows 러너에서 64비트와 32비트 파이썬으로 확인했다(#80).
 
 사람만 할 수 있는 단계(로그인)는 설치해도 대신하지 못한다. 그때는 무엇을 입력하면 되는지 출력하고
 멈춘다. OpenCode의 무료 모델은 로그인 없이 쓸 수 있어서, 리뷰는 로그인이 없어도 돈다.
@@ -150,7 +151,10 @@ def cmd_wt(a):
             "     3. python ship.py wt <새 작업 이슈 번호>")
     if path.exists():
         branch = call(["git", "-C", path, "branch", "--show-current"], capture=True).stdout.strip()
-        print(f"이미 있는 worktree를 쓴다. 브랜치: {branch}", file=sys.stderr)
+        print("이미 있는 worktree를 쓴다.", file=sys.stderr)
+        link_after_wt(a.issue, root)
+        # 새 worktree와 같다: 끝에서 둘째 줄은 브랜치, 마지막 줄은 경로다.
+        print(f"브랜치: {branch}", file=sys.stderr)
         print(path)
         return
     tag = a.tag or issue_tag(info)
@@ -160,9 +164,176 @@ def cmd_wt(a):
     call(["git", "-C", root, "fetch", "origin", "--quiet"])
     path.parent.mkdir(parents=True, exist_ok=True)
     call(["git", "-C", root, "worktree", "add", "--quiet", path, "-b", branch, "origin/main"])
+    link_after_wt(a.issue, root)
     # 마지막 줄은 경로만 쓴다. 스크립트가 `cd "$(python ship.py wt 12 | tail -1)"`처럼 쓸 수 있게.
     print(f"브랜치: {branch}", file=sys.stderr)
     print(path)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# link — 작업 이슈를 상위 PRD의 sub-issue로 잇기 (#79, #109)
+# ─────────────────────────────────────────────────────────────────────────────
+# 웹 양식(.github/ISSUE_TEMPLATE/task.yml, id parent-prd)으로 만든 이슈 본문에는 `### 상위 PRD` 제목과
+# 값만 남는다. 칸을 비우면 값은 `_No response_`다. sub-issue 관계는 생기지 않는다. 이 명령이 값을 읽어 잇는다.
+#
+# gh의 `issue edit --add-sub-issue`가 아니라 `gh api`를 쓰는 이유: 그 옵션은 gh 2.94.0(2026-06)에 처음
+# 들어갔다. 부원 PC의 gh는 그보다 오래됐을 수 있다. `gh api`와 `{owner}/{repo}` 자리표시는 훨씬 오래된
+# 버전에도 있다. REST: https://docs.github.com/en/rest/issues/sub-issues
+#
+# 관계는 POST 한 번으로만 바꾼다. replace_parent를 보내지 않으므로 이미 있는 상위 이슈를 바꾸지 않는다.
+
+PARENT_HEADING = "상위 PRD"  # task.yml parent-prd 칸의 label과 같아야 한다
+EMPTY_FORM_VALUE = "_No response_"  # 이슈 양식에서 칸을 비웠을 때 본문에 남는 값
+NO_PARENT_WORD = "없음"
+# 칸의 값에서 이 저장소의 이슈 번호를 찾는다(#133).
+# 읽는다: `#26`, `(#26)`, `#26번`, `#26의 하위`, `상위#26`, `-#26`, `/#26`.
+# 읽지 않는다: `org/repo#26`(이 저장소 이름이어도), `org/repo-#26`, `PRD#26`, `_#26`, `#26a`.
+# 1. OTHER_REPO_REF: 저장소 이름을 붙인 참조를 먼저 지운다. 계정·저장소 이름 자리에는 ASCII 영문자·숫자·`_`·`.`·`-`만 본다.
+#    바로 이어 붙은 번호도 함께 지운다(`org/repo#26#27`). GitHub은 이 값에서 아무것도 링크하지 않는다.
+# 2. 남은 값에서 `#<번호>`를 앞뒤 글자와 관계없이 센다. 서로 다른 번호가 둘 이상이면 오류다(`#26/#27`, `#26#27`).
+# 3. ISSUE_REF: 번호 하나를 읽는다. `#` 바로 앞과 번호 바로 뒤에 ASCII 영문자·숫자·`_`가 없어야 한다.
+# 3의 `#` 앞 규칙은 GitHub 자동 링크와 같다. `gh api markdown`으로 확인했다: `상위#26`, `-#26`, `.#26`, `/#26`은 링크하고
+# `PRD#26`, `_#26`은 링크하지 않는다. GitHub과 다른 곳은 둘이다. `#26번`은 GitHub이 링크하지 않지만 이 칸에서는 읽는다.
+# `#26#27`은 GitHub이 #26만 링크하지만 이 칸에서는 2단계에서 오류다.
+# re.ASCII를 쓰는 이유: 파이썬 3의 str 정규식에서 `\w`는 한글도 단어 글자로 본다. 그러면 `#26번`과 `상위#26`을 놓친다.
+OTHER_REPO_REF = re.compile(r"[\w.-]+/[\w.-]+(?:#[0-9]+)+", re.ASCII)
+ISSUE_REF = re.compile(r"(?<!\w)#([0-9]+)(?!\w)", re.ASCII)
+
+
+def parent_prd(body):
+    """본문의 `### 상위 PRD` 칸을 읽는다. (PRD 번호 또는 None, 칸의 값)을 돌려준다.
+
+    칸이 없거나, 비었거나, `_No response_`이거나, `없음`으로 시작하면 번호는 None이다.
+    값이 있는데 이 저장소의 `#<번호>`(ISSUE_REF)가 없으면 ValueError를 낸다. 저장소 이름을 붙인 참조를 뺀 값에
+    서로 다른 `#<번호>`가 둘 이상 있어도 ValueError를 낸다.
+    """
+    text = (body or "").replace("\r\n", "\n")
+    m = re.search(rf"^###[ \t]+{re.escape(PARENT_HEADING)}[ \t]*$(.*?)(?=^###[ \t]|\Z)", text,
+                  re.M | re.S)
+    if not m:
+        return None, ""
+    value = m.group(1).strip()
+    if not value or value == EMPTY_FORM_VALUE or value.startswith(NO_PARENT_WORD):
+        return None, value
+    rest = OTHER_REPO_REF.sub(" ", value)
+    seen = sorted({int(n) for n in re.findall(r"#([0-9]+)", rest)})
+    if len(seen) > 1:
+        raise ValueError(f"번호가 {len(seen)}개다(칸의 값: {value!r}). 상위 이슈는 하나만 둘 수 있다.")
+    numbers = ISSUE_REF.findall(rest)
+    if not numbers:
+        raise ValueError(f"`#<번호>` 형식의 번호가 없다(칸의 값: {value!r}). 예: #26\n"
+                         "     저장소 이름을 붙인 참조(`org/repo#26`)는 이 저장소 이름이어도 읽지 않는다.\n"
+                         "     `PRD#26`, `_#26`, `#26a`처럼 `#` 바로 앞이나 번호 바로 뒤에 영문자·숫자·`_`가 붙어도"
+                         " 읽지 않는다.")
+    return int(numbers[0]), value
+
+
+def gh_api(path, cwd=None, method=None, fields=()):
+    """`gh api`를 한 번 부른다. (종료 코드, JSON 또는 None, HTTP 상태 코드 또는 None, 오류 글)."""
+    cmd = ["gh", "api", *(["-X", method] if method else []), path]
+    for f in fields:
+        cmd += ["-F", f]
+    say(cmd)
+    r = subprocess.run([exe_of("gh"), *cmd[1:]], cwd=cwd, text=True, encoding="utf-8",
+                       errors="replace", capture_output=True)
+    try:
+        data = json.loads(r.stdout) if r.stdout.strip() else None
+    except ValueError:
+        data = None
+    # gh는 실패하면 stderr에 `gh: Not Found (HTTP 404)`처럼 쓴다.
+    m = re.search(r"\(HTTP (\d{3})\)", r.stderr)
+    return r.returncode, data, int(m.group(1)) if m else None, r.stderr.strip()
+
+
+def link_fail(msg):
+    print(f"[잇지 않음] {msg}", file=sys.stderr, flush=True)
+    return 1
+
+
+def link_issue(n, cwd=None):
+    """이슈 #n을 본문 "상위 PRD" 칸이 가리키는 PRD의 sub-issue로 잇는다. 종료 코드를 돌려준다.
+
+    0: 이었다. 이미 그 PRD의 하위 이슈다. 상위 PRD가 없다(칸 없음, 빈 칸, `_No response_`, `없음`).
+    1: 잇지 않았다. 칸의 값이 틀렸다, 다른 상위 이슈가 이미 있다, 권한이 없다, API가 실패했다.
+    """
+    issue_path = "repos/{owner}/{repo}/issues/"
+    rc, issue, status, err = gh_api(f"{issue_path}{n}", cwd)
+    if rc != 0 or not isinstance(issue, dict):
+        if status in (404, 410):
+            return link_fail(f"없는 이슈 번호다: #{n} (HTTP {status}).")
+        return link_fail(f"이슈 #{n} 정보를 읽지 못했다: {err}")
+    if issue.get("pull_request"):
+        return link_fail(f"PR 번호다: #{n}. 작업 이슈 번호를 준다.")
+    try:
+        prd, value = parent_prd(issue.get("body"))
+    except ValueError as e:
+        return link_fail(f"#{n} 본문의 `### {PARENT_HEADING}` 칸을 읽지 못했다. {e}\n"
+                         f"     이슈 본문의 칸을 `#<PRD 번호>` 하나로 고친 뒤 다시 실행한다.")
+    if prd is None:
+        why = f"칸의 값: {value!r}" if value else f"본문에 `### {PARENT_HEADING}` 칸이 없다"
+        print(f"#{n}: 상위 PRD가 없다({why}). 잇지 않는다.", flush=True)
+        return 0
+    if prd == n:
+        return link_fail(f"#{n} 본문의 상위 PRD 칸이 이 이슈 자신을 가리킨다. 칸의 번호를 고친다.")
+
+    # 중복 실행: 지금 상위 이슈를 먼저 본다. 이미 이 PRD 아래면 아무것도 바꾸지 않는다.
+    same_repo = f"{issue.get('repository_url')}/issues/"
+    current = issue.get("parent_issue_url")
+    if current == f"{same_repo}{prd}":
+        print(f"이미 PRD #{prd}의 하위 이슈다: #{n}. 바꾸지 않는다.", flush=True)
+        return 0
+    if current:
+        shown = f"#{current[len(same_repo):]}" if current.startswith(same_repo) else current
+        return link_fail(f"#{n}의 상위 이슈가 이미 있다: {shown}. 칸의 PRD #{prd}로 바꾸지 않는다.\n"
+                         "     칸의 PRD가 맞으면 부장·차장이 웹에서 상위 이슈를 옮긴다. "
+                         "지금 상위 이슈가 맞으면 칸을 고친다.")
+
+    rc, parent, status, err = gh_api(f"{issue_path}{prd}", cwd)
+    if rc != 0 or not isinstance(parent, dict):
+        if status in (404, 410):
+            return link_fail(f"칸의 번호로 이슈를 찾지 못했다: #{prd} (HTTP {status}). 칸의 번호를 고친다.")
+        return link_fail(f"PRD #{prd} 정보를 읽지 못했다: {err}")
+    if parent.get("pull_request"):
+        return link_fail(f"칸의 번호가 PR 번호다: #{prd}. PRD 이슈 번호로 고친다.")
+    if parent.get("state") != "open":
+        return link_fail(f"칸의 PRD가 닫혀 있다: #{prd} ({parent.get('state')}). 잇지 않는다.")
+    labels = {label.get("name") for label in parent.get("labels", [])}
+    if "prd" not in labels:
+        return link_fail(f"칸의 이슈에 라벨 `prd`가 없다: #{prd}. PRD 이슈 번호인지 확인한다.")
+
+    # sub_issue_id는 이슈 번호가 아니라 REST의 id다.
+    rc, _, status, err = gh_api(f"{issue_path}{prd}/sub_issues", cwd, method="POST",
+                                fields=[f"sub_issue_id={issue['id']}"])
+    if rc != 0:
+        if status in (401, 403, 404):
+            return link_fail(
+                f"PRD #{prd} 아래로 이슈 #{n} 잇기에 실패했다: {err}\n"
+                f"     원인: 이 gh 계정에 저장소의 triage 이상 권한이 없거나 로그인이 풀린 것으로 보인다"
+                f"(HTTP {status}). sub-issue는 triage 이상 권한으로만 잇는다.\n"
+                f"     손으로 잇기: 권한이 있는 사람(부장·차장)이 {parent.get('html_url', f'PRD #{prd}')} "
+                f"본문 아래 \"Create sub-issue\" 옆 화살표를 누르고 \"Add existing issue\"에서 이 이슈(#{n})를 고른다.\n"
+                f"     또는 그 사람이 다음 명령을 실행한다: python ship.py link {n}")
+        return link_fail(f"PRD #{prd} 아래로 이슈 #{n} 잇기에 실패했다: {err}")
+    print(f"PRD #{prd}의 하위 이슈로 이었다: #{n} ({parent.get('html_url', '')})", flush=True)
+    return 0
+
+
+def link_after_wt(n, cwd):
+    """wt 끝에 부른다. 잇지 못해도 worktree는 이미 있으므로 wt를 실패로 끝내지 않는다."""
+    print(f"\n상위 PRD 잇기 (python ship.py link {n}):", file=sys.stderr, flush=True)
+    try:
+        rc = link_issue(n, cwd)
+    except Exception as e:  # 잇기가 어떻게 실패해도 폴더 경로 출력(wt의 결과)은 지킨다
+        print(f"[잇지 않음] 예상하지 못한 오류: {e!r}", file=sys.stderr)
+        rc = 1
+    if rc != 0:
+        print("[주의] worktree는 그대로 쓴다. 위 안내대로 고친 뒤 다음 명령을 다시 실행한다: "
+              f"python ship.py link {n}", file=sys.stderr, flush=True)
+
+
+def cmd_link(a):
+    ensure_gh_login()
+    sys.exit(link_issue(a.issue, ROOT))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -197,10 +368,81 @@ def cmd_capped(a):
             print("[주의] macOS는 RLIMIT_AS를 강제하지 않을 수 있다. 상한이 안 걸릴 수 있다.",
                   file=sys.stderr)
         sys.exit(subprocess.run([exe_of(cmd[0]), *cmd[1:]], preexec_fn=limit_as).returncode)
-    # Windows: Job Object로 걸 수 있지만 여기서는 시험하지 못해서 넣지 않았다.
-    print("[주의] Windows에서는 메모리 상한을 걸지 못한다. 상한 없이 실행한다. "
-          "작업 관리자로 메모리를 지켜본다.", file=sys.stderr)
+    try:
+        win_job_cap(limit)
+    except OSError as e:
+        die(f"Windows Job Object로 메모리 상한을 걸지 못했다: {e}")
     sys.exit(subprocess.run([exe_of(cmd[0]), *cmd[1:]]).returncode)
+
+
+def win_job_cap(limit):
+    """Windows: 이 프로세스(ship.py)를 커밋 메모리 상한이 걸린 Job Object에 넣는다.
+
+    자식을 먼저 띄우고 Job에 넣으면, 넣기 전에 자식이 할당하거나 손자 프로세스를 띄울 수 있다.
+    subprocess는 CREATE_SUSPENDED로 띄운 자식의 스레드 핸들을 닫아 버려서 ResumeThread를 못 쓴다.
+    그래서 ship.py 자신을 먼저 Job에 넣는다. 그 뒤 띄우는 자식과 손자는 Job에 자동으로 들어간다.
+    JOB_MEMORY는 Job 전체 합계 상한이다(Linux systemd-run의 MemoryMax처럼). ship.py 자신이 쓰는
+    메모리도 합계에 들어간다. KILL_ON_JOB_CLOSE: ship.py가 끝나 마지막 Job 핸들이 닫히면 남은
+    자식도 끝난다. Job 핸들은 일부러 닫지 않는다.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    JOB_OBJECT_LIMIT_JOB_MEMORY = 0x00000200
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
+    JobObjectExtendedLimitInformation = 9
+
+    class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
+        _fields_ = [("PerProcessUserTimeLimit", wintypes.LARGE_INTEGER),
+                    ("PerJobUserTimeLimit", wintypes.LARGE_INTEGER),
+                    ("LimitFlags", wintypes.DWORD),
+                    ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t),
+                    ("ActiveProcessLimit", wintypes.DWORD),
+                    ("Affinity", ctypes.c_size_t),  # ULONG_PTR: 포인터 크기의 부호 없는 정수
+                    ("PriorityClass", wintypes.DWORD),
+                    ("SchedulingClass", wintypes.DWORD)]
+
+    class IO_COUNTERS(ctypes.Structure):
+        _fields_ = [(name, ctypes.c_ulonglong) for name in (
+            "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
+            "ReadTransferCount", "WriteTransferCount", "OtherTransferCount")]
+
+    class JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
+        _fields_ = [("BasicLimitInformation", JOBOBJECT_BASIC_LIMIT_INFORMATION),
+                    ("IoInfo", IO_COUNTERS),
+                    ("ProcessMemoryLimit", ctypes.c_size_t),
+                    ("JobMemoryLimit", ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                    ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+    if limit >= 1 << (8 * ctypes.sizeof(ctypes.c_size_t)):
+        die(f"상한 {limit}바이트가 이 파이썬(32비트)의 SIZE_T 범위를 넘는다.")
+
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateJobObjectW.argtypes = (ctypes.c_void_p, wintypes.LPCWSTR)
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.SetInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p,
+                                            wintypes.DWORD)
+    k32.SetInformationJobObject.restype = wintypes.BOOL
+    k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    k32.AssignProcessToJobObject.restype = wintypes.BOOL
+    k32.GetCurrentProcess.argtypes = ()
+    k32.GetCurrentProcess.restype = wintypes.HANDLE
+
+    job = k32.CreateJobObjectW(None, None)
+    if not job:
+        raise ctypes.WinError(ctypes.get_last_error())
+    info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
+    info.BasicLimitInformation.LimitFlags = (JOB_OBJECT_LIMIT_JOB_MEMORY
+                                             | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)
+    info.JobMemoryLimit = limit
+    if not k32.SetInformationJobObject(job, JobObjectExtendedLimitInformation,
+                                       ctypes.byref(info), ctypes.sizeof(info)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    if not k32.AssignProcessToJobObject(job, k32.GetCurrentProcess()):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return job
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -317,7 +559,17 @@ def main():
     k = sub.add_parser("skills", help=".claude/skills를 .agents/skills(Codex용)로 복사")
     k.add_argument("--check", action="store_true", help="복사하지 않고 같은지만 확인 (CI용)")
     k.set_defaults(fn=cmd_skills)
+    ln = sub.add_parser("link", help="작업 이슈를 본문 \"상위 PRD\" 칸의 PRD 아래 sub-issue로 잇기")
+    ln.add_argument("issue", type=int)
+    ln.set_defaults(fn=cmd_link)
     a = p.parse_args()
+    # link와 wt는 사람이 쓴 이슈 본문을 출력한다. cp949 콘솔에 없는 문자(이모지 등)가 있어도 멈추지
+    # 않게 못 쓰는 문자만 바꿔 쓴다. 인코딩 자체는 바꾸지 않는다(tasks.py의 같은 처리 참고).
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
     a.fn(a)
 
 

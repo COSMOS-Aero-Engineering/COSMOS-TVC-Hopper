@@ -178,6 +178,9 @@ def main():
             "model": args.model if args.policy == "ppo" else None,
             "seed": seed, "dt_s": env.dt, "max_steps": env.max_steps,
             "domain_rand": env.dr,
+            # 회전자 항 스위치와 상수(#86). 켜고 끈 에피소드를 meta만 보고 구별하려고 남긴다
+            "rotor": {"enabled": env.rotor_enabled, "inertia": env.rotor_inertia,
+                      "omega_max": env.rotor_omega_max, "tau": env.rotor_tau, "spin_dir": env.rotor_spin_dir},
             "episode_params": episode_params(env),
             "result": info,
             "git_commit": commit,

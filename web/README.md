@@ -12,6 +12,8 @@ npm run dev
 
 터미널에 나온 주소를 브라우저로 연다. 배포용 빌드는 `npm run build`(결과는 `dist/`, Git에 안 올림).
 
+좌표 변환이나 베인 코드를 고쳤으면 `npm run check`를 돌린다. 축 판정, 예제 CSV 모든 행의 자세, 베인 힌지 축과 부호를 숫자로 검사한다(`tools/check_pose.mjs`).
+
 ## 구조
 
 - `src/frames.js`: 기체 좌표(+X FWD, +Y LEFT, +Z 위) → Three.js 좌표(+Y 위) 변환. **좌표 변환은 여기에만 둔다.**

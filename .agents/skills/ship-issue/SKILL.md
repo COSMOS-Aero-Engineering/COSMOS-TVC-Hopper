@@ -19,6 +19,7 @@ description: COSMOS 저장소에서 GitHub 이슈 하나를 맡아 PR까지 끝�
    - **PRD 이슈에서는 바로 작업하지 않는다.** 라벨 `prd`가 있으면 3단계로 가지 않는다. 한 PRD를 여러 명이 맡으면 PRD 번호로 만든 브랜치가 겹치기 때문이다. 맡긴 사람의 작업 이슈를 만든다: `gh issue create --title "[태그] ..." --parent <PRD 번호> --assignee <아이디> --body-file <파일>`. 본문은 `.github/ISSUE_TEMPLATE/task.yml`의 목적·배경·할 일·판정 기준·제외로 쓰고, 배경 첫 줄에 `PRD: #<PRD 번호>`를 쓴다. 같은 사람의 같은 일을 다루는 열린 작업 이슈가 이미 있으면 그 이슈를 쓴다. gh가 `--parent`를 모르면 빼고 만든다. 새 번호로 2단계부터 다시 한다.
 3. **worktree.** `python ship.py wt <n>`을 실행한다. 출력의 마지막 줄이 폴더, 그 앞 줄이 브랜치 이름이다. 그 폴더로 이동해서 `AGENTS.md`를 읽는다.
    - 이어서 `gh issue comment <n> --body "claimed by <브랜치 이름>"`.
+   - `wt`는 본문 `### 상위 PRD` 칸의 PRD 아래 sub-issue로도 잇는다. 출력에 `[잇지 않음]`이 있으면 worktree는 그대로 쓰고, 원인(칸의 값, 권한)을 고칠 수 있으면 고친 뒤 `python ship.py link <n>`을 다시 실행한다. 고칠 수 없으면 9단계에서 후속 이슈로 남긴다.
 4. **조사 후 구현.** Best practice를 먼저 조사한다(공식 문서, 데이터시트, 쓰는 도구가 권장하는 방식, 잘 관리된 참고 프로젝트, 이 저장소의 기존 코드). 출처는 PR "근거"에 적는다. 이슈 범위만 고친다. 범위 밖 문제는 새 이슈로 남긴다.
 5. **검사.** 바꾼 영역의 검사를 돌린다(`python tasks.py check`, `pio run` 등). 무거운 명령은 `python ship.py capped 8G -- <명령>`. 통과할 때까지 고친다. 커밋 제목은 `[태그] 무엇을 바꿨는지`.
 6. **PR.** `git push -u origin HEAD` 후 `gh pr create --base main`. 본문은 `.github/pull_request_template.md`를 채우고 `Closes #<n>`을 넣는다. 실제로 해 본 확인만 체크한다. 작성자가 김민찬·김준원이 아니면 `--reviewer junwonkim07`을 붙인다. 본문을 쓰기 전에 `ste-ko` 스킬을 불러온다.

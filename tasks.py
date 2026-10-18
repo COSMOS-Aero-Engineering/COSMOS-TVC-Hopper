@@ -3,11 +3,16 @@
 
     python tasks.py                 작업 목록
     python tasks.py setup           uv.lock 그대로 .venv 구성
-    python tasks.py check           CI와 같은 검사 (skills → compile → sanity → gate → smoke → conncheck)
+    python tasks.py check           CI sim job의 check 단계와 같은 검사 (CI 전체는 아님, 아래 참고)
     python tasks.py check --force   캐시 무시하고 전부 다시 실행
     python tasks.py graph           작업 그래프와 캐시 상태 보기
     python tasks.py lock            의존성 다시 풀고 uv.lock/requirements.txt 갱신
     python tasks.py train           PPO 본 학습 (200k 스텝, 오래 걸림)
+
+check와 CI: CI(.github/workflows/ci.yml)의 sim job이 `python tasks.py check`를 그대로 돌린다.
+CI는 그 밖에 학습 자료 목록·내부 링크 검사와 펌웨어 PlatformIO 빌드를 ci.yml에서 직접 돌린다.
+이 둘은 check에 없다. 로컬에서 check를 통과해도 이 둘은 따로 확인한다(명령은 ci.yml).
+check가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다.
 
 왜 Makefile이 아니라 이 파일인가: 팀 개발 환경이 Windows 위주인데 Windows엔 `make`가 기본으로
 없다. 반면 파이썬은 소프트웨어팀이 어차피 설치해야 한다. 표준 라이브러리만 쓰므로 추가 설치도
@@ -39,6 +44,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -78,7 +84,8 @@ CACHE_VERSION = "1"
 # 캐시 확인이 검사보다 느려진다.
 SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".cosmos-cache", ".omc"}
 
-# CI(.github/workflows/ci.yml)의 PPO 스모크와 같은 내용. 한쪽만 고치지 말 것.
+# PPO 스모크 코드. 정본은 이 상수 하나다. ci.yml에는 복사본이 없다.
+# CI sim job의 check 단계(`python3 tasks.py check`)가 smoke 작업(task_smoke)으로 이 코드를 돌린다.
 SMOKE = (
     "from hopper_aviary import HopperAttitudeEnv\n"
     "from stable_baselines3 import PPO\n"
@@ -110,7 +117,7 @@ def uv():
     return need(
         "uv",
         "https://docs.astral.sh/uv/getting-started/installation/\n"
-        "           Windows PowerShell:  irm https://astral.sh/uv/install.ps1 | iex\n"
+        '           Windows PowerShell:  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"\n'
         "           Mac/Linux:           curl -LsSf https://astral.sh/uv/install.sh | sh",
     )
 
@@ -118,8 +125,9 @@ def uv():
 def child_env():
     """자식 프로세스도 같은 이유(cp949)로 죽지 않게 한다.
 
-    sanity_check.py·train.py 출력에도 em dash가 들어 있어서, 위 _survive_console_encoding()은
-    이 파일의 출력만 지켜준다. 자식에게는 PYTHONIOENCODING으로 같은 정책을 물려준다 —
+    위 _survive_console_encoding()은 이 파일의 출력만 지켜준다. sim/ 스크립트의 print 문자열에서
+    cp949에 없는 문자(em dash 등)는 뺐다(#137, #147). 그래도 라이브러리 출력이나 경로처럼 글자를
+    고를 수 없는 출력이 있다. 그래서 자식에게는 PYTHONIOENCODING으로 같은 정책을 물려준다.
     인코딩은 부모(또는 사용자가 이미 정한 값)와 같게 두고, 오류 처리만 replace로 맞춘다.
     """
     env = os.environ.copy()
@@ -186,22 +194,25 @@ def _digest(path):
     return h.hexdigest()
 
 
-def collect_inputs(patterns):
+def collect_inputs(patterns, root=None):
     """글롭 패턴들을 (저장소 기준 상대경로, 내용해시) 목록으로 펼친다.
 
     tasks.py 자신은 항상 포함한다 — 무엇을 실행할지가 여기 적혀 있으므로, 이 파일이
     바뀌면 모든 캐시가 무효가 되는 게 맞다.
+
+    root는 단위 검사가 임시 폴더를 저장소 대신 줄 때만 쓴다(test_userpath.py). 기본은 ROOT.
     """
+    root = ROOT if root is None else root
     found = set()
     for pattern in list(patterns) + ["tasks.py"]:
-        for p in ROOT.glob(pattern):
+        for p in root.glob(pattern):
             if not p.is_file():
                 continue
-            rel = p.relative_to(ROOT)
+            rel = p.relative_to(root)
             if SKIP_DIRS & set(rel.parts):
                 continue
             found.add(rel.as_posix())
-    return sorted((rel, _digest(ROOT / rel)) for rel in found)
+    return sorted((rel, _digest(root / rel)) for rel in found)
 
 
 def env_fingerprint():
@@ -367,6 +378,10 @@ def task_gate():
     uv_run(["python", "pd_gate.py"], cwd=STAGE1)
 
 
+def task_yaw():
+    uv_run(["python", "yaw_check.py"], cwd=STAGE1)
+
+
 def task_smoke():
     uv_run(["python", "-c", SMOKE], cwd=STAGE1)
 
@@ -395,6 +410,87 @@ def task_skills():
     같은 코드여야 검사와 수정이 서로 다른 판정을 내리지 않는다.
     """
     run([sys.executable, "ship.py", "skills", "--check"], cwd=ROOT)
+
+
+def task_shiptest():
+    """ship.py 단위 검사(test_ship.py, #109). gh·git을 부르지 않고 가짜 응답으로 돈다.
+
+    .venv가 필요 없다. ship.py처럼 표준 라이브러리만 쓰므로 이 파이썬으로 바로 돌린다.
+    """
+    run([sys.executable, "-m", "unittest", "test_ship"], cwd=ROOT)
+
+
+# kicad/_tools 스크립트에 작성자 PC의 사용자 홈 폴더 경로가 다시 들어오면 다른 PC에서
+# FileNotFoundError로 죽는다(#67). userpath 작업이 이것을 막는다(#96).
+USER_PATH_SCAN = ["kicad/_tools/*.py"]
+# 이 정규식과 아래 주석에는 실제 경로 예시를 쓰지 않는다. tasks.py를 검사해도 자기 자신에
+# 걸리지 않게 하려는 것이다. 걸리는 예와 안 걸리는 예는 test_userpath.py에 있다.
+USER_PATH_RE = re.compile(
+    # Windows 사용자 폴더: 드라이브 문자, 구분자(슬래시, 역슬래시, 문자열 안의 이중 역슬래시),
+    # Users 폴더. 드라이브 문자는 전부 본다. 사용자 폴더를 다른 드라이브로 옮길 수 있다.
+    # Users는 대소문자를 가리지 않는다. Windows 경로가 대소문자를 가리지 않기 때문이다.
+    r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]+(?i:users)(?![A-Za-z0-9_])"
+    # macOS 사용자 폴더. Git Bash와 WSL에서 본 Windows 사용자 폴더 경로에도 이 부분이 있다.
+    # 대소문자를 가린다. 소문자 users는 웹 API 주소에 흔하다.
+    r"|[\\/]Users[\\/]"
+    # Linux 사용자 폴더. Windows에서 WSL 안의 이 폴더를 열면 구분자가 역슬래시라서 둘 다 본다.
+    r"|[\\/]home[\\/]"
+)
+
+
+def find_user_paths(text):
+    """text에서 사용자 홈 폴더 경로를 찾는다. (줄 번호, 칸 번호, 찾은 글자) 목록을 돌려준다.
+
+    줄과 칸은 1부터 센다. 줄은 줄바꿈 문자 하나로만 나눈다. str.splitlines()는 폼 피드 같은
+    문자에서도 줄을 나눠서 편집기와 줄 번호가 달라진다. 주석도 검사한다. 주석의 경로도
+    작성자 PC에서만 맞다.
+    """
+    hits = []
+    for lineno, line in enumerate(text.split("\n"), start=1):
+        for m in USER_PATH_RE.finditer(line):
+            hits.append((lineno, m.start() + 1, m.group()))
+    return hits
+
+
+def scan_user_paths(root, patterns):
+    """patterns에 걸리는 root 아래 파일을 검사한다. (검사한 파일 목록, 찾은 목록)을 돌려준다.
+
+    찾은 목록의 한 항목은 (저장소 기준 상대경로, 줄 번호, 칸 번호, 찾은 글자)다.
+
+    파일 목록은 collect_inputs()로 만든다. 작업의 inputs 선언과 검사 대상이 어긋나지 않게
+    하려는 것이다. collect_inputs()가 늘 넣는 tasks.py는 검사 대상이 아니라서 뺀다.
+    """
+    files = [rel for rel, _ in collect_inputs(patterns, root) if rel != "tasks.py"]
+    hits = []
+    for rel in files:
+        # read_text는 줄바꿈 \r\n과 \r을 \n으로 바꿔 읽는다. 그래서 Windows 파일도 줄 번호가 맞다.
+        # utf-8-sig는 파일 맨 앞의 BOM을 빼고 읽고, BOM이 없는 파일은 utf-8과 같게 읽는다.
+        # utf-8로 읽으면 BOM이 글자 하나로 남아서 1줄 칸 번호가 편집기보다 1 크다.
+        text = (root / rel).read_text(encoding="utf-8-sig", errors="replace")
+        hits.extend((rel, *hit) for hit in find_user_paths(text))
+    return files, hits
+
+
+def task_userpath():
+    """kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 본다(#96).
+
+    검사기가 고장 나서 아무것도 못 찾으면 이 작업은 조용히 통과한다. 그래서 검사기 자체의
+    단위 검사(test_userpath.py)를 먼저 돌린다.
+    """
+    run([sys.executable, "-m", "unittest", "-q", "test_userpath"], cwd=ROOT)
+    files, hits = scan_user_paths(ROOT, USER_PATH_SCAN)
+    if not files:
+        # 폴더를 옮기거나 지우면 검사할 파일이 0개가 되고 검사가 늘 통과한다. 그렇게 두지 않는다.
+        die(f"검사할 파일을 찾지 못했다: {', '.join(USER_PATH_SCAN)}\n"
+            "     폴더를 옮겼다면 tasks.py의 USER_PATH_SCAN을 고칠 것.")
+    for rel, lineno, col, match in hits:
+        # 파일:줄:칸: 형식이다. 편집기와 CI 로그 도구가 이 형식으로 해당 줄을 연다.
+        print(f"{rel}:{lineno}:{col}: 사용자 홈 폴더 경로 '{match}'", flush=True)
+    if hits:
+        die(f"kicad/_tools에서 사용자 홈 폴더 경로 {len(hits)}건을 찾았다(#96).\n"
+            "     작성자 PC에서만 있는 경로라 다른 PC에서 스크립트가 죽는다(#67).\n"
+            "     스크립트 위치(Path(__file__)) 기준 경로, 명령행 인자, 환경변수 중 하나로 바꿀 것.")
+    print(f"사용자 홈 폴더 경로 없음 - {len(files)}개 파일 검사")
 
 
 def task_check():
@@ -436,6 +532,9 @@ TASKS = {t.name: t for t in [
     Task("sanity", "환경이 살아 있는지 20스텝 확인", task_sanity, inputs=SIM_IN, uses_env=True),
     Task("gate", "RL 전 합격 기준 - 랜덤화 켠 PD 200 에피소드 (#27)", task_gate, inputs=SIM_IN,
          uses_env=True),
+    Task("yaw", "요 축 검사 - 토크·회전자 항 손계산 + 요 PD 200 seed × 6조건(스로틀 고정·계단, 회전자 항 끔·켬) (#65, #86)",
+         task_yaw,
+         inputs=SIM_IN, uses_env=True),
     Task("smoke", "SB3-환경 연결 확인 (256스텝, 학습 아님)", task_smoke, inputs=SIM_IN,
          uses_env=True),
     Task("connectome", "커넥톰 그래프 생성 (합성 + 셔플 대조군)", task_connectome,
@@ -447,8 +546,14 @@ TASKS = {t.name: t for t in [
          inputs=CONN_IN, uses_env=True),
     Task("skills", "Codex용 스킬 복사본이 정본과 같은지 확인 (#39)", task_skills,
          inputs=[".claude/skills/**/*", ".agents/skills/**/*", "ship.py"]),
-    Task("check", "CI와 같은 검사 - skills + compile + sanity + gate + smoke + conncheck", task_check,
-         deps=["skills", "compile", "sanity", "gate", "smoke", "conncheck"]),
+    Task("shiptest", "ship.py 단위 검사 - gh 없이 가짜 응답으로 (#109)", task_shiptest,
+         inputs=["ship.py", "test_ship.py"]),
+    Task("userpath", "kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 확인 (#96)", task_userpath,
+         inputs=[*USER_PATH_SCAN, "test_userpath.py"]),
+    Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
+         " 단계 목록은 graph)", task_check,
+         deps=["skills", "shiptest", "userpath", "compile", "sanity", "gate", "yaw", "smoke",
+               "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,

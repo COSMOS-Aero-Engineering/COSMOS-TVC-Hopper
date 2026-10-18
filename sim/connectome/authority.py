@@ -8,7 +8,7 @@
 복원하지 못했다. 게인 탓인 줄 알고 격자탐색을 하려다, 그 전에 물리 상수로 **최대로
 낼 수 있는 토크**를 직접 계산해봤다:
 
-    params.yaml 현재값 (Kf=3e-8) 기준
+    당시 params.yaml 값 (Kf=3e-8) 기준
       스로틀 100%: 추력 0.27 N · 최대 베인토크 4.0e-5 Nm · 각가속도 0.008 rad/s^2
       -> 5초를 전부 써도 자세를 5.8도밖에 못 바꾼다
     그런데 reset()의 초기 교란은 +-17도다.
@@ -20,8 +20,17 @@
 
 원인은 Kf로 보인다. params.yaml은 Ft = Kf * omega^2 이고 omega는 throttle*3000 인데,
 64mm급 EDF의 실제 정적추력은 8~12 N 수준이다. 그러려면 Kf가 1e-6 근처여야 하는데
-지금 값은 3e-8 로 약 37배 작다. (params.yaml 스스로 "임시 스케일, 절대값 의미 없음"이라
+당시 값은 3e-8 로 약 37배 작았다. (params.yaml 스스로 "임시 스케일, 절대값 의미 없음"이라
 적어둔 그대로다 — 틀린 값이 아니라 아직 안 채운 값이다.)
+
+그 뒤 (2026-10-18 기준)
+-----------------------
+위 숫자는 2026-09-18 당시 기록이다. 그 뒤 상수가 두 번 바뀌었다.
+  - 2026-09-19 PR #10: Kf를 1.1e-6으로 잠정 보정했다(100% 스로틀 추력 9.9 N).
+  - PR #35(#21): 베인 양력 계수 CL(논문 식 3.16)과 vane_arm_l을 다시 계산했다.
+2026-10-18 params.yaml로는 여유 배수가 약 533배라 경고가 나오지 않는다. 지금 값은
+`python authority.py`로 본다. 경고 문구는 위의 옛 숫자가 아니라 그때 읽은 params.yaml의
+Kf를 출력한다(#129).
 
 이 파일은 값을 고치지 않는다. params.yaml은 실험 A(EDF 추력곡선)의 산출물이고 실측으로
 채울 자리다. 여기서는 **학습을 돌리기 전에 그 사실을 알려주는 것**까지만 한다.
@@ -44,16 +53,22 @@ from hopper_aviary import vane_lift_gain  # noqa: E402  (gymnasium만 딸려 온
 INIT_TILT_RAD = 0.3
 EPISODE_S = 5.0
 
+# 64mm급 EDF 정적추력의 대략 범위(N). params.yaml의 Kf 주석(2026-09-19)과 같은 근거다.
+# 경고가 "이 추력이면 Kf가 얼마여야 하나"를 지금 omega_t_per_throttle로 다시 계산할 때 쓴다.
+EDF_STATIC_THRUST_N = (8.0, 12.0)
+
 
 def authority(params_path: Path = PARAMS, throttle: float = 1.0) -> dict:
     p = yaml.safe_load(params_path.read_text(encoding="utf-8"))
     alpha_max = np.deg2rad(p["alpha_max_deg"])
-    thrust = p["Kf"] * (throttle * 3000.0) ** 2
+    thrust = p["Kf"] * (throttle * p["omega_t_per_throttle"]) ** 2
     vane_force = vane_lift_gain(p) * thrust * alpha_max
     torque = 2.0 * vane_force * p["vane_arm_l"]      # 한 축당 베인 2장
     ang_acc = torque / p["Jxx"]
     reachable = 0.5 * ang_acc * EPISODE_S ** 2        # 계속 최대토크를 걸었을 때
     return {
+        "Kf": float(p["Kf"]),
+        "omega_t_per_throttle": float(p["omega_t_per_throttle"]),
         "throttle": throttle,
         "thrust_N": thrust,
         "torque_Nm": torque,
@@ -69,16 +84,28 @@ def warn_if_underpowered(params_path: Path = PARAMS, stream=sys.stdout) -> bool:
     a = authority(params_path)
     if a["ratio"] >= 2.0:
         return False
+    # Kf 숫자를 글자로 박아 두지 않는다. params.yaml을 고치면 경고가 옛 값을 "현재"라고
+    # 알리게 된다(#129). 범위도 지금 omega_t_per_throttle로 다시 계산한다.
+    # print에 em dash처럼 cp949에 없는 문자를 쓰지 않는다. 한국어 Windows에서 출력을 파일로
+    # 돌리면 UnicodeEncodeError로 멈춘다(#147, tasks.py _survive_console_encoding 참고).
+    thrust_lo, thrust_hi = EDF_STATIC_THRUST_N
+    kf_lo = thrust_lo / a["omega_t_per_throttle"] ** 2
+    kf_hi = thrust_hi / a["omega_t_per_throttle"] ** 2
     print(
         "\n" + "!" * 78 + "\n"
-        "제어권한 부족 — 지금 물리 상수로는 이 과제를 어떤 제어기도 풀 수 없다.\n"
+        "제어권한 부족: 지금 물리 상수로는 이 과제를 어떤 제어기도 풀 수 없다.\n"
         f"  스로틀 100%에서 최대 추력 {a['thrust_N']:.3f} N, 베인토크 {a['torque_Nm']:.2e} Nm\n"
         f"  -> {EPISODE_S:.0f}초를 전부 써도 자세를 {a['reachable_deg']:.1f}도밖에 못 바꾼다\n"
         f"  그런데 초기 교란은 최대 {a['needed_deg']:.0f}도다 "
         f"(여유 배수 {a['ratio']:.2f}, 2.0 이상이어야 한다)\n\n"
-        "  네 비교군이 다 같이 실패하므로 결과에 정보가 없다. 실험 A(EDF 추력곡선)로\n"
-        "  params.yaml 의 Kf 를 실측값으로 채운 뒤 다시 돌릴 것.\n"
-        "  (64mm급 EDF 정적추력 8~12 N 기준이면 Kf 는 1e-6 근처가 된다 — 현재 3e-8)\n"
+        "  네 비교군이 다 같이 실패하므로 결과에 정보가 없다.\n"
+        f"  읽은 파일: {params_path}\n"
+        f"  읽은 값: Kf {a['Kf']:.2e}, omega_t_per_throttle {a['omega_t_per_throttle']:g}\n"
+        f"  64mm급 EDF 정적추력 {thrust_lo:g}-{thrust_hi:g} N이면 Kf는 "
+        f"{kf_lo:.2e}에서 {kf_hi:.2e} 사이다.\n"
+        "  Kf가 이 범위 밖이면 실험 A(EDF 추력곡선)로 Kf를 실측값으로 채운 뒤 다시 돌릴 것.\n"
+        "  Kf가 이 범위 안이면 원인은 Kf가 아니다. 베인 상수(CLalpha, vane_geometry,\n"
+        "  A_duct, alpha_max_deg), vane_arm_l, Jxx를 확인할 것.\n"
         + "!" * 78,
         file=stream,
     )
