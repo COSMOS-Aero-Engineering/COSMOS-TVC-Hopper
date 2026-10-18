@@ -47,6 +47,19 @@ Windows 명령은 [uv 공식 설치 문서](https://docs.astral.sh/uv/getting-st
 설치 스크립트가 오류를 내고 멈춘다(#99). 이 옵션은 이 명령이 새로 띄우는 PowerShell 프로세스에만
 적용된다. PC에 저장된 실행 정책은 바꾸지 않는다([Microsoft 문서](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-5.1#set-a-different-policy-for-one-session)).
 
+Windows는 [Microsoft Visual C++ 재배포 패키지](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)(x64)도
+한 번 설치한다. torch가 이 패키지의 DLL(`msvcp140.dll` 등)을 쓰는데, torch 설치 파일에는 이 DLL이
+들어 있지 않다([PyTorch Windows FAQ](https://docs.pytorch.org/docs/stable/notes/windows.html#import-error)).
+이 패키지가 없는 새 PC에서는 `python tasks.py check`가 `smoke` 단계에서 `c10.dll` 오류로 멈췄다(#108).
+
+```powershell
+# Windows PowerShell. 관리자 권한 확인 창(UAC)이 뜨면 "예"를 누른다.
+winget install --id Microsoft.VCRedist.2015+.x64 --exact --source winget
+```
+
+`winget`을 찾을 수 없다는 오류가 나면 [vc_redist.x64.exe](https://aka.ms/vc14/vc_redist.x64.exe)를 받아 실행한다.
+설치를 잊어도 `python tasks.py setup`이 이 패키지가 있는지 확인한다. 없으면 위 명령을 출력하고 멈춘다.
+
 그다음은 어느 OS든 같다. (Mac은 **Apple Silicon만** 된다 — 고정된 torch 2.14.0에 Intel Mac용
 휠이 없다. Intel Mac이면 Windows/Linux PC를 쓰거나, 부장에게 말해서 torch 버전을 조정한다.)
 
@@ -101,7 +114,7 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
 
 ### 엔지니어링팀
 
-캘리퍼스로 잰 부품 실측값은 `cad/measurements.md`에 기록하고, CAD 파라미터(`cad/hopper_params.scad`)에 반영한 뒤 커밋한다. 무게중심 추정은 `python cad/cg/cg_estimate.py`. 배선은 [`docs/design/01-avionics-integration-final.md`](docs/design/01-avionics-integration-final.md) §2·§4가 기준이다(`docs/execution/bench-wiring.svg`는 구버전).
+캘리퍼스로 잰 부품 실측값은 `cad/measurements.md`에 기록하고, CAD 파라미터(`cad/hopper_params.scad`)에 반영한 뒤 커밋한다. 무게중심 추정은 `python cad/cg/cg_estimate.py`. CAD 검증 echo 확인은 `python tasks.py cad`(OpenSCAD 필요, CI도 PR마다 돌린다). 배선은 [`docs/design/01-avionics-integration-final.md`](docs/design/01-avionics-integration-final.md) §2·§4가 기준이다(`docs/execution/bench-wiring.svg`는 구버전).
 
 작업 폴더: `cad/`(파라메트릭 CAD), `kicad/`(회로도), `data/`(실험 로그).
 
@@ -207,6 +220,7 @@ gh pr create --base main --reviewer junwonkim07
 | 설치 후 OneDrive가 몇 GB를 동기화하기 시작함 | `.venv`(torch 포함 ~1GB)가 OneDrive 폴더 안에 생겨서 | OneDrive 설정 → 백업/폴더 선택에서 `.venv` 제외. 지워도 `python tasks.py setup`으로 언제든 다시 만든다 |
 | uv 설치 명령이 `Error: PowerShell requires an execution policy in [Unrestricted, RemoteSigned, Bypass] to run uv`를 출력하고 멈춤 | `-ExecutionPolicy ByPass` 없이 `irm https://astral.sh/uv/install.ps1 \| iex`만 실행함. Windows 기본 실행 정책(`Restricted`)에서는 uv 설치 스크립트가 스스로 멈춘다 | 위 [소프트웨어팀](#소프트웨어팀)의 Windows 명령을 그대로 다시 실행한다. 오류 메시지가 권하는 `Set-ExecutionPolicy`는 하지 않아도 된다 |
 | `-ExecutionPolicy ByPass`를 넣은 위 Windows 설치 명령도 같은 `Error: PowerShell requires an execution policy ...`를 출력하고 멈춤. `Get-ExecutionPolicy -List`에서 `MachinePolicy`나 `UserPolicy`가 `Undefined`가 아님 | 학교나 회사가 그룹 정책으로 실행 정책을 정한 PC다. `-ExecutionPolicy ByPass`는 그룹 정책보다 우선하지 않는다([Microsoft 문서](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-5.1#set-a-different-policy-for-one-session)). uv 설치 스크립트는 실행 정책이 `Unrestricted`, `RemoteSigned`, `Bypass`가 아니면 멈춘다. 그래서 그룹 정책이 `AllSigned`나 `Restricted`면 이 오류가 날 것으로 보인다. 실행해서 확인하지 않았다 | uv 공식 문서가 적은 Windows 대안인 WinGet으로 설치한다: `winget install --id=astral-sh.uv -e`([uv 설치 문서](https://docs.astral.sh/uv/getting-started/installation/#winget)). 설치가 끝나면 터미널을 새로 연다. WinGet은 PowerShell 스크립트를 실행하지 않고 uv 실행 파일이 든 zip을 받아서 푼다([winget-pkgs 매니페스트](https://github.com/microsoft/winget-pkgs/tree/master/manifests/a/astral-sh/uv)의 `InstallerType: zip`). 그래서 실행 정책에 막히지 않을 것으로 보인다. **그룹 정책이 걸린 PC에서 이 방법이 되는지는 아직 확인하지 못했다(#168).** 매니페스트는 VC++ 재배포 패키지를 의존 패키지로 적었다. PC에 이 패키지가 없으면 WinGet이 함께 설치하고, 이때 관리자 권한을 물을 수 있다. torch도 이 패키지가 있어야 불러올 수 있다(#108). 그룹 정책은 WinGet도 끌 수 있다([`Enable App Installer` 정책](https://learn.microsoft.com/windows/client-management/mdm/policy-csp-desktopappinstaller#enableappinstaller)). 이때 `winget`은 그룹 정책이 작업을 막았다고 알린다. 관리자 권한을 줄 수 없거나, `winget`이 막혔거나, 그 PC에서 프로그램 설치가 허용되지 않으면 정책을 우회하지 않는다. 동아리 노트북 같은 다른 PC를 쓰고 부장·차장에게 알린다 |
+| `python tasks.py`가 `Microsoft Visual C++ 재배포 패키지(x64)가 이 PC에 없다`를 출력하고 멈춤. 또는 torch를 불러올 때 `OSError: [WinError 126]`, `c10.dll`, `Microsoft Visual C++ Redistributable is not installed`가 나옴 | Windows에 VC++ 재배포 패키지(x64)가 없다. torch가 쓰는 `msvcp140.dll` 등은 torch 설치 파일에 들어 있지 않다(#108) | 위 [소프트웨어팀](#소프트웨어팀)의 `winget install --id Microsoft.VCRedist.2015+.x64 --exact --source winget`을 실행한다. winget이 없으면 [vc_redist.x64.exe](https://aka.ms/vc14/vc_redist.x64.exe)를 받아 실행한다. 설치가 끝나면 멈춘 명령을 다시 실행한다 |
 | `uv: command not found` / `uv 이(가) 없다` | uv 미설치 또는 설치 후 터미널 미재시작 | 위 [소프트웨어팀](#소프트웨어팀) 설치 명령 실행 후 터미널을 새로 연다 |
 | `환경을 uv.lock 에 맞추지 못했다` 또는 CI의 `uv sync --locked` 실패 | `pyproject.toml`만 고치고 `uv.lock`을 갱신하지 않음 | `python tasks.py lock` 후 `uv.lock`·`sim/requirements.txt`를 함께 커밋 |
 

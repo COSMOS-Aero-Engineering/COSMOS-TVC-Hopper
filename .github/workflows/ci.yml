@@ -5,6 +5,7 @@
 # 오래 걸리는 PPO 본 학습(`train`)은 돌리지 않는다. job마다 돌리는 것:
 #   - sim: `python tasks.py check`, 그리고 학습 자료 목록·내부 링크 검사.
 #     check가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다. 여기에 옮겨 적지 않는다.
+#     check의 cad 작업을 위해 OpenSCAD를 먼저 설치한다(#61).
 #   - firmware: PlatformIO 빌드. 빌드할 프로젝트 목록은 아래 matrix.project가 정본이다.
 #   - firmware-all: firmware matrix의 결과를 체크 하나("firmware — 전체")로 모은다(#103).
 # sim job 이름("환경 로딩 + PPO 스모크")은 실제 검사 범위보다 좁다. 이 이름은 required
@@ -56,6 +57,16 @@ jobs:
       # 리눅스 torch는 pyproject의 CPU 인덱스 설정 덕분에 CUDA 2GB 없이 받아온다.
       - name: 의존성 설치 (uv.lock 고정 버전 그대로 + lock 최신 여부 검사)
         run: uv sync --locked
+
+      # check의 cad 작업(CAD 검증 echo, #61)이 OpenSCAD를 쓴다. cad 작업은 CI에서 OpenSCAD를
+      # 찾지 못하면 건너뛰지 않고 실패한다. 이 단계를 지우면 sim job이 빨간불이 된다.
+      # Ubuntu 저장소 판(24.04는 2021.01)을 쓴다. OpenSCAD 내려받기 페이지가 안내하는 방법이고,
+      # 부장 PC의 판(cad/README.md)과 같다. GitHub 문서대로 설치 전에 apt-get update를 한다.
+      - name: OpenSCAD 설치 (CAD 검증 echo용)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends openscad
+          openscad --version
 
       # check가 돌리는 단계 목록은 `python tasks.py graph`의 check 줄을 본다(#50). 학습은 하지 않는다.
       # 단계를 여기에 옮겨 적지 않는다. tasks.py에 단계가 늘면 이 주석만 틀린 채로 남는다.

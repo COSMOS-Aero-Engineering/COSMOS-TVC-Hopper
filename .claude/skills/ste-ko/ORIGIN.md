@@ -10,6 +10,12 @@
 
 `SKILL.md`, `LICENSE`, `NOTICE.md`, `references/`, `scripts/ste-ko-lint.py`
 
+## 원본과 다른 곳
+
+원본을 고치기 전에 이 저장소에서 먼저 고친 곳이다. 원본에 같은 수정이 들어가면 다시 복사하고 이 목록에서 지운다.
+
+- `scripts/ste-ko-lint.py`: 지적 메시지 3개의 em dash(—)를 콜론이나 마침표로 바꿨다. 출력 스트림의 오류 처리를 `backslashreplace`로 바꾸고, `--json` 출력은 출력 인코딩에 없는 글자를 `\uXXXX`로 쓴다. 한국어 Windows에서 출력을 파일이나 파이프로 돌리면 cp949로 쓰는데, 고치기 전에는 `UnicodeEncodeError`로 멈췄다(#169).
+
 ## 복사하지 않은 파일
 
 `assets/`(배너 이미지), `tests/`, `output-styles/`, `.claude-plugin/`, `README.md`. 스킬 동작에 필요 없습니다.
