@@ -6,7 +6,8 @@ Week 2 물리 실험의 "구속 스탠드"(M1, 만능조인트로 위치를 고�
 우리 기체 구조·좌표계·베인 4개짜리 토크 방정식을 그대로 쓰는 "진짜" 첫 RL 환경.
 
 ⚠️ 아직 실험 A(EDF 추력곡선)·구속 스탠드 실측 전이라 params.yaml의 물리 상수
-   (Jxx/Jyy/Jzz, CLalpha, vane_geometry, A_duct, Kf, vane_arm_l)는 PLACEHOLDER 상태. 지금 단계 목표는:
+   (Jxx/Jyy/Jzz, CLalpha, vane_geometry, A_duct, Kf, omega_t_per_throttle, vane_arm_l)는 PLACEHOLDER 상태.
+   지금 단계 목표는:
      "RL 학습 파이프라인이 우리 기체의 실제 상태/액션 구조에 맞춰 정상적으로 도는가"
    를 확인하는 것 — 절대적인 학습 성능 숫자 자체는 아직 의미 없음.
    Week 2에서 실측값이 나오는 대로 params.yaml만 교체하면 이 코드는 그대로 재사용됨.
