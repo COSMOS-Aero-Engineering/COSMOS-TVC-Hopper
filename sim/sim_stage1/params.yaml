@@ -87,6 +87,13 @@ domain_rand:
   # 무게중심-추력축 어긋남(축당 mm). 근거: 01-avionics §8.2 횡 CG 목표 ≤ 3 mm(설계 잔차 1.9 mm).
   # 베인 최대 제어력의 등가 오프셋은 2·CL·alpha_max·l = 6.5 mm(l 최소 -15%에서 5.5 mm)라 그 안쪽이다.
   cg_offset_mm: 3.0
+  # EDF 회전자 상수(#121). 범위는 docs/design/modelling-notes-ch3.md §3 "EDF 회전자 반작용·자이로 항"의 추정 범위다.
+  #   명목값(아래 rotor 블록)이 앞뒤로 비대칭인 범위라 ±비율 대신 [아래, 위]로 적는다. 범위는 명목값을 품어야 한다.
+  #   분포는 hopper_aviary.py의 ROTOR_RAND_LOG에 있다. 값마다 독립 난수 흐름이라 다른 값의 seed별 표본은 그대로다.
+  #   rotor.enabled가 꺼져 있으면 뽑기만 하고 쓰지 않는다. spin_dir는 뽑지 않는다(산 EDF로 확인할 값, #119).
+  rotor_inertia_range: [5.0e-6, 3.5e-5]    # kg·m², 로그 균등(범위 7배)
+  rotor_omega_max_range: [3100.0, 4000.0]  # rad/s, 균등(범위 1.29배). 추력은 바뀌지 않고 회전자 각운동량만 바뀐다(#122)
+  rotor_tau_range: [0.03, 0.15]            # s, 로그 균등(시상수, 범위 5배)
 
 # --- EDF 회전자 반작용·자이로 항 (#86) ---
 # 스위치 enabled의 기본값은 false(끔)다. 켜면 hopper_aviary.py step()이 두 토크를 더하고,
@@ -97,14 +104,14 @@ domain_rand:
 # 식의 근거와 유도, 상수 추정 계산은 docs/design/modelling-notes-ch3.md §3의 "EDF 회전자 반작용·자이로 항"에 있다.
 # 아래 상수는 전부 공개 자료와 가정으로 잡은 추정값(PLACEHOLDER)이다. 실측값이 아니다.
 # 산 EDF로 회전수(회전계)와 회전 방향을 재서 바꾼다(실험 A, TC-0).
-# 이 값들은 랜덤화하지 않는다. #98이 _randomize_episode_params의 난수 흐름을 바꾸는 중이라서다(랜덤화는 #121).
-# 범위를 돌려 보려면 아래 값을 손으로 바꿔서 python yaw_check.py를 돌린다.
+# inertia·omega_max·tau는 명목값이다. domain_rand가 켜져 있으면 에피소드마다 domain_rand.rotor_*_range에서 다시 뽑는다(#121).
+# yaw_check.py 1·2번 손계산은 랜덤화를 끄고 이 명목값을 쓴다. 3번 요 PD는 랜덤화한 값으로 돈다.
 rotor:
   enabled: false     # 기본 끔. 켜면 pd_gate.py·yaw_check.py의 판정도 이 항을 넣은 환경으로 한다
-  inertia: 1.0e-5    # kg·m², PLACEHOLDER(추정) — 임펠러 + 아웃러너 모터 캔. 범위 5e-6 - 3.5e-5
-  omega_max: 3800.0  # rad/s(약 36,300 rpm), PLACEHOLDER(추정) — 스로틀 100 %의 부하 회전수 = KV × 4S 전압 × 부하율. 범위 3100 - 4000
+  inertia: 1.0e-5    # kg·m², PLACEHOLDER(추정) — 임펠러 + 아웃러너 모터 캔. 범위는 domain_rand.rotor_inertia_range
+  omega_max: 3800.0  # rad/s(약 36,300 rpm), PLACEHOLDER(추정) — 스로틀 100 %의 부하 회전수 = KV × 4S 전압 × 부하율. 범위는 domain_rand
                      # 목표 회전수 = omega_max · throttle. 추력은 Ω/omega_max만 쓰므로 이 값을 바꿔도 추력은 그대로다(#122)
-  tau: 0.05          # s, PLACEHOLDER(가정) — 회전수의 1차 지연 시상수. 범위 0.03 - 0.15. 0이면 지연 없음
+  tau: 0.05          # s, PLACEHOLDER(가정) — 회전수의 1차 지연 시상수. 범위는 domain_rand. 0이면 지연 없음
                      # 회전수가 바뀔 때 주고받는 각운동량 I_r·ΔΩ는 tau와 상관없다. tau는 토크가 퍼지는 시간만 바꾼다
   spin_dir: 1        # PLACEHOLDER — +1: 회전자 각속도가 +Z(위, 흡기 쪽)를 향한다 = 흡기 쪽에서 내려다보면 반시계. −1은 반대
                      # EDF 제품마다 다르다(CW·CCW 판이 따로 있다). TC-0에서 산 EDF의 회전 방향을 보고 정한다

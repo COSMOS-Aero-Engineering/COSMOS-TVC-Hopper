@@ -24,7 +24,8 @@ EDF 회전자 항(#86): params.yaml의 rotor.enabled를 켜면 회전자 반작�
 식과 상수 근거는 docs/design/modelling-notes-ch3.md §3의 "EDF 회전자 반작용·자이로 항".
 
 도메인 랜덤화: params.yaml의 domain_rand 설정에 따라 매 reset()마다 Jxx/Jyy/Jzz,
-베인 모멘트암(l,r), Kf, 무게중심-추력축 오프셋을 그 범위 안에서 무작위로 다시 뽑는다.
+베인 모멘트암(l,r), Kf, 무게중심-추력축 오프셋, 회전자 상수(inertia·omega_max·tau, #121)를
+그 범위 안에서 무작위로 다시 뽑는다.
 지금은 애초에 실측 전 PLACEHOLDER 값들이라 "정확한 한 점"을 맞추는 게 의미가 없고,
 "이 근처 분포 전체"에서 버티는 정책을 학습해두는 게 나중에 실측값이 들어왔을 때도,
 그리고 실제 기체로 이식할 때도(PID와의 정량 비교 실험, CLAUDE.md 참고) 더 안전하다.
@@ -52,7 +53,17 @@ EPISODE_STREAMS = (
     "vane_arm_l", "vane_arm_r",
     "Kf",
     "cg_offset_x", "cg_offset_y",
+    "rotor_inertia", "rotor_omega_max", "rotor_tau",   # #121
 )
+
+# 회전자 상수의 랜덤화 분포(#121). 범위는 params.yaml domain_rand의 <이름>_range([아래, 위])에 있다.
+# True = 로그 균등(ln 값이 균등. 비율마다 같은 확률), False = 균등.
+#   inertia: 범위가 7배(5e-6 - 3.5e-5)라 로그 균등. 명목 1e-5 아래를 뽑을 확률이 36 %다(균등이면 17 %)
+#   omega_max: 범위가 1.29배(3100 - 4000)라 두 분포의 차이가 작다. 균등
+#   tau: 시상수(척도 값)이고 범위가 5배(0.03 - 0.15)라 로그 균등. 0.06 s 위를 뽑을 확률이 57 %다(균등이면 75 %)
+# 근거: Peng et al. 2018(arXiv:1710.06537)은 질량·감쇠·마찰·게인을 로그로, 나머지를 균등으로 뽑았다.
+#   OpenAI 2018(arXiv:1808.00177) 표 1도 감쇠·액추에이터 게인을 loguniform으로 뽑았다.
+ROTOR_RAND_LOG = {"rotor_inertia": True, "rotor_omega_max": False, "rotor_tau": True}
 
 
 def stream_id(name: str) -> int:
@@ -139,19 +150,23 @@ class HopperAttitudeEnv(gym.Env):
 
         # EDF 회전자(#86). 상수는 늘 읽는다. step()은 rotor_enabled가 참일 때만 회전자 토크를 넣는다.
         # yaw_check.py는 스위치와 상관없이 rotor_enabled를 바꿔서 끈 경우와 켠 경우를 비교한다.
-        # 상수는 랜덤화하지 않는다(params.yaml rotor 블록 주석).
+        # inertia·omega_max·tau는 명목값이다. 랜덤화를 켜면 reset()이 에피소드마다 다시 뽑는다(#121). spin_dir는 뽑지 않는다.
         rotor = p.get("rotor", {})
         self.rotor_enabled = bool(rotor.get("enabled", False))
-        self.rotor_inertia = float(rotor.get("inertia", 0.0))      # kg·m²
-        self.rotor_omega_max = float(rotor.get("omega_max", 0.0))  # rad/s, 스로틀 100 %
-        self.rotor_tau = float(rotor.get("tau", 0.0))              # s
+        self.nominal_rotor_inertia = float(rotor.get("inertia", 0.0))      # kg·m²
+        self.nominal_rotor_omega_max = float(rotor.get("omega_max", 0.0))  # rad/s, 스로틀 100 %
+        self.nominal_rotor_tau = float(rotor.get("tau", 0.0))              # s
         self.rotor_spin_dir = int(rotor.get("spin_dir", 1))
         if self.rotor_spin_dir not in (1, -1):
             raise ValueError(f"rotor.spin_dir = {self.rotor_spin_dir}: +1 또는 -1이어야 한다.")
-        if min(self.rotor_inertia, self.rotor_omega_max, self.rotor_tau) < 0:
+        if min(self.nominal_rotor_inertia, self.nominal_rotor_omega_max, self.nominal_rotor_tau) < 0:
             raise ValueError("rotor.inertia, rotor.omega_max, rotor.tau는 0 이상이어야 한다.")
-        if self.rotor_enabled and not (self.rotor_inertia > 0 and self.rotor_omega_max > 0):
+        if self.rotor_enabled and not (self.nominal_rotor_inertia > 0 and self.nominal_rotor_omega_max > 0):
             raise ValueError("rotor.enabled가 true인데 rotor.inertia나 rotor.omega_max가 0이다.")
+        self.rotor_inertia = self.nominal_rotor_inertia      # 이번 에피소드 값. reset()이 정한다
+        self.rotor_omega_max = self.nominal_rotor_omega_max
+        self.rotor_tau = self.nominal_rotor_tau
+        self.rotor_ranges = self._rotor_ranges()
         self.rotor_omega = None   # rad/s, 회전자 회전수. 에피소드 첫 step()에서 정한다
 
         self.dt = dt
@@ -198,6 +213,25 @@ class HopperAttitudeEnv(gym.Env):
         seq = np.random.SeedSequence([STREAM_IDS[name], self.episode_seed])
         return np.random.Generator(np.random.PCG64(seq))
 
+    def _rotor_ranges(self):
+        """params.yaml domain_rand의 회전자 상수 범위를 읽고 검사한다(#121). {이름: (아래, 위)}.
+
+        범위 키가 없으면 그 값은 명목값으로 둔다. 범위는 명목값을 품어야 한다. 실측 뒤 명목값만 고치고
+        범위를 그대로 두면 랜덤화가 명목값을 한 번도 뽑지 않는 어긋남이 생기기 때문이다.
+        """
+        ranges = {}
+        for name in ROTOR_RAND_LOG:
+            bounds = self.dr.get(f"{name}_range")
+            if bounds is None:
+                continue
+            lo, hi = (float(b) for b in bounds)
+            nominal = getattr(self, f"nominal_{name}")
+            if not (0.0 < lo <= nominal <= hi):
+                raise ValueError(f"domain_rand.{name}_range = [{lo:g}, {hi:g}]: 0 < 아래 ≤ 명목값({nominal:g}) ≤ 위 "
+                                 f"이어야 한다. params.yaml의 rotor 명목값과 범위를 함께 고칠 것.")
+            ranges[name] = (lo, hi)
+        return ranges
+
     def _randomize_episode_params(self):
         """도메인 랜덤화 — 이번 에피소드에서 쓸 물리 상수를 명목값 주변에서 다시 뽑는다."""
         if not self.dr.get("enabled", False):
@@ -206,6 +240,9 @@ class HopperAttitudeEnv(gym.Env):
             self.Kf = self.nominal_Kf
             self.cg_offset_x = 0.0
             self.cg_offset_y = 0.0
+            self.rotor_inertia = self.nominal_rotor_inertia
+            self.rotor_omega_max = self.nominal_rotor_omega_max
+            self.rotor_tau = self.nominal_rotor_tau
             return
 
         def jitter(name, nominal, rel_range):
@@ -228,6 +265,20 @@ class HopperAttitudeEnv(gym.Env):
         cg_offset_max_m = self.dr.get("cg_offset_mm", 0.0) / 1000.0
         self.cg_offset_x = self._rng("cg_offset_x").uniform(-cg_offset_max_m, cg_offset_max_m)
         self.cg_offset_y = self._rng("cg_offset_y").uniform(-cg_offset_max_m, cg_offset_max_m)
+
+        # 회전자 상수(#121): [아래, 위] 범위에서 값마다 자기 난수 흐름으로 뽑는다. 분포는 ROTOR_RAND_LOG.
+        # rotor.enabled가 꺼져 있어도 뽑는다. 흐름이 따로라 다른 값의 표본은 바뀌지 않고, 끄면 쓰지 않는다.
+        for name, nominal in (("rotor_inertia", self.nominal_rotor_inertia),
+                              ("rotor_omega_max", self.nominal_rotor_omega_max),
+                              ("rotor_tau", self.nominal_rotor_tau)):
+            if name not in self.rotor_ranges:
+                value = nominal
+            elif ROTOR_RAND_LOG[name]:
+                lo, hi = self.rotor_ranges[name]
+                value = float(np.exp(self._rng(name).uniform(np.log(lo), np.log(hi))))
+            else:
+                value = float(self._rng(name).uniform(*self.rotor_ranges[name]))
+            setattr(self, name, value)
 
     def step(self, action):
         action = np.clip(action, self.action_space.low, self.action_space.high)

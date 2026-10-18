@@ -135,6 +135,8 @@ def episode_params(env):
         "vane_arm_l": env.l, "vane_arm_r": env.r,
         "Kf": env.Kf,
         "cg_offset_x_m": env.cg_offset_x, "cg_offset_y_m": env.cg_offset_y,
+        # 회전자 상수도 에피소드마다 뽑는다(#121). rotor.enabled가 꺼져 있으면 환경이 쓰지 않는다
+        "rotor_inertia": env.rotor_inertia, "rotor_omega_max": env.rotor_omega_max, "rotor_tau": env.rotor_tau,
     }
 
 
@@ -178,9 +180,11 @@ def main():
             "model": args.model if args.policy == "ppo" else None,
             "seed": seed, "dt_s": env.dt, "max_steps": env.max_steps,
             "domain_rand": env.dr,
-            # 회전자 항 스위치와 상수(#86). 켜고 끈 에피소드를 meta만 보고 구별하려고 남긴다
-            "rotor": {"enabled": env.rotor_enabled, "inertia": env.rotor_inertia,
-                      "omega_max": env.rotor_omega_max, "tau": env.rotor_tau, "spin_dir": env.rotor_spin_dir},
+            # 회전자 항 스위치와 명목 상수(#86). 켜고 끈 에피소드를 meta만 보고 구별하려고 남긴다.
+            # 이번 에피소드에 뽑힌 값은 episode_params의 rotor_*에 있다(#121)
+            "rotor": {"enabled": env.rotor_enabled, "inertia": env.nominal_rotor_inertia,
+                      "omega_max": env.nominal_rotor_omega_max, "tau": env.nominal_rotor_tau,
+                      "spin_dir": env.rotor_spin_dir},
             "episode_params": episode_params(env),
             "result": info,
             "git_commit": commit,

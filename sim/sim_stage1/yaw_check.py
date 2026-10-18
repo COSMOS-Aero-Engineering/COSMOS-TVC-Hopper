@@ -28,8 +28,10 @@
        THRUST_PROBE_STEPS번째 스텝에 롤 명령을 주고 그 스텝의 Δω를 손계산과 상대오차 1e-4 안에서 비교한다.
        손계산은 1차 지연의 해석해 u_k = 0.75 + 0.25·e^(−k·dt/tau)(u = Ω/omega_max)로 추력 Kf·(u_k·omega_t_per_throttle)²를 쓴다.
        추력이 지연 없이 스로틀을 따르면(#122 전 모델) Δω가 (0.75/u_k)²배라서 이 검사가 실패한다.
+   1·2번은 랜덤화를 끄므로 회전자 상수도 params.yaml rotor의 명목값이다(#121).
 3. 요 PD (도메인 랜덤화 켬, 평가 seed 0-199)
    pd_gate.py의 롤·피치 PD에 요 PD(같은 게인 kp=8, kd=2)를 섞는다. 같은 seed로 두 스로틀 시나리오를 잰다.
+   회전자 상수(inertia·omega_max·tau)도 seed마다 domain_rand.rotor_*_range에서 뽑은 값이다(#121).
      A: 스로틀 1.0 고정(#65와 같다). 반작용 토크는 0이고 자이로 항만 작용한다.
      B: t = 1 s에 스로틀 1.0 → 0.75 계단. 0.75는 호버 스로틀 추정값이다.
         01 문서 §8.1의 AUW 735 g, 정적 추력 1300 gf에서 √(735/1300) = 0.75(추력 ∝ 스로틀²).
@@ -296,7 +298,7 @@ def check_rotor(p):
     r = p["rotor"]
     print("2. 회전자 항 손계산 (랜덤화 끔, 회전자 항 켬)")
     print(f"   inertia = {r['inertia']:g} kg·m², omega_max = {r['omega_max']:g} rad/s, tau = {r['tau']:g} s "
-          f"(params.yaml rotor, 추정값)\n")
+          f"(params.yaml rotor 명목값, 추정값)\n")
     failures = []
     for spin in (1, -1):
         failures += check_rotor_reaction(p, spin)
@@ -370,7 +372,7 @@ def roll_step_pitch_peak(rotor, spin=1):
 
 
 def check_yaw_pd(rotor_switch):
-    print(f"3. 요 PD (랜덤화 켬, 평가 seed {EVAL_SEEDS.start}-{EVAL_SEEDS.stop - 1}, kp=8, kd=2)")
+    print(f"3. 요 PD (랜덤화 켬, 회전자 상수 포함, 평가 seed {EVAL_SEEDS.start}-{EVAL_SEEDS.stop - 1}, kp=8, kd=2)")
     print(f"   A: 스로틀 1.0 고정. B: t = {STEP_TIME_S:g} s에 스로틀 1.0 → {THROTTLE_HOVER:g} 계단(호버 추정)")
     print(f"   params.yaml rotor.enabled = {str(rotor_switch).lower()} → "
           + ("A·B의 회전자 항 켬 줄을 판정한다\n" if rotor_switch else "A·회전자 항 끔 줄만 판정한다\n"))
