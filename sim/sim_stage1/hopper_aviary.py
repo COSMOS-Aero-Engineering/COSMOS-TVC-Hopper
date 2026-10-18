@@ -227,19 +227,23 @@ class HopperAttitudeEnv(gym.Env):
     def _rotor_ranges(self):
         """params.yaml domain_rand의 회전자 상수 범위를 읽고 검사한다(#121). {이름: (아래, 위)}.
 
-        범위 키가 없으면 그 값은 명목값으로 둔다. 범위는 명목값을 품어야 한다. 실측 뒤 명목값만 고치고
+        범위 키가 없으면 그 값은 명목값으로 둔다. 랜덤화를 켜면 범위는 명목값을 품어야 한다. 실측 뒤 명목값만 고치고
         범위를 그대로 두면 랜덤화가 명목값을 한 번도 뽑지 않는 어긋남이 생기기 때문이다.
+        랜덤화를 끄면 범위를 쓰지 않으므로 검사하지 않는다. 그래서 domain_rand.enabled가 false이면
+        rotor.tau = 0(지연 없음)도 범위를 고치지 않고 쓸 수 있다.
         """
         ranges = {}
+        check = bool(self.dr.get("enabled", False))
         for name in ROTOR_RAND_LOG:
             bounds = self.dr.get(f"{name}_range")
             if bounds is None:
                 continue
             lo, hi = (float(b) for b in bounds)
             nominal = getattr(self, f"nominal_{name}")
-            if not (0.0 < lo <= nominal <= hi):
+            if check and not (0.0 < lo <= nominal <= hi):
                 raise ValueError(f"domain_rand.{name}_range = [{lo:g}, {hi:g}]: 0 < 아래 ≤ 명목값({nominal:g}) ≤ 위 "
-                                 f"이어야 한다. params.yaml의 rotor 명목값과 범위를 함께 고칠 것.")
+                                 f"이어야 한다. params.yaml의 rotor 명목값과 범위를 함께 고칠 것. "
+                                 f"이 값을 랜덤화하지 않으려면 domain_rand.{name}_range 줄을 지운다.")
             ranges[name] = (lo, hi)
         return ranges
 
