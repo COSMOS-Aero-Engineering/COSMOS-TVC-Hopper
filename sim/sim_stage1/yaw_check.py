@@ -1,13 +1,14 @@
 """
 요 축 검사(#65). pd_gate.py는 롤·피치만 본다. 그 PD는 a1=a3, a2=a4라 요 토크가 늘 0이다.
-그래서 vane_arm_r이나 요 토크 식이 틀려도 pd_gate.py는 통과한다. 이 파일이 요 경로를 따로 본다.
+그래서 요 팔 r(vane_geometry)이나 요 토크 식이 틀려도 pd_gate.py는 통과한다. 이 파일이 요 경로를 따로 본다.
 
 실행: python yaw_check.py      하나라도 실패하면 exit 1
 
 1. 토크 손계산 (도메인 랜덤화 끔, 명목값)
    ω = 0에서 베인 명령을 한 스텝 주고 환경이 만든 각속도 변화 Δω를 손계산과 비교한다.
    손계산은 hopper_aviary.py의 토크 식을 쓰지 않는다. 베인 위치와 힘 방향에서 τ = Σ pᵢ × Fᵢ로 구한다.
-   상수는 전부 params.yaml에서 읽는다. 그래서 params.yaml 값이 바뀌어도(PR #63의 vane_arm_r 등) 그대로 맞는다.
+   상수는 전부 params.yaml에서 읽는다. 그래서 params.yaml 값이 바뀌어도(#98의 vane_geometry 등) 그대로 맞는다.
+   요 팔 r과 A_fin도 vane_geometry에서 따로 손계산한다(hand_geometry).
    - 부호: 요 명령 [1,-1,-1,1]이 +ωz를 만든다.
    - 크기: Δωz가 손계산과 상대오차 1e-4 안에서 같다.
    - 누설: 요 명령의 Δωx, Δωy가 0이다. 롤·피치 명령의 Δωz도 0이다.
@@ -69,6 +70,18 @@ COMMANDS = {
 }
 
 
+def hand_geometry(p):
+    """params.yaml의 vane_geometry에서 잠긴 면적 A_fin(m^2)과 요 팔 r(m)을 손계산한다(#98).
+
+    hopper_aviary.vane_geometry()를 쓰지 않는다. r은 정의대로 구한다: 유속이 균일하면 압력중심은
+    잠긴 면적의 도심이다. r = ∫ r·c dr / ∫ c dr (구간 r0-r1, 시위 c 일정) = c·(r1² − r0²)/2 / A_fin.
+    """
+    g = p["vane_geometry"]
+    r0, r1, c = (g[k] / 1000.0 for k in ("inner_r_mm", "outer_r_mm", "chord_mm"))
+    A_fin = (r1 - r0) * c
+    return A_fin, c * (r1**2 - r0**2) / 2.0 / A_fin
+
+
 def hand_torque(p, action):
     """베인 4장의 힘으로 몸체 토크 τ(N·m, 3벡터)를 손계산한다.
 
@@ -78,11 +91,12 @@ def hand_torque(p, action):
       τx = (F1+F3)·l이면 베인 1·3의 힘은 +Y, τy = −(F2+F4)·l이면 베인 2·4의 힘은 +X다.
     요 행 τz = (F1−F2−F3+F4)·r은 쓰지 않는다. 위 위치와 방향의 외적에서 따로 나와야 한다.
     """
-    CL = p["CLalpha"] * p["A_fin"] / (2.0 * p["A_duct"])
+    A_fin, r = hand_geometry(p)
+    CL = p["CLalpha"] * A_fin / (2.0 * p["A_duct"])
     alpha = np.asarray(action[:4], dtype=float) * np.deg2rad(p["alpha_max_deg"])
     throttle = (action[4] + 1.0) / 2.0
     Ft = p["Kf"] * (throttle * p["omega_t_per_throttle"]) ** 2
-    l, r = p["vane_arm_l"], p["vane_arm_r"]
+    l = p["vane_arm_l"]
     tau = np.zeros(3)
     for i, theta in enumerate(np.deg2rad([0, 90, 180, 270])):
         pos = np.array([r * np.cos(theta), r * np.sin(theta), -l])
@@ -101,11 +115,12 @@ def env_delta_omega(env, action):
 
 def check_torque(p):
     print("1. 토크 손계산 (랜덤화 끔, 명목값)")
-    print(f"   vane_arm_l = {p['vane_arm_l']} m, vane_arm_r = {p['vane_arm_r']} m\n")
+    A_fin, r = hand_geometry(p)
+    print(f"   vane_arm_l = {p['vane_arm_l']} m, vane_geometry 손계산: r = {r:.6g} m, A_fin = {A_fin:.6g} m²\n")
     failures = []
-    for name in ("vane_arm_l", "vane_arm_r"):
-        if not p[name] > 0:
-            failures.append(f"{name} = {p[name]}: 거리라서 0보다 커야 한다")
+    for name, value in (("vane_arm_l", p["vane_arm_l"]), ("r", r), ("A_fin", A_fin)):
+        if not value > 0:
+            failures.append(f"{name} = {value}: 거리·면적이라서 0보다 커야 한다")
 
     J = np.array([p["Jxx"], p["Jyy"], p["Jzz"]])
     for rotor in (False, True):   # 회전자 항(#86) 끔, 켬

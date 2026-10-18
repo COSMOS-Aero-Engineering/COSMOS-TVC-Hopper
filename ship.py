@@ -139,8 +139,10 @@ def cmd_wt(a):
         die(f"이슈 #{a.issue}가 열려 있지 않다({info['state']}).")
     if path.exists():
         branch = call(["git", "-C", path, "branch", "--show-current"], capture=True).stdout.strip()
-        print(f"이미 있는 worktree를 쓴다. 브랜치: {branch}", file=sys.stderr)
+        print("이미 있는 worktree를 쓴다.", file=sys.stderr)
         link_after_wt(a.issue, root)
+        # 새 worktree와 같다: 끝에서 둘째 줄은 브랜치, 마지막 줄은 경로다.
+        print(f"브랜치: {branch}", file=sys.stderr)
         print(path)
         return
     tag = a.tag or issue_tag(info)
@@ -171,13 +173,27 @@ def cmd_wt(a):
 PARENT_HEADING = "상위 PRD"  # task.yml parent-prd 칸의 label과 같아야 한다
 EMPTY_FORM_VALUE = "_No response_"  # 이슈 양식에서 칸을 비웠을 때 본문에 남는 값
 NO_PARENT_WORD = "없음"
+# 칸의 값에서 이 저장소의 이슈 번호를 찾는다(#133).
+# 읽는다: `#26`, `(#26)`, `#26번`, `#26의 하위`, `상위#26`, `-#26`, `/#26`.
+# 읽지 않는다: `org/repo#26`(이 저장소 이름이어도), `org/repo-#26`, `PRD#26`, `_#26`, `#26a`.
+# 1. OTHER_REPO_REF: 저장소 이름을 붙인 참조를 먼저 지운다. 계정·저장소 이름 자리에는 ASCII 영문자·숫자·`_`·`.`·`-`만 본다.
+#    바로 이어 붙은 번호도 함께 지운다(`org/repo#26#27`). GitHub은 이 값에서 아무것도 링크하지 않는다.
+# 2. 남은 값에서 `#<번호>`를 앞뒤 글자와 관계없이 센다. 서로 다른 번호가 둘 이상이면 오류다(`#26/#27`, `#26#27`).
+# 3. ISSUE_REF: 번호 하나를 읽는다. `#` 바로 앞과 번호 바로 뒤에 ASCII 영문자·숫자·`_`가 없어야 한다.
+# 3의 `#` 앞 규칙은 GitHub 자동 링크와 같다. `gh api markdown`으로 확인했다: `상위#26`, `-#26`, `.#26`, `/#26`은 링크하고
+# `PRD#26`, `_#26`은 링크하지 않는다. GitHub과 다른 곳은 둘이다. `#26번`은 GitHub이 링크하지 않지만 이 칸에서는 읽는다.
+# `#26#27`은 GitHub이 #26만 링크하지만 이 칸에서는 2단계에서 오류다.
+# re.ASCII를 쓰는 이유: 파이썬 3의 str 정규식에서 `\w`는 한글도 단어 글자로 본다. 그러면 `#26번`과 `상위#26`을 놓친다.
+OTHER_REPO_REF = re.compile(r"[\w.-]+/[\w.-]+(?:#[0-9]+)+", re.ASCII)
+ISSUE_REF = re.compile(r"(?<!\w)#([0-9]+)(?!\w)", re.ASCII)
 
 
 def parent_prd(body):
     """본문의 `### 상위 PRD` 칸을 읽는다. (PRD 번호 또는 None, 칸의 값)을 돌려준다.
 
     칸이 없거나, 비었거나, `_No response_`이거나, `없음`으로 시작하면 번호는 None이다.
-    값이 있는데 `#<번호>`가 없거나 번호가 둘 이상이면 ValueError를 낸다.
+    값이 있는데 이 저장소의 `#<번호>`(ISSUE_REF)가 없으면 ValueError를 낸다. 저장소 이름을 붙인 참조를 뺀 값에
+    서로 다른 `#<번호>`가 둘 이상 있어도 ValueError를 낸다.
     """
     text = (body or "").replace("\r\n", "\n")
     m = re.search(rf"^###[ \t]+{re.escape(PARENT_HEADING)}[ \t]*$(.*?)(?=^###[ \t]|\Z)", text,
@@ -187,12 +203,17 @@ def parent_prd(body):
     value = m.group(1).strip()
     if not value or value == EMPTY_FORM_VALUE or value.startswith(NO_PARENT_WORD):
         return None, value
-    numbers = sorted({int(n) for n in re.findall(r"#(\d+)\b", value)})
+    rest = OTHER_REPO_REF.sub(" ", value)
+    seen = sorted({int(n) for n in re.findall(r"#([0-9]+)", rest)})
+    if len(seen) > 1:
+        raise ValueError(f"번호가 {len(seen)}개다(칸의 값: {value!r}). 상위 이슈는 하나만 둘 수 있다.")
+    numbers = ISSUE_REF.findall(rest)
     if not numbers:
-        raise ValueError(f"`#<번호>` 형식의 번호가 없다(칸의 값: {value!r}). 예: #26")
-    if len(numbers) > 1:
-        raise ValueError(f"번호가 {len(numbers)}개다(칸의 값: {value!r}). 상위 이슈는 하나만 둘 수 있다.")
-    return numbers[0], value
+        raise ValueError(f"`#<번호>` 형식의 번호가 없다(칸의 값: {value!r}). 예: #26\n"
+                         "     저장소 이름을 붙인 참조(`org/repo#26`)는 이 저장소 이름이어도 읽지 않는다.\n"
+                         "     `PRD#26`, `_#26`, `#26a`처럼 `#` 바로 앞이나 번호 바로 뒤에 영문자·숫자·`_`가 붙어도"
+                         " 읽지 않는다.")
+    return int(numbers[0]), value
 
 
 def gh_api(path, cwd=None, method=None, fields=()):
@@ -286,7 +307,7 @@ def link_issue(n, cwd=None):
 
 
 def link_after_wt(n, cwd):
-    """wt 끝에 부른다. 잇지 못해도 worktree는 이미 만들었으므로 wt를 실패로 끝내지 않는다."""
+    """wt 끝에 부른다. 잇지 못해도 worktree는 이미 있으므로 wt를 실패로 끝내지 않는다."""
     print(f"\n상위 PRD 잇기 (python ship.py link {n}):", file=sys.stderr, flush=True)
     try:
         rc = link_issue(n, cwd)
@@ -294,7 +315,7 @@ def link_after_wt(n, cwd):
         print(f"[잇지 않음] 예상하지 못한 오류: {e!r}", file=sys.stderr)
         rc = 1
     if rc != 0:
-        print("[주의] worktree는 만들었다. 위 안내대로 고친 뒤 다음 명령을 다시 실행한다: "
+        print("[주의] worktree는 그대로 쓴다. 위 안내대로 고친 뒤 다음 명령을 다시 실행한다: "
               f"python ship.py link {n}", file=sys.stderr, flush=True)
 
 
