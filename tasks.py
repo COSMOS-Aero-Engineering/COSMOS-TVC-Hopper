@@ -200,20 +200,40 @@ VC_INSTALL_URL = "https://aka.ms/vc14/vc_redist.x64.exe"
 # c10.dll을 불러오기 전에 이 세 이름을 같은 순서로 불러 보고, ARM64에서는 vcruntime140_1.dll을
 # 건너뛴다. 이 DLL은 torch 휠(torch/lib)에 들어 있지 않다.
 #
-# winmode=0: Windows 기본 DLL 검색 순서(실행 파일 폴더, System32, Windows 폴더, 현재 폴더, PATH)로
-# 찾는다. torch는 PATH를 빼고 먼저 찾고, 못 찾으면 PATH를 더해 다시 찾는다. 그래서 여기서도 PATH까지
-# 본다. 그래야 torch가 실제로 실패하는 경우에만 멈춘다. ctypes 기본값(winmode=None)은 PATH를 보지 않는다.
+# 찾는 방법은 torch/__init__.py의 _load_dll_libraries()와 같게 한다. torch가 실제로 실패할 때만
+# 멈추려는 것이다. torch는 아래 순서로 찾는다.
+#   1) torch/lib, <venv>/Library/bin 같은 폴더를 os.add_dll_directory로 더한 뒤, 실행 파일 폴더,
+#      더한 폴더, System32에서 찾는다. ctypes 기본값(winmode=None)이 이 방식이다.
+#   2) 못 찾으면 더한 폴더를 PATH 앞에 붙이고 Windows 표준 검색 순서로 다시 찾는다. 표준 검색
+#      순서는 PATH까지 본다. winmode=0이 이 방식이다.
+# torch는 CUDA 빌드에서만 CUDA 폴더를 더한다. 우리 torch는 CPU 빌드라서 그 폴더는 뺐다.
 VC_PROBE = """\
-import ctypes, json, platform
+import ctypes, importlib.util, json, os, platform, sys, sysconfig
+spec = importlib.util.find_spec("torch")
+userbase = sysconfig.get_config_var("userbase")
+dirs = [
+    os.path.join(os.path.dirname(spec.origin), "lib") if spec and spec.origin else "",
+    os.path.join(sys.exec_prefix, "Library", "bin"),
+    os.path.join(sys.base_exec_prefix, "Library", "bin") if sys.exec_prefix != sys.base_exec_prefix else "",
+    os.path.join(userbase, "Library", "bin") if userbase else "",
+    os.path.join(sys.exec_prefix, "bin"),
+]
+dirs = [d for d in dirs if d and os.path.exists(d)]
+for d in dirs:
+    os.add_dll_directory(d)
+os.environ["PATH"] = os.pathsep.join(dirs + [os.environ.get("PATH", "")])
 names = ["vcruntime140.dll", "msvcp140.dll"]
 if platform.machine() != "ARM64":
     names.append("vcruntime140_1.dll")
 missing = []
 for name in names:
     try:
-        ctypes.WinDLL(name, winmode=0)
+        ctypes.WinDLL(name)
     except OSError:
-        missing.append(name)
+        try:
+            ctypes.WinDLL(name, winmode=0)
+        except OSError:
+            missing.append(name)
 print(json.dumps(missing))
 """
 

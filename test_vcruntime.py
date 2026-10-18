@@ -8,67 +8,123 @@ DLL 로더(ctypes.WinDLL)와 자식 프로세스 응답을 가짜로 바꿔 검�
 """
 import io
 import json
+import os
 import subprocess
+import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from unittest import mock
 
 import tasks
 
 ALL = ["vcruntime140.dll", "msvcp140.dll", "vcruntime140_1.dll"]
+DEFAULT = {}            # ctypes 기본값: 실행 파일 폴더, 더한 폴더, System32 (torch 1단계)
+STANDARD = {"winmode": 0}  # Windows 표준 검색 순서, PATH 포함 (torch 2단계)
 
 
-def run_probe(missing=(), machine="AMD64"):
-    """VC_PROBE를 이 프로세스에서 실행한다. (출력한 JSON, WinDLL 호출 목록)을 돌려준다.
+class Run:
+    """VC_PROBE 한 번 실행한 결과."""
 
-    missing에 든 이름은 실제 Windows처럼 OSError(WinError 126)를 낸다.
+    def __init__(self, missing, calls, added):
+        self.missing = missing  # 출력한 JSON
+        self.calls = calls      # (DLL 이름, WinDLL 키워드 인자, 그때의 PATH)
+        self.added = added      # os.add_dll_directory로 더한 폴더
+
+
+def run_probe(default_missing=(), standard_missing=(), machine="AMD64", torch_origin=None,
+              exec_prefix="/nonexistent/venv", base_exec_prefix="/nonexistent/base", userbase=None):
+    """VC_PROBE를 이 프로세스에서 실행한다.
+
+    default_missing은 1단계(기본값)에서, standard_missing은 2단계(winmode=0)에서 실제 Windows처럼
+    OSError(WinError 126)를 내는 이름이다. 경로 인자는 torch가 DLL 폴더를 만드는 데 쓰는 값이다.
     """
-    calls = []
+    calls, added = [], []
 
     def fake_windll(name, **kwargs):
-        calls.append((name, kwargs))
-        if name in missing:
+        calls.append((name, kwargs, os.environ["PATH"]))
+        if name in (standard_missing if kwargs == STANDARD else default_missing):
             raise OSError(22, "지정된 모듈을 찾을 수 없습니다", None, 126)
         return object()
 
+    spec = mock.Mock(origin=torch_origin) if torch_origin else None
     out = io.StringIO()
-    # Linux의 ctypes에는 WinDLL이 없어서 create=True로 만든다.
+    # Linux의 ctypes와 os에는 WinDLL, add_dll_directory가 없어서 create=True로 만든다.
+    # 검사 코드가 PATH를 바꾸므로 os.environ은 patch.dict로 되돌린다.
     with mock.patch("ctypes.WinDLL", fake_windll, create=True), \
+            mock.patch("os.add_dll_directory", side_effect=added.append, create=True), \
+            mock.patch("importlib.util.find_spec", return_value=spec), \
+            mock.patch("sysconfig.get_config_var", return_value=userbase), \
+            mock.patch.object(sys, "exec_prefix", exec_prefix), \
+            mock.patch.object(sys, "base_exec_prefix", base_exec_prefix), \
+            mock.patch.dict(os.environ, {"PATH": "ORIGINAL"}), \
             mock.patch("platform.machine", return_value=machine), redirect_stdout(out):
         exec(compile(tasks.VC_PROBE, "<VC_PROBE>", "exec"), {"__name__": "__main__"})
-    return json.loads(out.getvalue()), calls
+    return Run(json.loads(out.getvalue()), calls, added)
 
 
 class Probe(unittest.TestCase):
     """VC_PROBE: .venv 파이썬에서 실제로 실행하는 검사 코드."""
 
-    def test_all_found(self):
-        missing, calls = run_probe()
-        self.assertEqual(missing, [])
-        self.assertEqual([name for name, _ in calls], ALL)
+    def test_all_found_in_first_step(self):
+        run = run_probe()
+        self.assertEqual(run.missing, [])
+        self.assertEqual([(n, kw) for n, kw, _ in run.calls], [(n, DEFAULT) for n in ALL])
+
+    def test_found_only_with_path_counts_as_found(self):
+        # torch도 1단계에서 못 찾으면 PATH를 더해 다시 찾는다. 그래서 2단계에서 찾으면 멈추지 않는다.
+        run = run_probe(default_missing={"msvcp140.dll"})
+        self.assertEqual(run.missing, [])
+        self.assertEqual([(n, kw) for n, kw, _ in run.calls],
+                         [(ALL[0], DEFAULT), (ALL[1], DEFAULT), (ALL[1], STANDARD), (ALL[2], DEFAULT)])
 
     def test_reports_missing_in_order(self):
         # #108 VM에서 System32에 없던 두 파일이다.
-        missing, _ = run_probe(missing={"vcruntime140_1.dll", "msvcp140.dll"})
-        self.assertEqual(missing, ["msvcp140.dll", "vcruntime140_1.dll"])
+        gone = {"vcruntime140_1.dll", "msvcp140.dll"}
+        run = run_probe(default_missing=gone, standard_missing=gone)
+        self.assertEqual(run.missing, ["msvcp140.dll", "vcruntime140_1.dll"])
 
     def test_keeps_checking_after_a_miss(self):
-        missing, calls = run_probe(missing={"vcruntime140.dll"})
-        self.assertEqual(missing, ["vcruntime140.dll"])
-        self.assertEqual(len(calls), 3)
+        run = run_probe(default_missing={ALL[0]}, standard_missing={ALL[0]})
+        self.assertEqual(run.missing, [ALL[0]])
+        self.assertEqual([n for n, _, _ in run.calls], [ALL[0], ALL[0], ALL[1], ALL[2]])
 
     def test_arm64_skips_vcruntime140_1(self):
         # torch/__init__.py도 ARM64에서는 vcruntime140_1.dll을 불러 보지 않는다.
-        missing, calls = run_probe(missing={"vcruntime140_1.dll"}, machine="ARM64")
-        self.assertEqual(missing, [])
-        self.assertEqual([name for name, _ in calls], ALL[:2])
+        gone = {"vcruntime140_1.dll"}
+        run = run_probe(default_missing=gone, standard_missing=gone, machine="ARM64")
+        self.assertEqual(run.missing, [])
+        self.assertEqual([n for n, _, _ in run.calls], ALL[:2])
 
-    def test_searches_path_like_torch_fallback(self):
-        # winmode=0이어야 Windows 기본 검색 순서(PATH 포함)로 찾는다. 기본값 None은 PATH를 보지 않는다.
-        _, calls = run_probe()
-        for name, kwargs in calls:
-            with self.subTest(name):
-                self.assertEqual(kwargs, {"winmode": 0})
+    def test_adds_torch_dll_dirs_before_loading(self):
+        # torch가 더하는 폴더 5개: torch/lib, <venv>/Library/bin, <base>/Library/bin,
+        # <userbase>/Library/bin, <venv>/bin. 순서도 torch와 같다.
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Path(tmp)
+            want = [t / "venv/Lib/site-packages/torch/lib", t / "venv/Library/bin",
+                    t / "base/Library/bin", t / "user/Library/bin", t / "venv/bin"]
+            for d in want:
+                d.mkdir(parents=True)
+            run = run_probe(torch_origin=str(t / "venv/Lib/site-packages/torch/__init__.py"),
+                            exec_prefix=str(t / "venv"), base_exec_prefix=str(t / "base"),
+                            userbase=str(t / "user"))
+        self.assertEqual(run.added, [str(d) for d in want])
+        first_path = run.calls[0][2]
+        self.assertEqual(first_path, os.pathsep.join([*map(str, want), "ORIGINAL"]))
+
+    def test_skips_absent_dirs_and_base_outside_venv(self):
+        # 없는 폴더는 더하지 않는다. venv가 아니면(exec_prefix == base_exec_prefix) base 폴더를 따로 더하지 않는다.
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Path(tmp)
+            (t / "py/Library/bin").mkdir(parents=True)
+            run = run_probe(exec_prefix=str(t / "py"), base_exec_prefix=str(t / "py"))
+        self.assertEqual(run.added, [str(t / "py/Library/bin")])
+
+    def test_no_dirs_leaves_path(self):
+        run = run_probe()
+        self.assertEqual(run.added, [])
+        self.assertEqual(run.calls[0][2], "ORIGINAL")
 
 
 def completed(stdout="", returncode=0):
