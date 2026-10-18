@@ -86,6 +86,30 @@ class ParentPrdTest(unittest.TestCase):
     def test_extra_text_and_repeated_number(self):
         self.assertEqual(ship.parent_prd(form_body("#26 (CAD), 같은 #26"))[0], 26)
 
+    def test_korean_particle_after_number(self):
+        # 파이썬 3의 `\b`는 한글을 단어 글자로 본다. `#26번`도 26으로 읽어야 한다.
+        # `상위#26`: GitHub도 #26으로 링크한다. `\w`가 한글을 단어 글자로 보면 놓친다.
+        for value in ("#26번", "#26의 하위 작업", "PRD(#26)", "상위#26", "#26."):
+            with self.subTest(value=value):
+                self.assertEqual(ship.parent_prd(form_body(value))[0], 26)
+
+    def test_punctuation_before_hash(self):
+        # GitHub은 `-#26`, `.#26`, `/#26`을 #26으로 링크한다(`gh api markdown`으로 확인). 이 칸도 26으로 읽는다.
+        for value in ("-#26", ".#26", "/#26", "PRD/#26"):
+            with self.subTest(value=value):
+                self.assertEqual(ship.parent_prd(form_body(value))[0], 26)
+
+    def test_other_repo_reference_is_not_this_repo(self):
+        # `PRD#26`, `_#26`, `#26a`: GitHub도 링크하지 않는다. 저장소 이름을 붙인 참조는 이 저장소 이름이어도 읽지 않는다.
+        # `org/repo-#26`, `org/repo.#26`: 저장소 이름이 `-`나 `.`로 끝나는 참조다. `#` 앞 글자만 보면 놓친다.
+        for value in ("org/repo#26", "someorg/otherrepo#26", "org/my-repo.js#26", "PRD#26", "#26a",
+                      "_#26", "1#26", "org/repo-#26", "org/repo.#26", "org/repo#26#27",
+                      "COSMOS-Aero-Engineering/COSMOS-TVC-Hopper#26"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                ship.parent_prd(form_body(value))
+        # 다른 저장소 참조가 함께 있어도 이 저장소 번호 하나만 센다.
+        self.assertEqual(ship.parent_prd(form_body("#26 (org/repo#5 참고)"))[0], 26)
+
     def test_no_parent_values(self):
         for value in ("", "_No response_", "없음", "없음(PRD 아래 작업이 아니다)"):
             with self.subTest(value=value):
@@ -99,6 +123,13 @@ class ParentPrdTest(unittest.TestCase):
     def test_bad_values(self):
         for value in ("26", "PRD 27", "#26, #28"):
             with self.subTest(value=value), self.assertRaises(ValueError):
+                ship.parent_prd(form_body(value))
+
+    def test_joined_refs_are_two_numbers(self):
+        # 첫 번호만 읽으면 엉뚱한 PRD로 잇는다. GitHub은 `#26/#27`, `#26-#27`, `#26.#27`에서 둘 다 링크한다.
+        # `#26#27`은 GitHub이 #26만 링크하지만 이 칸에서는 오류로 낸다.
+        for value in ("#26/#27", "#26-#27", "#26.#27", "#26#27", "#26 (org/repo#5), #27"):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "번호가 2개다"):
                 ship.parent_prd(form_body(value))
 
 
@@ -142,6 +173,8 @@ class LinkTest(unittest.TestCase):
         cases = {
             "형식": (issue(50, form_body("26")),),
             "번호 둘": (issue(50, form_body("#26, #28")),),
+            # 열린 PRD #26을 둔다. 다른 저장소 참조를 이 저장소의 #26으로 읽으면 잇게 된다.
+            "다른 저장소": (issue(50, form_body("someorg/otherrepo#26")), issue(26, labels=("prd",))),
             # 라벨 prd를 붙여 둔다. 자기 자신 검사가 없으면 다른 검사를 모두 지나 잇게 된다.
             "자기 자신": (issue(50, form_body("#50"), labels=("prd",)),),
             "없는 이슈": (issue(50, form_body("#999")),),
@@ -185,7 +218,7 @@ class LinkTest(unittest.TestCase):
 
 class CmdTest(unittest.TestCase):
     def run_wt(self, link, existing):
-        """cmd_wt를 git·gh 없이 돌린다. stdout 마지막 줄과 worktree 경로를 돌려준다."""
+        """cmd_wt를 git·gh 없이 돌린다. stdout 마지막 줄, stderr 줄 목록, worktree 경로를 돌려준다."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"
             path = Path(tmp) / "repo-wt" / "issue-7"
@@ -201,21 +234,25 @@ class CmdTest(unittest.TestCase):
                     out = "infra/7"
                 return subprocess.CompletedProcess(cmd, 0, out + "\n", "")
 
-            out = io.StringIO()
+            out, err = io.StringIO(), io.StringIO()
             with mock.patch.object(ship, "ensure_gh_login"), \
                     mock.patch.object(ship, "call", fake_call), \
                     mock.patch.object(ship, "link_issue", side_effect=link) as linked, \
-                    redirect_stdout(out), redirect_stderr(io.StringIO()):
+                    redirect_stdout(out), redirect_stderr(err):
                 ship.cmd_wt(argparse.Namespace(issue=7, tag=None))
             linked.assert_called_once_with(7, root)
-            return out.getvalue().splitlines()[-1], str(path)
+            return out.getvalue().splitlines()[-1], err.getvalue().splitlines(), str(path)
 
     def test_wt_link_failure_does_not_block_worktree(self):
         for existing in (False, True):
             for link in (lambda *_: 1, RuntimeError("network down")):
                 with self.subTest(existing=existing, link=link):
-                    last, path = self.run_wt(link, existing)
+                    last, err, path = self.run_wt(link, existing)
                     self.assertEqual(last, path)
+                    # ship-issue 스킬 3단계: 경로 바로 앞 줄이 브랜치 이름이다. link 출력은 그 앞에 둔다.
+                    self.assertEqual(err[-1], "브랜치: infra/7")
+                    self.assertTrue(any(line.startswith("[주의] worktree는 그대로 쓴다.")
+                                        for line in err), err)
 
     def test_link_command_exit_code(self):
         for rc in (0, 1):
