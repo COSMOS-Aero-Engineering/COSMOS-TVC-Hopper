@@ -1,6 +1,6 @@
 """PD baseline — 학습 없이 사람이 게인을 정하는 비교군.
 
-AGENTS.md의 "PID vs RL 비교 실험 프로토콜"에서 baseline 자리다. 여기 있는 이유는 하나:
+PID vs RL 비교(docs/design/03-control-pipeline-design.md §3)에서 baseline 자리다. 여기 있는 이유는 하나:
 **RL 쪽만 여럿 두고 baseline을 대충 두면 비교가 성립하지 않기 때문이다.** 그래서 게인을
 작은 격자에서 실제로 탐색해 가장 좋은 걸 쓴다 — baseline을 일부러 약하게 두고 "RL이 이겼다"고
 하는 게 이 프로젝트에서 제일 하면 안 되는 일이다.

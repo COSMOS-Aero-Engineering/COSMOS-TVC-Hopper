@@ -105,7 +105,7 @@ def warn_if_underpowered(params_path: Path = PARAMS, stream=sys.stdout) -> bool:
         f"{kf_lo:.2e}에서 {kf_hi:.2e} 사이다.\n"
         "  Kf가 이 범위 밖이면 실험 A(EDF 추력곡선)로 Kf를 실측값으로 채운 뒤 다시 돌릴 것.\n"
         "  Kf가 이 범위 안이면 원인은 Kf가 아니다. 베인 상수(CLalpha, vane_geometry,\n"
-        "  A_duct, alpha_max_deg), vane_arm_l, Jxx를 확인할 것.\n"
+        "  alpha_max_deg), vane_arm_l, Jxx를 확인할 것. A_fin과 A_duct는 vane_geometry에서 계산한다.\n"
         + "!" * 78,
         file=stream,
     )

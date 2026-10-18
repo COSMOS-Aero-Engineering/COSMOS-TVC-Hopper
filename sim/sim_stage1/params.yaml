@@ -16,19 +16,20 @@ Jzz: 0.002           # kg*m^2, PLACEHOLDER — 세로축 관성모멘트, 가장
 vane_arm_l: 0.104    # m, PLACEHOLDER — 위 계산값
 
 # 베인 잠김 구간(#98): 베인 1장이 제트에 잠기는 반경 구간 inner_r-outer_r과 시위 chord.
-#   요 팔 r, 잠긴 면적 A_fin, 종횡비 AR은 전부 이 세 값에서 나온다. hopper_aviary.py의 vane_geometry()가 계산한다.
-#   예전에는 vane_arm_r과 A_fin을 따로 적어서 한쪽만 고치면 조용히 어긋날 수 있었다(#34의 0.048 m가 그런 버그였다).
+#   요 팔 r, 잠긴 면적 A_fin, 종횡비 AR, 배기 단면적 A_duct는 전부 이 세 값에서 나온다. hopper_aviary.py의 vane_geometry()가 계산한다.
+#   예전에는 vane_arm_r, A_fin, A_duct를 따로 적어서 한쪽만 고치면 조용히 어긋날 수 있었다(#34의 0.048 m가 그런 버그였다).
 #   축방향 유속이 잠김 구간에서 균일하다고 본다.
-#     r     = (inner_r + outer_r) / 2      요 모멘트암 = z축 → 베인 압력중심 반경 → (4+32)/2 = 18 mm = 0.018 m
-#     A_fin = (outer_r - inner_r) · chord  베인 1장의 잠긴 면적 → 28 mm × 25 mm = 7.0e-4 m^2
-#     AR    = (outer_r - inner_r) / chord  종횡비, 아래 CLalpha 주석에서 쓴다 → 1.12
+#     r      = (inner_r + outer_r) / 2      요 모멘트암 = z축 → 베인 압력중심 반경 → (4+32)/2 = 18 mm = 0.018 m
+#     A_fin  = (outer_r - inner_r) · chord  베인 1장의 잠긴 면적 → 28 mm × 25 mm = 7.0e-4 m^2
+#     AR     = (outer_r - inner_r) / chord  종횡비, 아래 CLalpha 주석에서 쓴다 → 1.12
+#     A_duct = π · outer_r²                 배기 단면적 = 제트 반지름 outer_r인 원 전체 → π·32² mm² = 3.21699e-3 m^2 (#117)
 #   꼬리 원뿔(허브) 뒤 안쪽은 실제로 유속이 작아 압력중심이 바깥으로 갈 수 있다(허브 지름 근거 없음, 추정).
 #   그 불확실성은 domain_rand.vane_arm_r_range로 덮는다. 예전 r 0.048 m는 베인 링 반지름이라 정의와 달랐다.
 #   실측값은 아직 없다. 배기 내경·허브 지름을 실측하면 이 블록만 고친다.
 vane_geometry:
   inner_r_mm: 4.0    # 설계값(실측 아님) — cad/hopper_params.scad의 vane_inner_r(베인 안쪽 끝)
   outer_r_mm: 32.0   # 추정값(실측 아님) — 제트 반지름 = 64 mm급 EDF 공칭 지름 / 2. 배기 내경 실측 필요.
-                     #   CAD 베인은 반경 41 mm까지 뻗지만 32 mm 바깥은 제트 밖이라 뺐다. 아래 A_duct도 같은 32 mm를 쓴다
+                     #   CAD 베인은 반경 41 mm까지 뻗지만 32 mm 바깥은 제트 밖이라 뺐다. A_duct도 이 값에서 계산한다(#117)
   chord_mm: 25.0     # 설계값(실측 아님) — cad/hopper_params.scad의 vane_chord
 
 # --- 베인 공력 (modelling-notes-ch3.md §2.2의 (B) 기하 기반) ---
@@ -41,14 +42,14 @@ vane_geometry:
 #   종횡비 AR = 1.12 (vane_geometry의 잠긴 스팬 28 mm / 시위 25 mm)
 #   Helmbold 저종횡비 보정 a = a0 / (sqrt(1 + (a0/(pi·AR))^2) + a0/(pi·AR)) = 1.637/rad
 #   베인을 고립된 날개로 본 값이다. 덕트 벽의 끝판 효과는 넣지 않았다(넣으면 커진다).
-#   코드는 이 값을 AR에서 다시 계산하지 않는다. TC-2 실측 회귀로 바꿀 입력이기 때문이다.
+#   코드는 이 값을 AR에서 다시 계산하지 않는다. TC-2 실측 회귀로 바꿀 입력이기 때문이다(#117에서 입력으로 두기로 정했다).
 #   TC-2 전에 vane_geometry를 바꾸면 이 값도 위 식으로 다시 계산해서 고친다.
 CLalpha: 1.637       # 1/rad, PLACEHOLDER — TC-2(베인각별 복원 모멘트) 실측 회귀로 교체
-# A_fin(베인 1장의 잠긴 면적)은 위 vane_geometry에서 계산한다(7.0e-4 m^2). 여기에 따로 적지 않는다.
-# A_duct: 배기 단면적. 64 mm급 EDF 공칭 지름으로 원 전체 넓이를 잡았다(pi·0.032^2).
-#   반지름 32 mm는 vane_geometry.outer_r_mm와 같은 추정이다. 배기 내경을 실측하면 둘을 함께 고친다.
-#   모터 꼬리 원뿔 단면을 빼면 A_duct가 작아지고 CL이 커진다 — 실측 전에는 작은 쪽 CL을 쓴다.
-A_duct: 3.217e-3     # m^2, PLACEHOLDER — EDF 배기 내경·꼬리 원뿔 지름 실측 필요
+# A_fin(베인 1장의 잠긴 면적)과 A_duct(배기 단면적)는 위 vane_geometry에서 계산한다. 여기에 따로 적지 않는다.
+#   A_duct = π·outer_r² = π·0.032² = 3.21699e-3 m^2(#117). 예전에는 A_duct: 3.217e-3을 따로 적어서
+#   outer_r_mm만 고치면 A_duct가 조용히 어긋날 수 있었다. 이제 배기 내경을 실측하면 outer_r_mm 하나만 고친다.
+#   원 전체 넓이다. 모터 꼬리 원뿔(허브) 단면을 빼면 A_duct가 작아지고 CL이 커진다 — 허브 지름 실측(#118) 전에는 작은 쪽 CL을 쓴다.
+#   A_duct 줄을 다시 쓰면 hopper_aviary.py가 ValueError를 낸다(두 출처가 생기므로).
 # 상한: 한 축 베인 2장의 측력 합 2·CL·alpha_max·Ft는 Ft·sin(alpha_max)를 넘지 못한다(제트 운동량).
 #   지금 값: 0.0621·Ft, 상한 0.1736·Ft의 36%. hopper_aviary.py가 넘으면 ValueError를 낸다.
 CD0: 0.001054        # PLACEHOLDER — 원저자 MATLAB의 뭉쳐진 값(raw는 부록 B.3의 0.0145). 지금 동역학 코드는 안 쓴다
@@ -66,8 +67,19 @@ Kf: 1.1e-6           # PLACEHOLDER(역산값), Ft = Kf * omega_t_equiv^2 (omega_
 #   단위는 임의 단위다. omega_t_equiv는 실제 rpm도 rad/s도 아니고 throttle을 키운 값일 뿐이다.
 #   Kf 1.1e-6은 이 값 3000을 전제로 역산했다: 100% 스로틀 Ft = Kf * 3000^2 = 9.9 N.
 #   둘 중 하나만 바꾸면 최대 추력이 바뀐다. hopper_aviary.py, yaw_check.py, connectome/authority.py가 이 값을 읽는다(#87).
+#   rotor.enabled를 켜면 throttle 대신 지연된 유효 스로틀 Ω/rotor.omega_max를 넣는다(#122). rotor.omega_max와의 관계는
+#   docs/design/modelling-notes-ch3.md §3의 "추력과 회전수"에 있다.
 #   실험 A 뒤 실제 회전수 기반 추력 모델로 Kf와 함께 바꾼다
 omega_t_per_throttle: 3000.0   # 임의 단위(실제 rpm 아님), PLACEHOLDER
+
+# throttle_slew_rate: 스로틀 변화율 제한(#120). 스로틀(0-1)이 1초에 바뀔 수 있는 최댓값, 단위 1/s.
+#   0.25/s = 1초에 25 %p. 스로틀 1.0 → 0.75(호버 추정)를 1초에 걸쳐 바꾼다.
+#   목적: 회전수가 바뀔 때 회전자 반작용(−s·I_r·dΩ/dt)이 기체를 요로 돌린다. 변화율을 줄이면 이 토크가 작아진다.
+#   근거: #120 측정(명목 I_r 1e-5, 회전자 항 켬)에서 25 % 변화를 1 s 이상에 걸치면 요 PD가 합격했다.
+#   올릴 때와 내릴 때 같은 제한이다. 에피소드 첫 스텝은 자르지 않는다. null이면 제한하지 않는다.
+#   펌웨어 제어 루프도 같은 제한을 쓴다(docs/design/00-hopper-master-design.md §8.1). 킬스위치·disarm은 이 제한을 거치지 않는다.
+#   결과와 한계(회전자 상수를 랜덤화하면 이 제한만으로는 yaw_check 3번 B가 불합격)는 modelling-notes-ch3.md §3에 있다.
+throttle_slew_rate: 0.25   # 1/s, 가정(#120 측정 근거). 실물 고도 제어에 충분한지는 확인하지 않았다
 
 # --- 도메인 랜덤화 (매 에피소드마다 아래 비율 범위 안에서 물리 상수를 무작위로 흔들어서 학습)
 #     목적: 지금 값들이 전부 PLACEHOLDER라 정확한 값을 모름 → 학습된 정책이 "이 근처 어딘가"의
@@ -84,23 +96,31 @@ domain_rand:
   # 무게중심-추력축 어긋남(축당 mm). 근거: 01-avionics §8.2 횡 CG 목표 ≤ 3 mm(설계 잔차 1.9 mm).
   # 베인 최대 제어력의 등가 오프셋은 2·CL·alpha_max·l = 6.5 mm(l 최소 -15%에서 5.5 mm)라 그 안쪽이다.
   cg_offset_mm: 3.0
+  # EDF 회전자 상수(#121). 범위는 docs/design/modelling-notes-ch3.md §3 "EDF 회전자 반작용·자이로 항"의 추정 범위다.
+  #   명목값(아래 rotor 블록)이 앞뒤로 비대칭인 범위라 ±비율 대신 [아래, 위]로 적는다. 범위는 명목값을 품어야 한다.
+  #   분포는 hopper_aviary.py의 ROTOR_RAND_LOG에 있다. 값마다 독립 난수 흐름이라 다른 값의 seed별 표본은 그대로다.
+  #   rotor.enabled가 꺼져 있으면 뽑기만 하고 쓰지 않는다. spin_dir는 뽑지 않는다(산 EDF로 확인할 값, #119).
+  rotor_inertia_range: [5.0e-6, 3.5e-5]    # kg·m², 로그 균등(범위 7배)
+  rotor_omega_max_range: [3100.0, 4000.0]  # rad/s, 균등(범위 1.29배). 추력은 바뀌지 않고 회전자 각운동량만 바뀐다(#122)
+  rotor_tau_range: [0.03, 0.15]            # s, 로그 균등(시상수, 범위 5배)
 
 # --- EDF 회전자 반작용·자이로 항 (#86) ---
-# 스위치 enabled의 기본값은 false(끔)다. 켜면 hopper_aviary.py step()이 두 토크를 더한다.
+# 스위치 enabled의 기본값은 false(끔)다. 켜면 hopper_aviary.py step()이 두 토크를 더하고,
+# 추력도 지연된 회전수 Ω에서 계산한다: Ft = Kf·(Ω/omega_max·omega_t_per_throttle)²(#122). 끄면 추력은 지연 없이 스로틀을 따른다.
 #   회전자 각운동량  h = s·I_r·Ω·e_z  (s = spin_dir, Ω = 바디 기준 회전자 각속도, e_z = 바디 +Z)
 #   반작용  τ = −dh/dt        → τz = −s·I_r·dΩ/dt (스로틀을 바꿀 때만 생긴다)
 #   자이로  τ = −ω × h        → τx = −s·I_r·Ω·ωy, τy = +s·I_r·Ω·ωx, τz = 0
 # 식의 근거와 유도, 상수 추정 계산은 docs/design/modelling-notes-ch3.md §3의 "EDF 회전자 반작용·자이로 항"에 있다.
 # 아래 상수는 전부 공개 자료와 가정으로 잡은 추정값(PLACEHOLDER)이다. 실측값이 아니다.
 # 산 EDF로 회전수(회전계)와 회전 방향을 재서 바꾼다(실험 A, TC-0).
-# 이 값들은 랜덤화하지 않는다. #98이 _randomize_episode_params의 난수 흐름을 바꾸는 중이라서다(랜덤화는 #121).
-# 범위를 돌려 보려면 아래 값을 손으로 바꿔서 python yaw_check.py를 돌린다.
+# inertia·omega_max·tau는 명목값이다. domain_rand가 켜져 있으면 에피소드마다 domain_rand.rotor_*_range에서 다시 뽑는다(#121).
+# yaw_check.py 1·2번 손계산은 랜덤화를 끄고 이 명목값을 쓴다. 3번 요 PD는 랜덤화한 값으로 돈다.
 rotor:
   enabled: false     # 기본 끔. 켜면 pd_gate.py·yaw_check.py의 판정도 이 항을 넣은 환경으로 한다
-  inertia: 1.0e-5    # kg·m², PLACEHOLDER(추정) — 임펠러 + 아웃러너 모터 캔. 범위 5e-6 - 3.5e-5
-  omega_max: 3800.0  # rad/s(약 36,300 rpm), PLACEHOLDER(추정) — 스로틀 100 %의 부하 회전수 = KV × 4S 전압 × 부하율. 범위 3100 - 4000
-                     # Ω = omega_max · throttle로 둔다. 환경의 추력이 스로틀²에 비례하므로(Ft ∝ Ω²) 그 모델과 맞는다
-  tau: 0.05          # s, PLACEHOLDER(가정) — 회전수의 1차 지연 시상수. 범위 0.03 - 0.15. 0이면 지연 없음
+  inertia: 1.0e-5    # kg·m², PLACEHOLDER(추정) — 임펠러 + 아웃러너 모터 캔. 범위는 domain_rand.rotor_inertia_range
+  omega_max: 3800.0  # rad/s(약 36,300 rpm), PLACEHOLDER(추정) — 스로틀 100 %의 부하 회전수 = KV × 4S 전압 × 부하율. 범위는 domain_rand
+                     # 목표 회전수 = omega_max · throttle. 추력은 Ω/omega_max만 쓰므로 이 값을 바꿔도 추력은 그대로다(#122)
+  tau: 0.05          # s, PLACEHOLDER(가정) — 회전수의 1차 지연 시상수. 범위는 domain_rand. 0이면 지연 없음(랜덤화를 켜면 rotor_tau_range 줄도 지운다)
                      # 회전수가 바뀔 때 주고받는 각운동량 I_r·ΔΩ는 tau와 상관없다. tau는 토크가 퍼지는 시간만 바꾼다
   spin_dir: 1        # PLACEHOLDER — +1: 회전자 각속도가 +Z(위, 흡기 쪽)를 향한다 = 흡기 쪽에서 내려다보면 반시계. −1은 반대
                      # EDF 제품마다 다르다(CW·CCW 판이 따로 있다). TC-0에서 산 EDF의 회전 방향을 보고 정한다

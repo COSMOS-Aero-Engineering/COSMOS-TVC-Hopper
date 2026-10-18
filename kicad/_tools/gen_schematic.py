@@ -21,6 +21,15 @@ from extract_symbols import extract_symbol, extract_pins
 PROJECT_NAME = "cosmos-avionics"
 ROOT_UUID = "b6a2f001-0000-4000-8000-000000000000"  # fixed so file is reproducible
 
+# KiCad file format versions (YYYYMMDD), from KiCad's eeschema/sch_file_versions.h.
+# KiCad tags 10.0.0 to 10.0.7 have the same schematic and symbol library versions.
+# The output embeds symbol definitions copied from the installed libraries, so the
+# declared schematic version must match the KiCad version of those libraries (#139).
+SCH_FILE_VERSION = 20260306        # SEXPR_SCHEMATIC_FILE_VERSION of KiCad 10.0
+SCH_GENERATOR_VERSION = "10.0"     # KiCad version that writes SCH_FILE_VERSION
+KICAD9_SYMBOL_LIB_VERSION = 20241209   # SEXPR_SYMBOL_LIB_FILE_VERSION of KiCad 9.0
+KICAD10_SYMBOL_LIB_VERSION = 20251024  # SEXPR_SYMBOL_LIB_FILE_VERSION of KiCad 10.0
+
 HERE = Path(__file__).resolve().parent        # kicad/_tools
 REPO_ROOT = HERE.parents[1]                   # repository root
 DEFAULT_OUT = REPO_ROOT / "kicad" / "cosmos-avionics" / f"{PROJECT_NAME}.kicad_sch"
@@ -60,6 +69,32 @@ def _kicad_version_key(path):
 
 def _has_libraries(path):
     return all((path / f).is_file() for f in LIB_FILES.values())
+
+
+def library_version(path):
+    """Return the (version YYYYMMDD) number in a .kicad_sym header, or None."""
+    with open(path, encoding="utf-8") as f:
+        head = f.read(512)
+    m = re.search(r"\(kicad_symbol_lib\s+\(version\s+(\d+)\)", head)
+    return int(m.group(1)) if m else None
+
+
+def _library_problem(path):
+    """Return None if `path` holds KiCad 10 format libraries, else the reason.
+
+    A KiCad 9 library uses an older syntax (for example "~" for an empty pin
+    name), and a newer library can hold tokens KiCad 10 does not know. Neither
+    matches the SCH_FILE_VERSION that this generator declares.
+    """
+    for name in sorted(LIB_FILES.values()):
+        version = library_version(path / name)
+        if version is None:
+            return f"{name} has no (version ...) header"
+        if not KICAD9_SYMBOL_LIB_VERSION < version <= KICAD10_SYMBOL_LIB_VERSION:
+            return (f"{name} has library format {version}, not KiCad 10 "
+                    f"(newer than {KICAD9_SYMBOL_LIB_VERSION}, "
+                    f"at most {KICAD10_SYMBOL_LIB_VERSION})")
+    return None
 
 
 def _symbol_dir_candidates():
@@ -106,18 +141,30 @@ def find_symbols_dir(override):
                 f"--kicad-symbols does not hold KiCad's symbol libraries: {path}\n"
                 f"  expected files: {', '.join(sorted(LIB_FILES.values()))}"
             )
+        problem = _library_problem(path)
+        if problem:
+            raise SystemExit(
+                f"--kicad-symbols does not hold KiCad 10 symbol libraries: {path}\n"
+                f"  {problem}"
+            )
         return path
+    skipped = []
     for candidate in _symbol_dir_candidates():
         try:
-            if _has_libraries(candidate):
-                return candidate
+            if not _has_libraries(candidate):
+                continue
+            problem = _library_problem(candidate)
         except OSError:
             continue
-    raise SystemExit(
-        "KiCad's symbol libraries were not found. Pass --kicad-symbols <dir>, or set\n"
-        "KICAD_SYMBOL_DIR (or KICAD10_SYMBOL_DIR). Usual place on Windows:\n"
-        r"  %LOCALAPPDATA%\Programs\KiCad\<version>\share\kicad\symbols"
-    )
+        if problem is None:
+            return candidate
+        skipped.append(f"  skipped {candidate}: {problem}")
+    raise SystemExit("\n".join([
+        "KiCad 10 symbol libraries were not found. Pass --kicad-symbols <dir>, or set",
+        "KICAD_SYMBOL_DIR (or KICAD10_SYMBOL_DIR). Usual place on Windows:",
+        r"  %LOCALAPPDATA%\Programs\KiCad\10.0\share\kicad\symbols",
+        *skipped,
+    ]))
 
 
 def build_lib_sources(symbols_dir):
@@ -318,9 +365,13 @@ def main():
 
     doc = []
     doc.append("(kicad_sch")
-    doc.append("\t(version 20250114)")
+    doc.append(f"\t(version {SCH_FILE_VERSION})")
+    # KiCad's file format guide asks third-party scripts not to write "eeschema" here.
     doc.append('\t(generator "cosmos-schematic-generator")')
-    doc.append('\t(generator_version "1.0")')
+    # KiCad reads generator_version as a KiCad version. An older KiCad checks the
+    # file version only when this token is present, and then names this value in
+    # its "upgrade KiCad" message.
+    doc.append(f'\t(generator_version "{SCH_GENERATOR_VERSION}")')
     doc.append(f'\t(uuid "{ROOT_UUID}")')
     doc.append('\t(paper "A3")')
     doc.append("\t(title_block")
