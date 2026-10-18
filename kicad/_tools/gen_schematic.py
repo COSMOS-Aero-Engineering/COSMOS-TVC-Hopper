@@ -8,11 +8,18 @@ Net list mirrors docs/design/01-avionics-integration-final.md SS2 (Teensy pin
 map) and SS3 (power tree). This is a documentation-grade schematic capture
 (generic connector symbols standing in for Teensy/BNO085/ESC/etc, since none
 of those have official KiCad symbols) - not a fabrication-ready PCB source.
+
+The script writes the schematic, then lets KiCad's own kicad-cli save it again
+("sch upgrade --force"). The committed file is then in the layout that KiCad
+writes, so opening it in KiCad and saving it without edits changes nothing (#140).
 """
 import argparse
 import math
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import uuid as uuidlib
 from pathlib import Path
 
@@ -33,10 +40,25 @@ KICAD10_SYMBOL_LIB_VERSION = 20251024  # SEXPR_SYMBOL_LIB_FILE_VERSION of KiCad 
 HERE = Path(__file__).resolve().parent        # kicad/_tools
 REPO_ROOT = HERE.parents[1]                   # repository root
 DEFAULT_OUT = REPO_ROOT / "kicad" / "cosmos-avionics" / f"{PROJECT_NAME}.kicad_sch"
+# The project file is committed as KiCad wrote it. kicad-cli reads it to get the
+# project name for each (instances (project ...)) entry; without it, KiCad writes "".
+PROJECT_FILE = DEFAULT_OUT.with_suffix(".kicad_pro")
+KICAD_CLI_TIMEOUT_S = 300
+# The schematic editor writes this line when it saves the root sheet
+# (eeschema/sch_io/kicad_sexpr/sch_io_kicad_sexpr.cpp:537-539 in KiCad 10.0.7).
+# "kicad-cli sch upgrade" saves a second copy of the sheet that it loads again
+# (eeschema/eeschema_jobs_handler.cpp:1416-1418), so it does not write the line.
+EMBEDDED_FONTS_LINE = "\t(embedded_fonts no)"
 
 
-def u():
-    return str(uuidlib.uuid4())
+def u(key):
+    """Return a UUID that depends only on `key`, so a run with the same input gives the same file.
+
+    KiCad saves schematic items sorted by type, then by UUID
+    (eeschema/sch_io/kicad_sexpr/sch_io_kicad_sexpr.cpp:440-459 in KiCad 10.0.7).
+    Random UUIDs would put the items in a new order on every run (#140).
+    """
+    return str(uuidlib.uuid5(uuidlib.UUID(ROOT_UUID), key))
 
 
 # ---------- library symbols needed (file path is resolved at run time) ----------
@@ -167,6 +189,90 @@ def find_symbols_dir(override):
     ]))
 
 
+def _kicad_cli_candidates(symbols_dir):
+    """Yield places kicad-cli might be, best first, for a given symbol folder."""
+    exe = "kicad-cli.exe" if os.name == "nt" else "kicad-cli"
+    symbols_dir = Path(symbols_dir).absolute()
+    parents = symbols_dir.parents
+    # Windows and Linux: <prefix>/share/kicad/symbols and <prefix>/bin/kicad-cli.
+    if len(parents) >= 3:
+        yield parents[2] / "bin" / exe
+    # macOS: KiCad.app/Contents/SharedSupport/symbols and KiCad.app/Contents/MacOS/kicad-cli.
+    if len(parents) >= 2:
+        yield parents[1] / "MacOS" / exe
+    found = shutil.which("kicad-cli")
+    if found:
+        yield Path(found)
+
+
+def kicad_cli_version(cli):
+    """Return the version string that `kicad-cli version` prints, for example 10.0.7."""
+    result = subprocess.run([str(cli), "version"], capture_output=True,
+                            encoding="utf-8", errors="replace",
+                            timeout=KICAD_CLI_TIMEOUT_S)
+    if result.returncode != 0:
+        raise SystemExit(f"{cli} version failed (exit {result.returncode}):\n"
+                         f"{result.stdout}{result.stderr}")
+    return result.stdout.strip()
+
+
+def find_kicad_cli(override, symbols_dir):
+    """Return (kicad-cli path, its version) for the KiCad major version of SCH_GENERATOR_VERSION."""
+    if override:
+        candidates = [Path(override)]
+        if not candidates[0].is_file():
+            raise SystemExit(f"--kicad-cli is not a file: {override}")
+    else:
+        candidates = [c for c in _kicad_cli_candidates(symbols_dir) if c.is_file()]
+    if not candidates:
+        raise SystemExit("\n".join([
+            "kicad-cli was not found. It comes with the KiCad 10 install. Pass",
+            "--kicad-cli <file>. Usual place on Windows:",
+            r"  %LOCALAPPDATA%\Programs\KiCad\10.0\bin\kicad-cli.exe",
+        ]))
+    cli = candidates[0]
+    version = kicad_cli_version(cli)
+    wanted = SCH_GENERATOR_VERSION.split(".")[0]
+    if version.split(".")[0] != wanted:
+        raise SystemExit(f"{cli} is KiCad {version}, not KiCad {wanted}. "
+                         f"Pass the KiCad {wanted} kicad-cli with --kicad-cli <file>.")
+    return cli, version
+
+
+def add_embedded_fonts(text):
+    """Add the (embedded_fonts no) line that the schematic editor writes on save."""
+    if re.search(r"^\t\(embedded_fonts ", text, re.M):
+        return text
+    newline = "\r\n" if text.endswith("\r\n") else "\n"
+    end = newline + ")" + newline
+    if not text.endswith(end):
+        raise SystemExit("kicad-cli output does not end with the closing ')' line")
+    return text[:-len(end)] + newline + EMBEDDED_FONTS_LINE + end
+
+
+def save_with_kicad(text, cli):
+    """Return `text` as KiCad saves it: kicad-cli layout plus (embedded_fonts no)."""
+    if not PROJECT_FILE.is_file():
+        raise SystemExit(f"project file not found: {PROJECT_FILE}")
+    with tempfile.TemporaryDirectory() as tmp:
+        sch = Path(tmp) / f"{PROJECT_NAME}.kicad_sch"
+        sch.write_bytes(text.encode("utf-8"))
+        shutil.copyfile(PROJECT_FILE, Path(tmp) / PROJECT_FILE.name)
+        result = subprocess.run([str(cli), "sch", "upgrade", "--force", str(sch)],
+                                capture_output=True, encoding="utf-8", errors="replace",
+                                timeout=KICAD_CLI_TIMEOUT_S, cwd=tmp)
+        if result.returncode != 0:
+            raise SystemExit(
+                f"kicad-cli sch upgrade failed (exit {result.returncode}). The output file "
+                f"was not changed. If kicad-cli crashes on Windows, see the known problem "
+                f"about kicad-cli in kicad/README.md.\n{result.stdout}{result.stderr}")
+        saved = sch.read_bytes().decode("utf-8")
+    if '(generator "eeschema")' not in saved[:400]:
+        raise SystemExit("kicad-cli did not save the schematic again:\n"
+                         f"{result.stdout}{result.stderr}")
+    return add_embedded_fonts(saved)
+
+
 def build_lib_sources(symbols_dir):
     """Map lib_id -> (symbol library file, symbol name) for the parts we embed."""
     sources = {}
@@ -276,7 +382,7 @@ def emit_component_instance(ref, lib_id, value, pos, pins_by_num):
     lines.append("\t\t(in_bom yes)")
     lines.append("\t\t(on_board yes)")
     lines.append("\t\t(dnp no)")
-    inst_uuid = u()
+    inst_uuid = u(f"symbol/{ref}")
     lines.append(f'\t\t(uuid "{inst_uuid}")')
     lines.append(f'\t\t(property "Reference" "{ref}"')
     lines.append(f"\t\t\t(at {x} {y - 4} 0)")
@@ -291,7 +397,8 @@ def emit_component_instance(ref, lib_id, value, pos, pins_by_num):
     lines.append("\t\t\t(effects (font (size 1.27 1.27)) (hide yes))")
     lines.append("\t\t)")
     for n in sorted(pins_by_num.keys(), key=lambda s: int(s)):
-        lines.append(f'\t\t(pin "{n}" (uuid "{u()}"))')
+        pin_uuid = u(f"symbol/{ref}/pin/{n}")
+        lines.append(f'\t\t(pin "{n}" (uuid "{pin_uuid}"))')
     lines.append("\t\t(instances")
     lines.append(f'\t\t\t(project "{PROJECT_NAME}"')
     lines.append(f'\t\t\t\t(path "/{ROOT_UUID}"')
@@ -304,40 +411,44 @@ def emit_component_instance(ref, lib_id, value, pos, pins_by_num):
     return "\n".join(lines), inst_uuid
 
 
-def emit_wire(p1, p2):
+def emit_wire(p1, p2, key):
     return (
         "\t(wire\n"
         f"\t\t(pts (xy {p1[0]:.3f} {p1[1]:.3f}) (xy {p2[0]:.3f} {p2[1]:.3f}))\n"
         "\t\t(stroke (width 0) (type solid))\n"
-        f'\t\t(uuid "{u()}")\n'
+        f'\t\t(uuid "{u(key)}")\n'
         "\t)"
     )
 
 
-def emit_label(text, pos, angle):
+def emit_label(text, pos, angle, key):
     justify = "left" if math.cos(math.radians(angle)) >= 0 else "right"
     return (
         f'\t(label "{text}"\n'
         f"\t\t(at {pos[0]:.3f} {pos[1]:.3f} {angle:g})\n"
         f"\t\t(effects (font (size 1.27 1.27)) (justify {justify} bottom))\n"
-        f'\t\t(uuid "{u()}")\n'
+        f'\t\t(uuid "{u(key)}")\n'
         "\t)"
     )
 
 
-def emit_no_connect(pos):
-    return f'\t(no_connect (at {pos[0]:.3f} {pos[1]:.3f}) (uuid "{u()}"))'
+def emit_no_connect(pos, key):
+    return f'\t(no_connect (at {pos[0]:.3f} {pos[1]:.3f}) (uuid "{u(key)}"))'
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--kicad-symbols", metavar="DIR",
                         help="KiCad symbol library directory (default: auto-detect)")
+    parser.add_argument("--kicad-cli", metavar="FILE",
+                        help="KiCad 10 kicad-cli program (default: auto-detect)")
     parser.add_argument("--out", metavar="FILE", default=str(DEFAULT_OUT),
                         help="output .kicad_sch (default: %(default)s)")
     args = parser.parse_args()
 
-    sources = build_lib_sources(find_symbols_dir(args.kicad_symbols))
+    symbols_dir = find_symbols_dir(args.kicad_symbols)
+    cli, cli_version = find_kicad_cli(args.kicad_cli, symbols_dir)
+    sources = build_lib_sources(symbols_dir)
     cache = load_libs(sources)
     parts = []
     wires = []
@@ -352,14 +463,14 @@ def main():
             local = pin_geo[pin_num]
             wx, wy, wang = pin_world_pos(pos, local)
             if net == NC:
-                ncs.append(emit_no_connect((wx, wy)))
+                ncs.append(emit_no_connect((wx, wy), f"no_connect/{ref}/{pin_num}"))
                 continue
             # stub extends AWAY from the symbol body: opposite of the pin's own angle
             dx = -math.cos(math.radians(wang))
             dy = -math.sin(math.radians(wang))
             ex, ey = wx + dx * STUB_LEN, wy + dy * STUB_LEN
-            wires.append(emit_wire((wx, wy), (ex, ey)))
-            labels.append(emit_label(net, (ex, ey), wang))
+            wires.append(emit_wire((wx, wy), (ex, ey), f"wire/{ref}/{pin_num}"))
+            labels.append(emit_label(net, (ex, ey), wang, f"label/{ref}/{pin_num}"))
 
     lib_symbols_block = emit_lib_symbols(cache, sources)
 
@@ -367,6 +478,7 @@ def main():
     doc.append("(kicad_sch")
     doc.append(f"\t(version {SCH_FILE_VERSION})")
     # KiCad's file format guide asks third-party scripts not to write "eeschema" here.
+    # kicad-cli replaces this value with "eeschema" when it saves the file below.
     doc.append('\t(generator "cosmos-schematic-generator")')
     # KiCad reads generator_version as a KiCad version. An older KiCad checks the
     # file version only when this token is present, and then names this value in
@@ -381,6 +493,9 @@ def main():
     doc.append('\t\t(company "COSMOS Aero Engineering")')
     doc.append('\t\t(comment 1 "Source: docs/design/01-avionics-integration-final.md SS2 (pin map), SS3 (power tree)")')
     doc.append('\t\t(comment 2 "Generic Connector_Generic symbols stand in for Teensy 4.0 / BNO085 / ESC / UBEC / level shifters - none have official KiCad parts yet")')
+    # The file header names "eeschema" after kicad-cli saves it, so say here that
+    # this file is generated.
+    doc.append('\t\t(comment 3 "Generated by kicad/_tools/gen_schematic.py. Do not edit this file by hand: change the script and run it again.")')
     doc.append("\t)")
     doc.append(lib_symbols_block)
     doc.extend(parts)
@@ -394,10 +509,11 @@ def main():
     doc.append("\t)")
     doc.append(")")
 
+    saved = save_with_kicad("\n".join(doc) + "\n", cli)
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text("\n".join(doc) + "\n", encoding="utf-8")
-    print(f"wrote {out_path}")
+    out_path.write_bytes(saved.encode("utf-8"))
+    print(f"wrote {out_path} (saved again by {cli}, KiCad {cli_version})")
     print(f"{len(parts)} components, {len(wires)} wires, {len(labels)} labels, {len(ncs)} NC markers")
 
 
