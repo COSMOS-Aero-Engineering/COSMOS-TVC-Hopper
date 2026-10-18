@@ -404,9 +404,9 @@ def self_test():
 def decode_input(data, fallback):
     """표준 입력에서 읽은 바이트를 글로 바꾼다. (글, 쓴 대체 인코딩) 을 돌려준다.
 
-    UTF-8(BOM 포함)로 먼저 읽는다. 파일 입력과 같은 인코딩이다. UTF-8이 아니면 fallback
-    (파이썬이 표준 입력에 쓰는 인코딩. 한국어 Windows의 파이프는 cp949)으로 읽고, 그 이름을
-    돌려준다. UTF-8로 읽었으면 None 이다. 둘 다 아니면 UnicodeDecodeError 를 낸다.
+    UTF-8로 먼저 읽고, 앞에 BOM이 있으면 뗀다. 파일 입력은 utf-8로 읽어서 BOM을 떼지 않는다
+    (#195). UTF-8이 아니면 fallback(파이썬이 표준 입력에 쓰는 인코딩. 한국어 Windows의 파이프는
+    cp949)으로 읽고, 그 이름을 돌려준다. UTF-8로 읽었으면 None 이다. 둘 다 아니면 UnicodeDecodeError 를 낸다.
     """
     try:
         return data.decode("utf-8-sig"), None
