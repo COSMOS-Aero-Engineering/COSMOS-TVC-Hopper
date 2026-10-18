@@ -577,9 +577,10 @@ def check_cad_file(exe, scad, workdir):
         # stderr에도 같은 줄이 나올 수 있다. 같은 줄을 두 번 세지 않는다.
         problems += [p for p in scan_cad_output(r.stderr)[2] if p not in problems]
         print(f"{mode}: echo {len(echoes)}줄, '!!' 경고 {len(alarms)}건, "
-              f"WARNING·ERROR {len(problems)}건 (exit {r.returncode})")
+              f"WARNING·ERROR {len(problems)}건 (exit {r.returncode})", flush=True)
         for line in alarms + problems:
-            print(f"  {line}")
+            # die()는 stderr로 쓴다. flush하지 않으면 CI 로그에서 이 줄이 [중단] 뒤에 찍힌다.
+            print(f"  {line}", flush=True)
         if r.returncode != 0:
             tail = r.stderr.strip()[-1000:]
             failures.append(f"{mode}: OpenSCAD가 exit {r.returncode}로 끝났다." + (f"\n{tail}" if tail else ""))
