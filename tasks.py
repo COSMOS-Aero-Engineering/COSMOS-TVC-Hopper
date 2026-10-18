@@ -904,11 +904,6 @@ AGENTS_REF_RE = re.compile(r"AGENTS\.md`?[ \t]*§")
 AGENTS_SELF_REF_RE = re.compile(r"§(?=[^\s\d])")
 # AGENTS.md 안에서 § 앞 낱말이 이 형식이면 다른 문서의 절이다. 예: "README §협업 규칙 6".
 AGENTS_FOREIGN_RE = re.compile(r"(?:README|\.md`?|문서|마스터|PRD)$")
-# 절 이름 바로 뒤에 붙을 수 있는 조사. 예: "§교훈에", "§일하는 방식의", "§작업 순서다".
-AGENTS_PARTICLE_RE = re.compile(
-    r"(?:의|에도|에서|에는|에|을|를|은|는|이다|이|가|과|와|으로|로|도|만|대로|처럼|까지|다)"
-    r"(?![가-힣A-Za-z0-9_])"
-)
 
 
 def agents_sections(text):
@@ -941,17 +936,15 @@ def agents_sections(text):
 def _cites_section(rest, names):
     """§ 바로 뒤 글자 rest가 names 중 하나로 시작하는지 본다.
 
-    참조는 글 속에 있어서 절 이름이 어디서 끝나는지 글자만으로는 모른다. "§안전 원칙 확인"과
-    "§교훈에도"가 그 예다. 그래서 절 이름으로 시작하고, 그 바로 뒤가 줄 끝, 공백, 문장 부호,
-    조사 중 하나이면 맞는 참조로 본다. 바로 뒤에 다른 글자나 숫자가 붙으면("§교훈들") 틀린 참조다.
-    한계: 이름이 다른 이름의 앞부분이면 구별하지 못한다. 절 "작업"만 있을 때 "§작업 순서"도
-    통과한다. 지금 AGENTS.md 제목에는 이런 쌍이 없다.
+    참조는 글 속에 있어서 절 이름이 어디서 끝나는지 글자만으로는 모른다. "§안전 원칙 확인",
+    "§교훈에서는", "§작업 순서인지"가 그 예다. 한국어 조사와 어미는 종류가 많고 겹쳐 붙는다.
+    그래서 절 이름으로 시작하고 그 바로 뒤에 영문자, 숫자, 밑줄이 붙지 않으면 맞는 참조로 본다.
+    한계: 절 이름 뒤에 한글이 붙으면 조사인지 낱말의 일부인지 구별하지 않는다. 절 "교훈"이 있으면
+    "§교훈들"도 통과한다. 절을 지우거나 이름을 바꾸면 옛 이름은 보통 지금 이름으로 시작하지
+    않으므로 낡은 참조는 걸린다.
     """
-    for name in sorted(names, key=len, reverse=True):
-        if not rest.startswith(name):
-            continue
-        after = rest[len(name):]
-        if not after or not re.match(r"[가-힣A-Za-z0-9_]", after) or AGENTS_PARTICLE_RE.match(after):
+    for name in names:
+        if rest.startswith(name) and not re.match(r"[A-Za-z0-9_]", rest[len(name):]):
             return True
     return False
 
