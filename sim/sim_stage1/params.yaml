@@ -55,6 +55,25 @@ CLalpha: 1.637       # 1/rad, PLACEHOLDER — TC-2(베인각별 복원 모멘트
 CD0: 0.001054        # PLACEHOLDER — 원저자 MATLAB의 뭉쳐진 값(raw는 부록 B.3의 0.0145). 지금 동역학 코드는 안 쓴다
 alpha_max_deg: 10    # 선형 근사 유효 범위 (논문 명시값, 서보 물리적 최대각과는 별개)
 
+# --- 베인 서보 동특성 (#161) ---
+# 스위치 enabled의 기본값은 false(끔)다. 끄면 베인각은 행동을 받은 스텝에 바로 명령각이 된다(#161 전과 비트 단위로 같다).
+# 켜면 hopper_aviary.py의 _advance_servo()가 베인 4개마다 아래 순서로 한 스텝 진행한다(tvc-retro-propulsion actuator_servo.py와 같은 꼴):
+#   1. 데드밴드: 오차 e = 명령각 − 현재각. |e| < deadband이면 베인은 그 스텝에 움직이지 않는다(상태가 아니라 오차에 건다)
+#   2. 1차 지연: 명령이 스텝 동안 일정하다고 보고 해석해로 진행한다. α1 = α_cmd + (α0 − α_cmd)·e^(−dt/tau)
+#   3. 속도 제한: |α1 − α0| ≤ rate_max·dt
+#   힘은 스텝 끝 베인각 α1로 계산한다. 에피소드 시작 때 베인은 중립(0)이다.
+# 켜면 실제 베인각은 관측에 없다. MG90S는 위치 피드백이 없어서 실물에서도 재지 못한다(#161 결정).
+# 끈 이유: tau가 실측값이 아니다. TC-2·실험 A에서 서보 응답을 잰 뒤 켤지 정한다. 결과는 modelling-notes-ch3.md §3 "베인 서보 동특성"
+servo:
+  enabled: false        # 기본 끔. 켜면 pd_gate.py·yaw_check.py 3번도 이 모델로 돈다(yaw_check.py 1번 토크 손계산은 늘 끈다)
+  tau: 0.05             # s, PLACEHOLDER(추정) — 1차 지연 시상수. 데이터시트에 없다. tvc-retro-propulsion 추정값과 같고
+                        #   03-control-pipeline-design.md §5의 20-60 ms 안이다. 0이면 지연 없음
+  rate_max_dps: 600.0   # deg/s, 제조사 사양(실측 아님) — TowerPro MG90S 0.10 s/60°(4.8 V, 무부하). Waveshare 판매 사양은 0.11 s/60°다.
+                        #   부하가 걸리면 느려진다. tau 0.05 s에서는 1차 지연의 최대 속도(2·alpha_max/tau = 400°/s)가
+                        #   이 값보다 작아서 제한이 걸리지 않는다
+  deadband_deg: 0.45    # deg, 판매 사양(실측 아님) — dead band width 5 µs(Waveshare MG90S) × 0.09°/µs. TowerPro 사양은 1 µs(0.09°)다.
+                        #   우리 서보는 TowerPro 정품인지 모른다. 큰 쪽을 쓴다. 0.09°/µs는 펄스 1000 µs당 90°라는 가정이다
+
 # --- 모터/추력 모델 (PLACEHOLDER — 실험 A 전까지 임시 스케일, 절대값 의미 없음) ---
 # 2026-09-19: 기존 3.0e-8은 100% 스로틀에서 Ft=0.27N — 64mm급 EDF 실제 정적추력(8~12N)의
 # 1/37 수준이었다(PR #9 리뷰 중 발견, sim/connectome 작업과 무관하게 실재하는 값 오류).

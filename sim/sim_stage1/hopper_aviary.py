@@ -31,6 +31,10 @@ EDF 회전자 항(#86): params.yaml의 rotor.enabled를 켜면 회전자 반작�
 첫 스텝은 제한하지 않으므로 이 값은 첫 스텝을 제약하지 않는다. 회전자 회전수 Ω(rotor.enabled)는 관측에 넣지 않았다.
 실물에서 회전수를 받으려면 ESC 텔레메트리가 필요하고 지금 하드웨어에는 없다(#174, #186 결정).
 
+베인 서보 동특성(#161): params.yaml의 servo.enabled를 켜면 베인각이 명령각을 데드밴드·1차 지연·속도 제한으로 따라간다
+(_advance_servo). 기본값은 끔이다. 끄면 베인각은 행동을 받은 스텝에 바로 명령각이 된다. 켜도 실제 베인각은 관측에 없다.
+MG90S는 위치 피드백이 없어서 실물에서도 재지 못한다. 상수 근거는 params.yaml servo 블록.
+
 도메인 랜덤화: params.yaml의 domain_rand 설정에 따라 매 reset()마다 Jxx/Jyy/Jzz,
 베인 모멘트암(l,r), Kf, 무게중심-추력축 오프셋, 회전자 상수(inertia·omega_max·tau, #121)를
 그 범위 안에서 무작위로 다시 뽑는다.
@@ -168,6 +172,16 @@ class HopperAttitudeEnv(gym.Env):
         self.CD0 = p["CD0"]
         self.alpha_max = np.deg2rad(p["alpha_max_deg"])
 
+        # 베인 서보 동특성(#161). 블록이 없으면 끈다. step()은 servo_enabled가 참일 때만 _advance_servo()를 부른다.
+        servo = p.get("servo", {})
+        self.servo_enabled = bool(servo.get("enabled", False))
+        self.servo_tau = float(servo.get("tau", 0.0))                              # s
+        self.servo_rate_max = np.deg2rad(float(servo.get("rate_max_dps", np.inf)))  # rad/s
+        self.servo_deadband = np.deg2rad(float(servo.get("deadband_deg", 0.0)))     # rad
+        if self.servo_tau < 0 or self.servo_deadband < 0 or not self.servo_rate_max > 0:
+            raise ValueError("servo.tau와 servo.deadband_deg는 0 이상, servo.rate_max_dps는 0보다 커야 한다.")
+        self.vane_alpha = np.zeros(4)   # rad, 실제 베인각 4개. servo_enabled일 때만 쓴다. reset()이 중립(0)으로 둔다
+
         self.dr = p.get("domain_rand", {"enabled": False})
 
         # EDF 회전자(#86). 상수는 늘 읽는다. step()은 rotor_enabled가 참일 때만 회전자 토크를 넣는다.
@@ -223,6 +237,7 @@ class HopperAttitudeEnv(gym.Env):
         self.state = np.array([phi, theta, psi, 0.0, 0.0, 0.0], dtype=np.float32)
         self.step_count = 0
         self.throttle_applied = None
+        self.vane_alpha = np.zeros(4)
         return self._obs(), {}
 
     def _obs(self):
@@ -317,6 +332,8 @@ class HopperAttitudeEnv(gym.Env):
         action = np.clip(action, self.action_space.low, self.action_space.high)
         a1, a2, a3, a4, throttle_norm = action
         alpha = np.array([a1, a2, a3, a4]) * self.alpha_max
+        if self.servo_enabled:
+            alpha = self._advance_servo(alpha)   # 서보 동특성(#161). 끄면 명령각을 그대로 쓴다
         throttle = self._limit_throttle((throttle_norm + 1.0) / 2.0)  # -1~1 -> 0~1, 그다음 변화율 제한(#120)
 
         # 회전자 항을 켜면(#86) 회전수 Ω가 스로틀을 1차 지연으로 따라가고, 추력도 이 Ω에서 계산한다(#122).
@@ -398,6 +415,25 @@ class HopperAttitudeEnv(gym.Env):
             throttle = min(max(throttle_cmd, self.throttle_applied - d), self.throttle_applied + d)
         self.throttle_applied = throttle
         return throttle
+
+    def _advance_servo(self, alpha_cmd):
+        """베인 서보 4개를 한 스텝(dt) 진행하고 스텝 끝 베인각(rad, 4벡터)을 돌려준다(#161). step()이 servo_enabled일 때만 부른다.
+
+        모델은 tvc-retro-propulsion simulation/isaac/tvc_env/dynamics/actuator_servo.py(MIT, 커밋 971e24d)와 같은 꼴이다.
+          1. 데드밴드: |α_cmd − α0| < deadband인 베인은 이 스텝에 움직이지 않는다. 데드밴드는 상태가 아니라 오차에 건다
+          2. 1차 지연: 명령이 스텝 동안 일정하다고 보고 해석해로 진행한다. α1 = α_cmd + (α0 − α_cmd)·e^(−dt/tau).
+             참고 구현은 전진 오일러(α0 + dt·e/tau)다. 해석해는 dt가 tau에 가까워도 명령각을 넘지 않는다(회전자와 같은 방법)
+          3. 속도 제한: |α1 − α0| ≤ rate_max·dt
+          4. 각도 제한: |α1| ≤ alpha_max. 명령각이 이미 이 안이라 지금은 걸리지 않는다
+        에피소드 첫 스텝의 α0는 reset()이 둔 중립(0)이다.
+        """
+        a0 = self.vane_alpha
+        target = np.where(np.abs(alpha_cmd - a0) < self.servo_deadband, a0, alpha_cmd)
+        decay = np.exp(-self.dt / self.servo_tau) if self.servo_tau > 0 else 0.0
+        d = self.servo_rate_max * self.dt
+        a1 = np.clip(target + (a0 - target) * decay, a0 - d, a0 + d)
+        self.vane_alpha = np.clip(a1, -self.alpha_max, self.alpha_max)
+        return self.vane_alpha
 
     def _advance_rotor(self, throttle):
         """회전자 회전수 Ω를 한 스텝(dt) 진행하고 (스텝 시작 Ω0, 스텝 끝 Ω1)을 rad/s로 돌려준다(#86, #122).

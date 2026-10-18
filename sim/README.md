@@ -5,7 +5,7 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 포크 수준으로 새로 써야 해서, 순수 `gymnasium.Env`를 직접 구현하는 쪽으로 결정).
 
 > ⚠️ **여기 있는 Stage 1은 파이프라인 검증용 PoC다 — 최종 목표가 아니다.** numpy 직접적분이라
-> 빠르고 의존성이 없지만 물리 신뢰도가 낮다(공력 lumped 근사, 서보 동특성 없음, 충돌 없음). 3D
+> 빠르고 의존성이 없지만 물리 신뢰도가 낮다(공력 lumped 근사, 서보 동특성 기본 끔(#161), 충돌 없음). 3D
 > 물리엔진 기반 Stage 2로 넘어가는 계획(후보 비교·검증 상태 포함)은
 > [`../docs/design/03-control-pipeline-design.md`](../docs/design/03-control-pipeline-design.md) §2가
 > 정본. 이 Stage 1은 버리지 않고 앞으로도 빠른 스모크테스트용으로 계속 쓴다(§2 참고).
@@ -17,7 +17,7 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 | `hopper_aviary.py` | **`HopperAttitudeEnv`** — 위치 구속(만능조인트) 상태에서 자세만 제어하는 Stage 1 환경. 뉴턴-오일러 강체 회전방정식(자이로스코픽 교차항 포함) + ZYX 오일러각 운동학을 numpy로 직접 적분. `docs/design/references/`의 논문 3장(Modelling)을 그대로 코드화한 것 |
 | `params.yaml` | 물리 상수. **CLalpha/vane_geometry/CD0/Kf/omega_t_per_throttle/mass/Jxx·Jyy·Jzz/vane_arm_l/rotor.\*(inertia·omega_max·tau·spin_dir)는 PLACEHOLDER** — 실험 A(EDF 추력곡선)·TC-0·TC-2·조립 후 실측 전까지는 추정값. 각 값의 계산 근거는 파일 주석에 있다(#27). 요 팔 r, 베인 잠긴 면적 A_fin, 배기 단면적 A_duct는 `vane_geometry`(잠김 구간 반경·시위) 하나에서 계산한다(#98, #117) |
 | `pd_gate.py` | **RL 학습 전 합격 기준**(#27): 도메인 랜덤화 켠 상태에서 PD(kp=8, kd=2)가 평가 seed 0~199에서 넘어짐 ≤ 5 %, 최종 기울기 중앙값 ≤ 5°인지. `--model`로 PPO도 같은 seed로 비교. `tasks.py check`가 매번 돌린다 |
-| `yaw_check.py` | **요 축 검사**(#65): `pd_gate.py`의 PD는 요 토크가 늘 0이라 요 경로를 못 본다. ① 베인 위치·힘 방향의 외적으로 손계산한 토크와 환경의 한 스텝 Δω를 비교한다(부호, 크기, 롤·피치 누설, 상수는 `params.yaml`에서 읽음). ② 회전자 항(#86) 손계산: 스로틀 계단에서 z축 각운동량 보존, 자유 세차와 추력 지연(#122)을 해석해와 비교. 스로틀 변화율 제한(#120)이 명령 계단을 경사로 바꾸는지도 본다. ③ 요 PD를 섞으면 평가 seed 0-199에서 마지막 \|ψ\| ≤ 1°인지 본다. 스로틀 고정(A)과 명령 계단 1.0 → 0.75(B)를 회전자 항 끔·켬으로 같은 seed에서 비교하고, 판정은 `rotor.enabled`를 따른다. `tasks.py check`가 매번 돌린다 |
+| `yaw_check.py` | **요 축 검사**(#65): `pd_gate.py`의 PD는 요 토크가 늘 0이라 요 경로를 못 본다. ① 베인 위치·힘 방향의 외적으로 손계산한 토크와 환경의 한 스텝 Δω를 비교한다(부호, 크기, 롤·피치 누설, 상수는 `params.yaml`에서 읽음). ② 회전자 항(#86) 손계산: 스로틀 계단에서 z축 각운동량 보존, 자유 세차와 추력 지연(#122)을 해석해와 비교. 스로틀 변화율 제한(#120)이 명령 계단을 경사로 바꾸는지도 본다. 서보 모델(#161)의 1차 지연·데드밴드·속도 제한도 손계산과 비교한다. ③ 요 PD를 섞으면 평가 seed 0-199에서 마지막 \|ψ\| ≤ 1°인지 본다. 스로틀 고정(A)과 명령 계단 1.0 → 0.75(B)를 회전자 항 끔·켬으로 같은 seed에서 비교하고, 판정은 `rotor.enabled`를 따른다. `tasks.py check`가 매번 돌린다 |
 | `altitude_check.py` | **고도 검사**(#185, 참고용이라 합격 판정과 `tasks.py check` 단계가 없다): 환경에 없는 세로 운동방정식을 옆에서 적분해 스로틀 변화율 제한(`throttle_slew_rate`)으로 호버 고도 유지(H)와 0.5 m/s 착지 하강(L)이 되는지 잰다. 고도 제어기는 ArduPilot Copter 기본 게인 꼴이다. 변화율 제한 없음·2·1·0.5·0.25·0.125/s를 같은 seed 0-199에서 비교한다. `--rotor`로 회전자 항을 켠다 |
 | `sanity_check.py` | 환경이 안 깨졌는지 빠르게 확인(무작위 액션 20스텝) |
 | `train.py` | PPO(stable-baselines3) 학습 스크립트. 학습 seed 10000(평가 seed 0~199와 분리) |
@@ -51,6 +51,9 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
   관측 이름과 순서는 `hopper_aviary.py`의 `OBS_NAMES`다. 회전자 회전수는 관측에 없다(실물에서 받을 신호가 아직 없다, #186).
   펌웨어 요구사항은 `docs/design/00-hopper-master-design.md` §8.1의 8번.
   식, 상수 근거, 결과는 [`modelling-notes-ch3.md`](../docs/design/modelling-notes-ch3.md) §3의 "EDF 회전자 반작용·자이로 항".
+- 베인 서보 동특성(#161): `params.yaml`의 `servo.enabled`로 켠다. 기본값은 끔이다. 켜면 베인각이 명령각을 데드밴드(0.45°)·
+  1차 지연(0.05 s, 추정)·속도 제한(600°/s)으로 따라간다. 에피소드 시작 때 베인은 중립이다. 실제 베인각은 관측에 없다.
+  `yaw_check.py` 2번 마.가 지연 해석해·데드밴드·속도 제한을 손계산과 비교한다. 결과는 [`modelling-notes-ch3.md`](../docs/design/modelling-notes-ch3.md) §3의 "베인 서보 동특성".
 
 ## 실행
 
