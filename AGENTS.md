@@ -51,7 +51,7 @@ Claude Code, Codex, OpenCode 등 어떤 도구를 쓰든 이 규칙을 먼저 �
 
 **남의 브랜치**: 권한자가 요청하면 다른 사람의 브랜치나 PR에도 커밋을 더할 수 있다. 새 커밋만 더하고, 푸시 전에 원격 브랜치의 최신 커밋을 확인해서 남이 먼저 푸시한 커밋을 덮지 않는다.
 
-**CI**(`.github/workflows/ci.yml`): sim 검사(`python tasks.py check`)·학습 자료 링크 검사, 펌웨어 3종(`imu_test`, `imu_test_i2c`, `throttle_serial`) PlatformIO 빌드. 웹은 아직 CI에 없다. `firmware — 전체` job이 펌웨어 빌드 결과를 체크 하나로 모은다. main 룰셋의 required status check로 쓰는 이름은 `sim — 환경 로딩 + PPO 스모크`와 `firmware — 전체`다. 이 이름을 바꾸는 순서는 ci.yml의 sim job 주석에 있다(#103).
+**CI**(`.github/workflows/ci.yml`): sim 검사(`python tasks.py check`, OpenSCAD를 설치해서 CAD 검증 echo도 본다, #61)·학습 자료 링크 검사, 펌웨어 3종(`imu_test`, `imu_test_i2c`, `throttle_serial`) PlatformIO 빌드. 웹은 아직 CI에 없다. `firmware — 전체` job이 펌웨어 빌드 결과를 체크 하나로 모은다. main 룰셋의 required status check로 쓰는 이름은 `sim — 환경 로딩 + PPO 스모크`와 `firmware — 전체`다. 이 이름을 바꾸는 순서는 ci.yml의 sim job 주석에 있다(#103).
 
 PR을 거치는 이유는 [`docs/decisions.md`](docs/decisions.md#왜-pr을-거치나-2026-09-18)에 있다.
 
@@ -197,4 +197,4 @@ AI가 지킬 선:
 - (2026-10-17) 자체 검사 통과를 근거로 삼지 않는다. 검사기가 생성물을 읽지 않으면 뒤집힌 회로도가 "일치"로 통과한다(`check_imu_nets.py`는 생성기 원본만, `validate_sch.py`는 레이블 글자 수만 봤다). 검사는 산출물(`.kicad_sch`, 넷리스트, 로그)을 읽는다. ERC 초록불도 "배선해도 된다"는 뜻이 아니다(#66, #69).
 - (2026-10-18) Windows에서만 생기는 동작은 사람에게 넘기기 전에 AI가 먼저 재현한다. 한국어 로캘이나 데스크톱 Windows의 동작이 중요하면 에이전트 서버의 한국어 Windows 11 데스크톱 VM(`~/vms/win11-ko`)을 쓴다. dockur/windows로 띄운 VM이고, 서버에 KVM이 없어서 QEMU TCG로 느리게 돈다. 환경은 ko-KR(cp949), Windows PowerShell 5.1, 실행 정책 `Restricted`다. 쓰는 법은 그 폴더의 `README.md`에 있다(#80, #99, #108). 이 VM은 설치 직후 상태가 아니다. 파이썬, uv, VC++ 재배포 패키지, OpenSSH를 이미 설치했으므로 새 PC에서만 나는 실패(#108)는 이 VM으로 확인하지 못한다. 그런 확인은 별도 VM `~/vms/win11-ko-clean`에서 한다. 설치 직후 디스크를 `pristine/`에 읽기 전용으로 보관한 VM이고, 원본에는 Windows와 OpenSSH만 있다. `checks/fresh-pc.sh`가 파이썬과 uv를 README대로 설치하고 `setup`·`smoke`를 돌린다. 끝나면 `./reset-to-pristine.sh`로 원본으로 되돌리고 VM을 끈다. 쓰는 법은 그 폴더의 `README.md`에 있다(#150). 빠른 확인은 GitHub `windows-latest` 러너(영어 로캘의 Windows Server)에서 한다. 임시 브랜치에 그 브랜치 push로만 도는 워크플로를 두고, 옛 동작을 대조군으로 함께 돌린다(#99, #104). AI는 이 임시 브랜치를 지우지 않는다. 미병합 브랜치는 저장소 룰셋이 삭제를 제한하고, README §협업 규칙 6도 임의로 지우지 않는다고 정한다. 서버의 gh 토큰이 룰셋을 우회할 수 있어도 같다. 대신 권한자가 지우도록 후속 이슈를 만든다(#107, #136).
 - (2026-10-18) 에이전트 서버에 없는 도구(KiCad 등)가 필요하면 사람에게 넘기기 전에 서버에 설치해서 직접 확인한다. 설치할 수 없을 때만 사람에게 넘긴다(#75).
-- (2026-10-18) 파이썬 `print` 문자열에 em dash(—)처럼 cp949에 없는 문자를 쓰지 않는다. 한국어 Windows에서 출력을 파일이나 파이프로 돌리면 `UnicodeEncodeError`로 멈춘다. 콘솔에 바로 출력할 때는 멈추지 않아서 놓치기 쉽다. 콜론이나 마침표를 쓴다. cp1252(영어 로캘 Windows)에는 em dash가 있어서 영어 Windows에서는 이 오류가 나지 않는다. 확인은 한국어 VM에서 한다(#137, #147, #159).
+- (2026-10-18) 파이썬 `print` 문자열에 em dash(—)처럼 cp949에 없는 문자를 쓰지 않는다. 한국어 Windows에서 출력을 파일이나 파이프로 돌리면 `UnicodeEncodeError`로 멈춘다. 콘솔에 바로 출력할 때는 멈추지 않아서 놓치기 쉽다. 콜론이나 마침표를 쓴다. cp1252(영어 로캘 Windows)에는 em dash가 있어서 영어 Windows에서는 이 오류가 나지 않는다. 확인은 한국어 VM에서 한다(#137, #147, #159). `python tasks.py check`의 `cp949` 작업이 `print()`, `raise` 같은 출력 자리의 문자열 리터럴을 검사한다. 변수에 담았다가 출력하는 글은 이 작업이 보지 못한다(#169, #171).

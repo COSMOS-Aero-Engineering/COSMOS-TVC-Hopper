@@ -13,6 +13,7 @@ check와 CI: CI(.github/workflows/ci.yml)의 sim job이 `python tasks.py check`�
 CI는 그 밖에 학습 자료 목록·내부 링크 검사와 펌웨어 PlatformIO 빌드를 ci.yml에서 직접 돌린다.
 이 둘은 check에 없다. 로컬에서 check를 통과해도 이 둘은 따로 확인한다(명령은 ci.yml).
 check가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다.
+check의 cad 작업은 OpenSCAD가 필요하다. 없는 PC에서는 건너뛰고, CI는 OpenSCAD를 설치해서 돌린다(#61).
 
 왜 Makefile이 아니라 이 파일인가: 팀 개발 환경이 Windows 위주인데 Windows엔 `make`가 기본으로
 없다. 반면 파이썬은 소프트웨어팀이 어차피 설치해야 한다. 표준 라이브러리만 쓰므로 추가 설치도
@@ -41,6 +42,7 @@ check가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다.
 순서로 실행할지"만 안다 — 둘을 섞지 않는다.
 """
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -48,7 +50,9 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
+import unicodedata
 from pathlib import Path
 
 def _survive_console_encoding():
@@ -183,6 +187,119 @@ def uv_run(args, cwd=None):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Windows: torch가 쓰는 VC++ 런타임 확인 (#108)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 새 Windows PC에는 Microsoft Visual C++ 재배포 패키지가 없을 수 있다. 그러면 torch가 c10.dll을
+# 불러오지 못하고 `OSError: [WinError 126]`으로 멈춘다. torch를 쓰는 작업이 돌기 전에 이것을 찾아서,
+# 영어 오류 대신 설치 명령을 보여 준다.
+#
+# 내려받기 주소: https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist 의 x64 고정 링크.
+# winget 패키지 ID: microsoft/winget-pkgs 저장소의 manifests/m/Microsoft/VCRedist/2015+/x64.
+VC_INSTALL_CMD = "winget install --id Microsoft.VCRedist.2015+.x64 --exact --source winget"
+VC_INSTALL_URL = "https://aka.ms/vc14/vc_redist.x64.exe"
+
+# .venv의 파이썬으로 실행하는 검사 코드. 이 파이썬이 torch를 불러오는 파이썬이다. tasks.py를
+# 실행한 파이썬으로 검사하면 결과가 다를 수 있다. 실행 파일 폴더와 32/64비트가 다를 수 있기 때문이다.
+#
+# DLL 목록: torch 2.14.0 Windows 휠의 c10.dll이 가져오는 VC++ 런타임 DLL 세 개다. torch/__init__.py도
+# c10.dll을 불러오기 전에 이 세 이름을 같은 순서로 불러 보고, ARM64에서는 vcruntime140_1.dll을
+# 건너뛴다. 이 DLL은 torch 휠(torch/lib)에 들어 있지 않다.
+#
+# 찾는 방법은 torch/__init__.py의 _load_dll_libraries()와 같게 한다. torch가 실제로 실패할 때만
+# 멈추려는 것이다. torch는 아래 순서로 찾는다.
+#   1) torch/lib, <venv>/Library/bin 같은 폴더를 os.add_dll_directory로 더한 뒤, 실행 파일 폴더,
+#      더한 폴더, System32에서 찾는다. ctypes 기본값(winmode=None)이 이 방식이다.
+#   2) 못 찾으면 더한 폴더를 PATH 앞에 붙이고 Windows 표준 검색 순서로 다시 찾는다. 표준 검색
+#      순서는 PATH까지 본다. winmode=0이 이 방식이다.
+# torch는 CUDA 빌드에서만 CUDA 폴더를 더한다. 우리 torch는 CPU 빌드라서 그 폴더는 뺐다.
+VC_PROBE = """\
+import ctypes, importlib.util, json, os, platform, sys, sysconfig
+spec = importlib.util.find_spec("torch")
+userbase = sysconfig.get_config_var("userbase")
+dirs = [
+    os.path.join(os.path.dirname(spec.origin), "lib") if spec and spec.origin else "",
+    os.path.join(sys.exec_prefix, "Library", "bin"),
+    os.path.join(sys.base_exec_prefix, "Library", "bin") if sys.exec_prefix != sys.base_exec_prefix else "",
+    os.path.join(userbase, "Library", "bin") if userbase else "",
+    os.path.join(sys.exec_prefix, "bin"),
+]
+dirs = [d for d in dirs if d and os.path.exists(d)]
+for d in dirs:
+    os.add_dll_directory(d)
+os.environ["PATH"] = os.pathsep.join(dirs + [os.environ.get("PATH", "")])
+names = ["vcruntime140.dll", "msvcp140.dll"]
+if platform.machine() != "ARM64":
+    names.append("vcruntime140_1.dll")
+missing = []
+for name in names:
+    try:
+        ctypes.WinDLL(name)
+    except OSError:
+        try:
+            ctypes.WinDLL(name, winmode=0)
+        except OSError:
+            missing.append(name)
+print(json.dumps(missing))
+"""
+
+
+def venv_python():
+    return VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+def probe_vc_runtime(python):
+    """python으로 VC_PROBE를 실행해 찾지 못한 DLL 이름 목록을 돌려준다.
+
+    검사 자체를 하지 못하면(파이썬 실행 실패, 시간 초과, 알 수 없는 출력) None을 돌려준다.
+    """
+    try:
+        result = subprocess.run([str(python), "-I", "-c", VC_PROBE], capture_output=True,
+                                text=True, encoding="utf-8", errors="replace", timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    lines = (result.stdout or "").strip().splitlines()
+    try:
+        missing = json.loads(lines[-1])
+    except (IndexError, ValueError):
+        return None
+    if not isinstance(missing, list) or not all(isinstance(n, str) for n in missing):
+        return None
+    return missing
+
+
+def ensure_vc_runtime(windows=None):
+    """Windows에서 torch에 필요한 VC++ 런타임 DLL이 없으면 설치 방법을 출력하고 멈춘다(#108).
+
+    Windows가 아니면 아무것도 하지 않는다. 검사 자체를 하지 못하면 경고만 하고 진행한다.
+    검사 코드가 틀려서 멀쩡한 PC를 막는 것보다, torch가 원래 오류를 내게 두는 편이 낫다.
+    windows는 단위 검사(test_vcruntime.py)가 Linux에서 Windows 경로를 돌릴 때만 준다.
+    """
+    if windows is None:
+        windows = os.name == "nt"
+    if not windows:
+        return
+    missing = probe_vc_runtime(venv_python())
+    if missing is None:
+        print("\n[경고] Microsoft Visual C++ 재배포 패키지가 있는지 확인하지 못했다. 그대로 진행한다.\n"
+              "     torch가 c10.dll 오류(WinError 126)로 멈추면 PowerShell에서 아래 명령으로 설치한다.\n"
+              f"     {VC_INSTALL_CMD}", file=sys.stderr, flush=True)
+        return
+    if missing:
+        die("torch에 필요한 Microsoft Visual C++ 재배포 패키지(x64)가 이 PC에 없다(#108).\n"
+            f"     찾지 못한 DLL: {', '.join(missing)}\n"
+            "     이대로 실행하면 torch가 c10.dll을 불러오지 못하고 OSError [WinError 126]으로 멈춘다.\n"
+            "     1) PowerShell에서 설치한다:\n"
+            f"          {VC_INSTALL_CMD}\n"
+            "        winget이 없다는 오류가 나면 아래 파일을 받아 실행한다:\n"
+            f"          {VC_INSTALL_URL}\n"
+            "     2) 관리자 권한 확인 창(UAC)이 뜨면 \"예\"를 누른다.\n"
+            "     3) 설치가 끝나면 방금 실행한 python tasks.py 명령을 다시 실행한다.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 입력 해시 캐시
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -249,6 +366,8 @@ def cache_key(task, dep_keys):
         h.update(digest.encode())
     if task.uses_env:
         h.update(env_fingerprint().encode())
+    if task.tool:
+        h.update(task.tool().encode())
     return h.hexdigest()
 
 
@@ -298,9 +417,16 @@ def cache_write(name, key):
 # 작업 정의
 # ─────────────────────────────────────────────────────────────────────────────
 
+# 작업 함수가 이 값을 돌려주면 "실행할 수 없어서 건너뛰었다"는 뜻이다. execute()는 이 결과를
+# 캐시하지 않는다. 캐시하면 도구를 설치한 뒤에도 검사가 캐시 히트로 계속 빠진다.
+SKIPPED = object()
+# 이번 실행에서 건너뛴 작업 이름. main()이 마지막에 알린다.
+SKIPPED_TASKS = []
+
+
 class Task:
     def __init__(self, name, doc, run=None, deps=(), inputs=(), outputs=(),
-                 cacheable=True, uses_env=False):
+                 cacheable=True, uses_env=False, tool=None, needs_torch=False):
         self.name = name
         self.doc = doc
         self.run = run or (lambda: None)
@@ -309,12 +435,17 @@ class Task:
         self.outputs = tuple(outputs)     # 이 파일들이 없으면 캐시가 맞아도 다시 만든다
         self.cacheable = cacheable
         self.uses_env = uses_env          # .venv 상태를 캐시 키에 포함할지
+        self.tool = tool                  # 외부 도구의 경로·버전 문자열을 돌려주는 함수. 캐시 키에 넣는다
+        self.needs_torch = needs_torch    # torch를 불러오는지. Windows에서 VC++ 런타임을 먼저 확인한다(#108)
 
 
 def task_setup():
     # ensure_env와 같은 판정(--locked)을 쓴다. setup만 --frozen이면 낡은 lock으로
     # 환경이 만들어지고, 정작 check와 CI는 그 lock을 거부하는 엇갈림이 생긴다.
     sync_to_lock(verbose=True)
+    # 새 Windows PC는 여기까지 성공하고 check의 smoke에서야 torch 오류로 멈췄다(#108).
+    # 설치를 마쳤다고 알리기 전에 VC++ 런타임부터 확인한다.
+    ensure_vc_runtime()
     activate = r".venv\Scripts\activate" if os.name == "nt" else "source .venv/bin/activate"
     print(
         "\n설치 완료. 확인하려면:  python tasks.py check"
@@ -420,6 +551,15 @@ def task_shiptest():
     run([sys.executable, "-m", "unittest", "test_ship"], cwd=ROOT)
 
 
+def task_vcruntime():
+    """Windows VC++ 런타임 확인(#108)의 단위 검사(test_vcruntime.py).
+
+    실제 확인은 Windows에서만 돌아서 CI(Linux)에서는 늘 건너뛴다. 그래서 검사 코드와 판정을
+    가짜 DLL 로더와 가짜 응답으로 여기서 돌린다. 표준 라이브러리만 쓰므로 .venv가 필요 없다.
+    """
+    run([sys.executable, "-m", "unittest", "test_vcruntime"], cwd=ROOT)
+
+
 # kicad/_tools 스크립트에 작성자 PC의 사용자 홈 폴더 경로가 다시 들어오면 다른 PC에서
 # FileNotFoundError로 죽는다(#67). userpath 작업이 이것을 막는다(#96).
 USER_PATH_SCAN = ["kicad/_tools/*.py"]
@@ -493,6 +633,232 @@ def task_userpath():
     print(f"사용자 홈 폴더 경로 없음 - {len(files)}개 파일 검사")
 
 
+# CAD 검증 echo(#61). hopper_params.scad 맨 아래 echo()가 조립 정합성을 계산하고, 문제가 있으면
+# 문구에 "!!"를 넣는다. 예전에는 사람이 OpenSCAD 콘솔을 열어야만 이 경고를 봤다.
+CAD_SCAD = ROOT / "cad" / "hopper_params.scad"
+# 두 모드를 다 돌린다. echo는 모드와 관계없이 나오지만, 없는 모듈·변수 경고는 그 모드의 조립
+# 분기를 실행해야 나온다.
+CAD_MODES = ("preview", "print")
+OPENSCAD_HOW = (
+    "https://openscad.org/downloads.html\n"
+    "           Windows: 설치 파일로 설치한다. 기본 폴더(C:\\Program Files\\OpenSCAD)에 두면 자동으로 찾는다.\n"
+    "           Ubuntu:  sudo apt-get install openscad\n"
+    "           다른 폴더에 두었으면 환경변수 OPENSCAD에 openscad 실행 파일 경로를 넣는다."
+)
+
+
+def find_openscad():
+    """실제로 실행되는 OpenSCAD 경로를 돌려준다. 없으면 None.
+
+    찾는 순서: 환경변수 OPENSCAD, PATH의 openscad, Windows 기본 설치 폴더.
+    Windows에서 설치 폴더에 실행 파일만 남고 설치가 깨진 일이 있었다(cad/README.md, 2026-09-18).
+    그래서 파일이 있는지만 보지 않고 `--version`이 성공하는지 본다.
+    """
+    cands = [os.environ.get("OPENSCAD"), shutil.which("openscad")]
+    if os.name == "nt":
+        for base in (os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)")):
+            if base:
+                cands.append(str(Path(base) / "OpenSCAD" / "openscad.exe"))
+    for cand in cands:
+        if cand and Path(cand).is_file() and openscad_version(cand) is not None:
+            return cand
+    return None
+
+
+def openscad_version(exe):
+    """`exe --version`의 출력을 돌려준다. 실패하면 None.
+
+    OpenSCAD 2021.01은 Linux와 Windows 모두 버전을 stderr에 쓴다. 그래서 stdout과 stderr를 합친다.
+    """
+    try:
+        r = subprocess.run([exe, "--version"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return (r.stdout + r.stderr).strip() if r.returncode == 0 else None
+
+
+def openscad_fingerprint():
+    """cad 작업의 캐시 키에 넣는 OpenSCAD 경로와 버전.
+
+    이 값이 키에 없으면 한 번 통과한 뒤 OpenSCAD를 지우거나 바꿔도 cad가 캐시 히트로 통과한다.
+    없으면 "no-openscad"다. 그러면 키가 달라져서 cad가 다시 돌고 [건너뜀]을 출력한다.
+    """
+    exe = find_openscad()
+    return f"{exe}\n{openscad_version(exe)}" if exe else "no-openscad"
+
+
+def scan_cad_output(text):
+    """OpenSCAD 출력에서 (ECHO 줄, "!!" 경고가 있는 ECHO 줄, WARNING·ERROR 줄)을 돌려준다.
+
+    OpenSCAD는 없는 변수·모듈을 WARNING으로만 알리고 exit 0으로 끝난다. 그런 echo는 값이
+    undef라서 "!!" 판정이 틀릴 수 있다. 그래서 WARNING도 실패로 본다.
+    """
+    lines = [line.strip() for line in text.splitlines()]
+    echoes = [line for line in lines if line.startswith("ECHO:")]
+    alarms = [line for line in echoes if "!!" in line]
+    problems = [line for line in lines if line.startswith(("WARNING:", "ERROR:"))]
+    return echoes, alarms, problems
+
+
+def check_cad_file(exe, scad, workdir):
+    """scad를 CAD_MODES마다 OpenSCAD로 실행하고 실패 이유 목록을 돌려준다. 빈 목록이면 통과다.
+
+    `-o <파일>.echo`는 echo() 출력과 경고를 텍스트 파일로 쓴다(OpenSCAD 매뉴얼, 명령행 사용).
+    판정은 이 파일과 stderr를 같이 읽는다. Windows의 openscad.exe는 stderr를 비워 둘 수 있다.
+    형상(CGAL) 계산은 하지 않는다. 그래서 파일 하나에 1초 안쪽으로 끝난다.
+    """
+    failures = []
+    for mode in CAD_MODES:
+        out = Path(workdir) / f"{mode}.echo"
+        out.unlink(missing_ok=True)
+        cmd = [exe, "-D", f'render_mode="{mode}"', "-o", str(out), str(scad)]
+        print(f"\n$ {' '.join(cmd)}", flush=True)
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=600)
+        except subprocess.TimeoutExpired:
+            failures.append(f"{mode}: OpenSCAD가 600초 안에 끝나지 않았다.")
+            continue
+        text = out.read_text(encoding="utf-8", errors="replace") if out.exists() else ""
+        echoes, alarms, problems = scan_cad_output(text)
+        # stderr에도 같은 줄이 나올 수 있다. 같은 줄을 두 번 세지 않는다.
+        problems += [p for p in scan_cad_output(r.stderr)[2] if p not in problems]
+        print(f"{mode}: echo {len(echoes)}줄, '!!' 경고 {len(alarms)}건, "
+              f"WARNING·ERROR {len(problems)}건 (exit {r.returncode})", flush=True)
+        for line in alarms + problems:
+            # die()는 stderr로 쓴다. flush하지 않으면 CI 로그에서 이 줄이 [중단] 뒤에 찍힌다.
+            print(f"  {line}", flush=True)
+        if r.returncode != 0:
+            tail = r.stderr.strip()[-1000:]
+            failures.append(f"{mode}: OpenSCAD가 exit {r.returncode}로 끝났다." + (f"\n{tail}" if tail else ""))
+        elif not out.exists():
+            failures.append(f"{mode}: OpenSCAD가 exit 0이지만 {out.name}을 만들지 않았다.")
+        elif not echoes:
+            # 검사기가 아무것도 읽지 못하면 늘 통과한다. echo가 0줄이면 실패로 본다.
+            failures.append(f"{mode}: echo가 0줄이다. 검증 echo()를 지웠거나 출력을 읽지 못했다.")
+        if alarms:
+            failures.append(f"{mode}: '!!' 경고 {len(alarms)}건")
+        if problems:
+            failures.append(f"{mode}: WARNING·ERROR {len(problems)}건")
+    return failures
+
+
+def task_cad():
+    """hopper_params.scad의 검증 echo에 "!!" 경고나 OpenSCAD 경고가 없는지 본다(#61).
+
+    OpenSCAD가 없는 PC에서는 이유와 설치 방법을 출력하고 건너뛴다. 건너뛴 결과는 캐시하지
+    않는다. CI(환경변수 CI가 있음)에서는 건너뛰지 않고 실패한다. CI가 OpenSCAD 설치 단계를
+    잃으면 이 검사가 조용히 빠지기 때문이다. ci.yml의 sim job이 OpenSCAD를 설치한다.
+
+    검사기 자체의 단위 검사(test_cadcheck.py)를 먼저 돌린다.
+    """
+    run([sys.executable, "-m", "unittest", "-q", "test_cadcheck"], cwd=ROOT)
+    exe = find_openscad()
+    if not exe:
+        if os.environ.get("CI"):
+            die("CI에서 OpenSCAD를 찾지 못했다. ci.yml sim job의 OpenSCAD 설치 단계를 확인할 것.\n"
+                f"     설치: {OPENSCAD_HOW}")
+        print("[건너뜀] cad - OpenSCAD를 찾지 못했다. CI는 이 검사를 돌린다.\n"
+              f"     설치: {OPENSCAD_HOW}")
+        return SKIPPED
+    if not CAD_SCAD.is_file():
+        die(f"{CAD_SCAD.relative_to(ROOT)}이 없다. 파일을 옮겼다면 tasks.py의 CAD_SCAD를 고칠 것.")
+    with tempfile.TemporaryDirectory() as tmp:
+        failures = check_cad_file(exe, CAD_SCAD, tmp)
+    if failures:
+        die("CAD 검증 실패:\n     " + "\n     ".join(failures) +
+            f"\n     {CAD_SCAD.relative_to(ROOT)}를 고친 뒤 다시 실행할 것.")
+    print("CAD 검증 echo 통과 - '!!' 경고와 OpenSCAD 경고 없음")
+
+
+# 한국어 Windows에서 출력을 파일이나 파이프로 돌리면 파이썬은 cp949로 쓴다. 출력 문자열에
+# em dash(U+2014)처럼 cp949에 없는 글자가 있으면 UnicodeEncodeError로 멈춘다(#137, #147, #170, #169).
+# CI는 Linux(UTF-8)에서 돌아서 이 결함을 보지 못한다. cp949 작업이 이것을 막는다(#171).
+# 범위는 부원 PC에서 돌 수 있는 저장소의 파이썬 파일이다. .agents/skills는 정본(.claude/skills)의
+# 복사본이라 뺀다. skills 작업이 두 폴더가 같은지 본다.
+CP949_SCAN = ["*.py", "sim/**/*.py", ".claude/skills/**/*.py", "kicad/_tools/*.py", "cad/**/*.py",
+              "web/tools/*.py", "docs/learning/**/*.py", "docs/design/tools/*.py"]
+# 인자를 그대로 출력하는 호출. die는 tasks.py와 ship.py의 die()다. raise 뒤의 식도 본다.
+CP949_CALLS = {"print", "die", "sys.exit", "sys.stdout.write", "sys.stderr.write"}
+STE_KO_LINT = Path(".claude/skills/ste-ko/scripts/ste-ko-lint.py")
+
+
+def _call_name(func):
+    """호출 대상을 `sys.stdout.write` 같은 점 이름으로 바꾼다. 이름으로 쓸 수 없으면 None."""
+    parts = []
+    while isinstance(func, ast.Attribute):
+        parts.append(func.attr)
+        func = func.value
+    if not isinstance(func, ast.Name):
+        return None
+    parts.append(func.id)
+    return ".".join(reversed(parts))
+
+
+def find_non_cp949(source, filename="<source>"):
+    """출력하는 문자열 리터럴에서 cp949에 없는 글자를 찾는다. (줄, 칸, 글자, 자리) 목록을 돌려준다.
+
+    자리는 `print`, `raise` 같은 출력 자리의 이름이다. 줄과 칸은 1부터 세고, 글자가 든 리터럴이
+    시작하는 곳을 가리킨다. f-string의 고정된 부분도 본다. `file=` 인자는 출력할 글이 아니라서 뺀다.
+    변수에 담았다가 출력하는 글은 보지 않는다. 문법이 틀린 소스는 SyntaxError를 낸다.
+    """
+    # ast의 col_offset은 줄 앞부터 센 UTF-8 바이트 수다. 칸은 글자 수로 바꿔서 쓴다.
+    # 줄은 ast와 같이 \r\n, \r, \n에서 나눈다.
+    lines = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    hits = set()
+    for node in ast.walk(ast.parse(source, filename)):
+        if isinstance(node, ast.Call) and _call_name(node.func) in CP949_CALLS:
+            where = _call_name(node.func)
+            roots = [*node.args, *(k.value for k in node.keywords if k.arg != "file")]
+        elif isinstance(node, ast.Raise) and node.exc is not None:
+            where, roots = "raise", [node.exc]
+        else:
+            continue
+        for root in roots:
+            for lit in ast.walk(root):
+                if not (isinstance(lit, ast.Constant) and isinstance(lit.value, str)):
+                    continue
+                for ch in set(lit.value):
+                    try:
+                        ch.encode("cp949")
+                    except UnicodeEncodeError:
+                        line = lines[lit.lineno - 1].encode("utf-8")
+                        col = len(line[:lit.col_offset].decode("utf-8")) + 1
+                        hits.add((lit.lineno, col, ch, where))
+    return sorted(hits)
+
+
+def task_cp949():
+    """출력 문자열에 cp949에 없는 글자가 없는지 본다(#171).
+
+    userpath 작업과 같은 이유로 검사기의 단위 검사(test_cp949.py)를 먼저 돌린다.
+    찾은 글자는 그대로 출력하지 않고 U+2014 같은 코드로 쓴다. 이 출력도 cp949로 쓸 수 있어야 한다.
+    """
+    run([sys.executable, "-m", "unittest", "-q", "test_cp949"], cwd=ROOT)
+    files = [rel for rel, _ in collect_inputs(CP949_SCAN)]
+    hits = []
+    for rel in files:
+        text = (ROOT / rel).read_text(encoding="utf-8-sig")
+        try:
+            found = find_non_cp949(text, rel)
+        except SyntaxError as e:
+            die(f"{rel}:{e.lineno}: 파이썬 {sys.version.split()[0]}이 이 파일을 읽지 못했다: {e.msg}")
+        hits.extend((rel, *hit) for hit in found)
+    for rel, lineno, col, ch, where in hits:
+        name = unicodedata.name(ch, "")
+        print(f"{rel}:{lineno}:{col}: {where} 문자열에 cp949에 없는 글자 U+{ord(ch):04X} {name}",
+              flush=True)
+    if hits:
+        die(f"출력 문자열에서 cp949에 없는 글자 {len(hits)}건을 찾았다(#171).\n"
+            "     한국어 Windows에서 출력을 파일이나 파이프로 돌리면 UnicodeEncodeError로 멈춘다.\n"
+            "     em dash는 콜론이나 마침표로 바꾼다(AGENTS.md §교훈 2026-10-18).")
+    print(f"cp949에 없는 출력 글자 없음 - {len(files)}개 파일 검사")
+    # ste-ko-lint.py는 지적 메시지를 목록에 모았다가 출력해서 위 검사가 보지 못한다(#169).
+    # 그 파일의 --self-test가 메시지를 cp949로 인코딩해 본다.
+    run([sys.executable, STE_KO_LINT, "--self-test"], cwd=ROOT)
+
+
 def task_kicadver():
     """생성 회로도의 KiCad 형식 번호가 생성기와 같고, KiCad가 저장한 형식인지 본다(#139, #140).
 
@@ -533,7 +899,8 @@ SIM_IN = ["sim/sim_stage1/*.py", "sim/sim_stage1/*.yaml", *DEPS_IN]
 CONN_IN = ["sim/connectome/*.py", *SIM_IN]
 
 TASKS = {t.name: t for t in [
-    Task("setup", "uv.lock 그대로 .venv 구성", task_setup, inputs=DEPS_IN, cacheable=False),
+    Task("setup", "uv.lock 그대로 .venv 구성 (Windows는 VC++ 재배포 패키지도 확인, #108)", task_setup,
+         inputs=DEPS_IN, cacheable=False),
     Task("lock", "의존성 재해석 - uv.lock + sim/requirements.txt 갱신", task_lock, cacheable=False),
     Task("compile", "파이썬 문법 체크", task_compile,
          inputs=["sim/**/*.py", "test_*.py", "ship.py", *DEPS_IN], uses_env=True),
@@ -544,29 +911,37 @@ TASKS = {t.name: t for t in [
          task_yaw,
          inputs=SIM_IN, uses_env=True),
     Task("smoke", "SB3-환경 연결 확인 (256스텝, 학습 아님)", task_smoke, inputs=SIM_IN,
-         uses_env=True),
+         uses_env=True, needs_torch=True),
     Task("connectome", "커넥톰 그래프 생성 (합성 + 셔플 대조군)", task_connectome,
          inputs=CONN_IN,
          outputs=["sim/connectome/graphs/synthetic.npz",
                   "sim/connectome/graphs/synthetic_shuffled.npz"],
          uses_env=True),
     Task("conncheck", "커넥톰 정책망 점검 (그래프/셔플/수치/SB3연결)", task_conncheck,
-         inputs=CONN_IN, uses_env=True),
+         inputs=CONN_IN, uses_env=True, needs_torch=True),
     Task("skills", "Codex용 스킬 복사본이 정본과 같은지 확인 (#39)", task_skills,
          inputs=[".claude/skills/**/*", ".agents/skills/**/*", "ship.py"]),
     Task("shiptest", "ship.py 단위 검사 - gh 없이 가짜 응답으로 (#109)", task_shiptest,
          inputs=["ship.py", "test_ship.py"]),
     Task("userpath", "kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 확인 (#96)", task_userpath,
          inputs=[*USER_PATH_SCAN, "test_userpath.py"]),
+    Task("cad", "CAD 검증 echo에 '!!' 경고·OpenSCAD 경고가 없는지 확인, OpenSCAD 없으면 건너뜀 (#61)",
+         task_cad, inputs=["cad/hopper_params.scad", "test_cadcheck.py"], tool=openscad_fingerprint),
+    Task("cp949", "print·raise 등 출력 문자열에 cp949에 없는 글자가 없는지 확인 (#171)."
+         f" 범위: {', '.join(CP949_SCAN)}", task_cp949,
+         inputs=[*CP949_SCAN, "test_cp949.py",
+                 ".claude/skills/ste-ko/references/upstream/dictionary.md"]),
+    Task("vcruntime", "Windows VC++ 런타임 확인의 단위 검사 - 가짜 응답으로 (#108)", task_vcruntime,
+         inputs=["test_vcruntime.py"]),
     Task("kicadver", "생성 회로도의 KiCad 형식 번호와 저장 형식 확인 (#139, #140)", task_kicadver,
          inputs=["kicad/_tools/*.py", "kicad/cosmos-avionics/*.kicad_sch",
                  "test_kicad_version.py"]),
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
          " 단계 목록은 graph)", task_check,
-         deps=["skills", "shiptest", "userpath", "kicadver", "compile", "sanity", "gate", "yaw",
-               "smoke", "conncheck"]),
+         deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "cad", "vcruntime",
+               "compile", "sanity", "gate", "yaw", "smoke", "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
-         uses_env=True),
+         uses_env=True, needs_torch=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
          inputs=["docs/presentation/build_deck.js", "docs/presentation/speaker-notes.md"],
          outputs=["docs/presentation/cosmos-info-session.pptx"]),
@@ -599,10 +974,17 @@ def ensure_env(name):
 
     먼저 환경을 만들어 두면 이 실행 내내 env_fingerprint()가 고정되고, 캐시는
     "이 환경 + 이 입력으로 이미 통과했는가"라는 한 가지 질문에만 답하게 된다.
+
+    torch를 쓰는 작업이 있으면 환경을 맞춘 직후 VC++ 런타임도 확인한다(#108). torch 작업
+    바로 앞이 아니라 여기서 하는 이유: check에서 smoke는 gate·yaw 뒤에 돈다. 그 앞에서 멈춰야
+    부원이 기다리지 않고 바로 설치 명령을 본다.
     """
-    if not any(TASKS[n].uses_env for n in needed_tasks(name)):
+    needed = needed_tasks(name)
+    if not any(TASKS[n].uses_env for n in needed):
         return
     sync_to_lock(verbose=not (VENV / "pyvenv.cfg").exists())
+    if any(TASKS[n].needs_torch for n in needed):
+        ensure_vc_runtime()
 
 
 def execute(name, opts, memo, done):
@@ -619,7 +1001,10 @@ def execute(name, opts, memo, done):
         return
 
     print(f"[실행] {name} - {task.doc}")
-    task.run()
+    if task.run() is SKIPPED:
+        SKIPPED_TASKS.append(name)
+        done.add(name)
+        return
     if task.cacheable:
         # 실행 전 키가 아니라 '실행 후' 키를 저장한다. uses_env 작업은 실행 과정에서
         # .venv가 만들어지거나 갱신될 수 있어서, 실행 전 키를 저장하면 다음 번에 절대
@@ -674,6 +1059,9 @@ def main():
 
     ensure_env(opts.task)
     execute(opts.task, opts, {}, set())
+    # check가 캐시 히트면 task_check는 돌지 않는다. 그래서 건너뛴 작업은 여기서 알린다.
+    if SKIPPED_TASKS:
+        print(f"\n건너뛴 작업: {', '.join(SKIPPED_TASKS)}. 이유는 위 [건너뜀] 줄을 본다. CI는 이 작업도 돌린다.")
     return 0
 
 

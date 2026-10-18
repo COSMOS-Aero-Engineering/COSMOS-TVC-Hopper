@@ -249,7 +249,7 @@ def check_text(text, surface, vocab):
             n = len(sent.split())
             if n > limit["eojeol"]:
                 hits.append((lineno, "4.1", "warn",
-                             f"{n}어절 (신호 {limit['eojeol']}). 뜻이 둘이면 나눈다 — {sent[:30]}…"))
+                             f"{n}어절 (신호 {limit['eojeol']}). 뜻이 둘이면 나눈다: {sent[:30]}…"))
             words = sent.split()
             if words and not is_heading and not is_list:
                 tails.append(words[-1].rstrip(".!?"))
@@ -267,7 +267,7 @@ def check_text(text, surface, vocab):
         for m in DOUBLE_PASSIVE.finditer(clean):
             add(m, "3.2", "hard", f"이중피동 `{m.group()}`")
         for m in TILDE_RANGE.finditer(clean):
-            add(m, "8.1", "hard", f"범위에 물결표 `{m.group()}` — 마크다운이 취소선으로 읽는다. `-` 를 쓴다")
+            add(m, "8.1", "hard", f"범위에 물결표 `{m.group()}`. 마크다운이 취소선으로 읽는다. `-` 를 쓴다")
         for m in NOMINALIZED.finditer(clean):
             add(m, "2.5", "warn", f"동작을 명사로 씀 `{m.group()}` → 동사로 (`검토를 진행했다` → `검토했다`)")
         for pat, bad, good, section, level in vocab:
@@ -293,7 +293,7 @@ def check_text(text, surface, vocab):
         n = len(sentences(strip_noise(joined)))
         if n > limit["para"]:
             first = block.strip().split("\n")[0][:28]
-            hits.append((0, "4.7", "info", f"문단에 {n}문장 (신호 {limit['para']}) — {first}…"))
+            hits.append((0, "4.7", "info", f"문단에 {n}문장 (신호 {limit['para']}): {first}…"))
 
     return sorted(hits, key=lambda h: (h[0], h[1]))
 
@@ -352,7 +352,48 @@ def self_test():
     assert ("10.4", "warn") in rules("좋은 질문입니다. 답은 이렇다.", "대화")
     long = "이 문장은 " + "아주 " * 30 + "길다."
     assert ("4.1", "warn") in rules(long)
+
+    # 지적 메시지가 만드는 글자는 cp949에 있어야 한다. 한국어 Windows에서 출력을 파일이나
+    # 파이프로 돌리면 cp949로 쓰기 때문이다. 입력 글은 cp949에 있는 글자만 쓴다.
+    para = " ".join(["짧은 문장이다."] * 7)
+    for text, rule in ((long, "4.1"), ("항목은 3~5개다.", "8.1"), (para, "4.7")):
+        msgs = [m for _, r, _, m in check_text(text, "문서", vocab) if r == rule]
+        assert msgs, f"{rule} 를 못 잡았다: {text!r}"
+        for m in msgs:
+            try:
+                m.encode("cp949")
+            except UnicodeEncodeError as e:
+                raise AssertionError(f"{rule} 메시지에 cp949에 없는 글자: {m!r}") from e
     print("self-test OK")
+
+
+def keep_output_alive():
+    """출력 인코딩에 없는 글자를 만나도 멈추지 않게 한다.
+
+    한국어 Windows에서 출력을 파일이나 파이프로 돌리면 파이썬은 cp949로 쓴다. cp949에는
+    em dash(—) 같은 글자가 없다. 지적 메시지는 검사한 글의 일부를 그대로 담으므로, 메시지
+    문자열만 고쳐서는 막지 못한다. 인코딩은 그대로 두고 못 쓰는 글자만 `\\u2014` 처럼 쓴다.
+    stderr의 기본 오류 처리와 같은 방식이다.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError, OSError):
+            pass  # reconfigure가 없는 스트림으로 바뀐 경우. 이때는 손대지 않는다.
+
+
+def to_json(rows):
+    """JSON 글을 만든다. 출력 인코딩에 없는 글자가 있으면 `\\uXXXX` 이스케이프로 쓴다.
+
+    backslashreplace는 BMP 밖 글자를 `\\U0001f600` 처럼 써서 JSON 문법에 맞지 않는다.
+    그래서 JSON은 여기서 미리 이스케이프한다.
+    """
+    text = json.dumps(rows, ensure_ascii=False, indent=2)
+    try:
+        text.encode(sys.stdout.encoding or "utf-8")
+    except (UnicodeEncodeError, LookupError):
+        text = json.dumps(rows, ensure_ascii=True, indent=2)
+    return text
 
 
 def main():
@@ -366,6 +407,7 @@ def main():
     ap.add_argument("--no-vocab", action="store_true", help="1.3 어휘 검사를 끈다")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args()
+    keep_output_alive()
 
     if a.self_test:
         self_test()
@@ -394,7 +436,7 @@ def main():
 
     shown = [r for r in rows if a.all or r["level"] != "info"]
     if a.json:
-        print(json.dumps(shown, ensure_ascii=False, indent=2))
+        print(to_json(shown))
     else:
         for r in shown:
             loc = f"{r['file']}:{r['line']}" if r["line"] else r["file"]
