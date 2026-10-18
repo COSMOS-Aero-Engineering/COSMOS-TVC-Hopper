@@ -84,7 +84,8 @@ CACHE_VERSION = "1"
 # 캐시 확인이 검사보다 느려진다.
 SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".cosmos-cache", ".omc"}
 
-# CI(.github/workflows/ci.yml)의 PPO 스모크와 같은 내용. 한쪽만 고치지 말 것.
+# PPO 스모크 코드. 정본은 이 상수 하나다. ci.yml에는 복사본이 없다.
+# CI sim job의 check 단계(`python3 tasks.py check`)가 smoke 작업(task_smoke)으로 이 코드를 돌린다.
 SMOKE = (
     "from hopper_aviary import HopperAttitudeEnv\n"
     "from stable_baselines3 import PPO\n"
