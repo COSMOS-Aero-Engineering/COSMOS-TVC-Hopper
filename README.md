@@ -146,8 +146,9 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
    김준원(`junwonkim07`) 두 명뿐이다. CODEOWNERS는 자동 리뷰 알림이 너무 많이 생겨 삭제됐다(PR #12).
    작성자가 두 사람 외의 부원이면 둘 중 한 명을 직접 리뷰어로 지정한다.
 4. **로컬 검사와 CI가 모두 통과해야 승인 대상이다.** PR 전에 `python tasks.py check`를 실행하고,
-   GitHub의 sim 검사와 PlatformIO 펌웨어 빌드 3개(`imu_test`, `imu_test_i2c`, `throttle_serial`)가
-   모두 초록불인지 확인한다. 펌웨어 빌드 목록의 정본은 `.github/workflows/ci.yml`의 `matrix.project`다.
+   GitHub의 sim 검사와 `firmware — 전체` 검사가 초록불인지 확인한다. `firmware — 전체`는 PlatformIO
+   펌웨어 빌드 3개(`imu_test`, `imu_test_i2c`, `throttle_serial`)가 모두 성공해야 초록불이 된다.
+   펌웨어 빌드 목록의 정본은 `.github/workflows/ci.yml`의 `matrix.project`다.
 5. **리뷰와 머지 권한은 김민찬·김준원 두 사람에게만 있다.** 두 사람은 CI가 초록불인 것을 확인하고
    변경사항을 직접 검토한 뒤 본인이 올린 PR도 스스로 머지할 수 있다. 그 외 부원은 두 사람 중 한 명의
    승인(Approve)을 받아야 하며 직접 머지하지 않는다. 승인 뒤 새 커밋을 push했다면 다시 확인받는다.
@@ -182,7 +183,7 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
 python ship.py wt 21                     # 이슈 #21용 폴더와 브랜치(sim/21)를 최신 main에서 만든다
 cd ../COSMOS-TVC-Hopper-wt/issue-21      # 위 명령이 출력한 폴더로 이동
 # ... 작업 ...
-python tasks.py check                    # CI가 볼 걸 미리 확인
+python tasks.py check                    # CI sim job의 check 단계와 같은 검사 (CI 전체는 아님)
 git add -A
 git commit -m "[sim] params.yaml 추력 상수 실측값 반영"
 git push -u origin HEAD
@@ -190,6 +191,10 @@ gh pr create --base main --reviewer junwonkim07
 # gh가 없으면: push 후 터미널에 뜨는 링크를 열어 웹에서 PR 생성 → 우측 Reviewers에 junwonkim07
 # 일반 부원은 CI 통과 + 김민찬 또는 김준원의 Approve를 기다린다.
 ```
+
+`check`는 CI 전체가 아니다. CI는 `check` 말고도 학습 자료 목록·내부 링크 검사와 펌웨어 PlatformIO 빌드를 따로 돌린다.
+이 둘은 `check`에 없다. 명령은 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)의 각 단계에 있다.
+`check`가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다.
 
 브랜치 이름은 `ship.py wt`가 만드는 `<커밋 태그>/<이슈 번호>` 형태다. 예: `fw/24`, `docs/30`.
 태그는 이슈 제목의 `[태그]`에서 정한다. 머지와 원격 브랜치 삭제는 김민찬 또는 김준원이 처리한다.
@@ -214,6 +219,7 @@ gh pr create --base main --reviewer junwonkim07
 | `pip install` 중 `OSError: [Errno 2] No such file or directory: ...torch\include\...` | Windows 경로 길이 260자 제한 (torch는 경로가 아주 깊다) | 저장소를 더 짧은 경로로 옮기거나(예: `C:\dev\COSMOS-TVC-Hopper`), [긴 경로 지원 활성화](https://pip.pypa.io/warnings/enable-long-paths) |
 | 설치 후 OneDrive가 몇 GB를 동기화하기 시작함 | `.venv`(torch 포함 ~1GB)가 OneDrive 폴더 안에 생겨서 | OneDrive 설정 → 백업/폴더 선택에서 `.venv` 제외. 지워도 `python tasks.py setup`으로 언제든 다시 만든다 |
 | uv 설치 명령이 `Error: PowerShell requires an execution policy in [Unrestricted, RemoteSigned, Bypass] to run uv`를 출력하고 멈춤 | `-ExecutionPolicy ByPass` 없이 `irm https://astral.sh/uv/install.ps1 \| iex`만 실행함. Windows 기본 실행 정책(`Restricted`)에서는 uv 설치 스크립트가 스스로 멈춘다 | 위 [소프트웨어팀](#소프트웨어팀)의 Windows 명령을 그대로 다시 실행한다. 오류 메시지가 권하는 `Set-ExecutionPolicy`는 하지 않아도 된다 |
+| `-ExecutionPolicy ByPass`를 넣은 위 Windows 설치 명령도 같은 `Error: PowerShell requires an execution policy ...`를 출력하고 멈춤. `Get-ExecutionPolicy -List`에서 `MachinePolicy`나 `UserPolicy`가 `Undefined`가 아님 | 학교나 회사가 그룹 정책으로 실행 정책을 정한 PC다. `-ExecutionPolicy ByPass`는 그룹 정책보다 우선하지 않는다([Microsoft 문서](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-5.1#set-a-different-policy-for-one-session)). uv 설치 스크립트는 실행 정책이 `Unrestricted`, `RemoteSigned`, `Bypass`가 아니면 멈춘다. 그래서 그룹 정책이 `AllSigned`나 `Restricted`면 이 오류가 날 것으로 보인다. 실행해서 확인하지 않았다 | uv 공식 문서가 적은 Windows 대안인 WinGet으로 설치한다: `winget install --id=astral-sh.uv -e`([uv 설치 문서](https://docs.astral.sh/uv/getting-started/installation/#winget)). 설치가 끝나면 터미널을 새로 연다. WinGet은 PowerShell 스크립트를 실행하지 않고 uv 실행 파일이 든 zip을 받아서 푼다([winget-pkgs 매니페스트](https://github.com/microsoft/winget-pkgs/tree/master/manifests/a/astral-sh/uv)의 `InstallerType: zip`). 그래서 실행 정책에 막히지 않을 것으로 보인다. **그룹 정책이 걸린 PC에서 이 방법이 되는지는 아직 확인하지 못했다(#168).** 매니페스트는 VC++ 재배포 패키지를 의존 패키지로 적었다. PC에 이 패키지가 없으면 WinGet이 함께 설치하고, 이때 관리자 권한을 물을 수 있다. torch도 이 패키지가 있어야 불러올 수 있다(#108). 그룹 정책은 WinGet도 끌 수 있다([`Enable App Installer` 정책](https://learn.microsoft.com/windows/client-management/mdm/policy-csp-desktopappinstaller#enableappinstaller)). 이때 `winget`은 그룹 정책이 작업을 막았다고 알린다. 관리자 권한을 줄 수 없거나, `winget`이 막혔거나, 그 PC에서 프로그램 설치가 허용되지 않으면 정책을 우회하지 않는다. 동아리 노트북 같은 다른 PC를 쓰고 부장·차장에게 알린다 |
 | `python tasks.py`가 `Microsoft Visual C++ 재배포 패키지(x64)가 이 PC에 없다`를 출력하고 멈춤. 또는 torch를 불러올 때 `OSError: [WinError 126]`, `c10.dll`, `Microsoft Visual C++ Redistributable is not installed`가 나옴 | Windows에 VC++ 재배포 패키지(x64)가 없다. torch가 쓰는 `msvcp140.dll` 등은 torch 설치 파일에 들어 있지 않다(#108) | 위 [소프트웨어팀](#소프트웨어팀)의 `winget install --id Microsoft.VCRedist.2015+.x64 --exact --source winget`을 실행한다. winget이 없으면 [vc_redist.x64.exe](https://aka.ms/vc14/vc_redist.x64.exe)를 받아 실행한다. 설치가 끝나면 멈춘 명령을 다시 실행한다 |
 | `uv: command not found` / `uv 이(가) 없다` | uv 미설치 또는 설치 후 터미널 미재시작 | 위 [소프트웨어팀](#소프트웨어팀) 설치 명령 실행 후 터미널을 새로 연다 |
 | `환경을 uv.lock 에 맞추지 못했다` 또는 CI의 `uv sync --locked` 실패 | `pyproject.toml`만 고치고 `uv.lock`을 갱신하지 않음 | `python tasks.py lock` 후 `uv.lock`·`sim/requirements.txt`를 함께 커밋 |
