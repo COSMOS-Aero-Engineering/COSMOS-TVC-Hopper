@@ -71,6 +71,18 @@ MUST_HIT = {
     "영문자가 이어짐": ("`AGENTS.md` §교훈s", "§교훈s"),
     "하위 제목": ("`AGENTS.md` §하위 제목은 절이 아니다", "§하위 제목은 절이 아니다"),
     "코드 블록 안 제목": ("`AGENTS.md` §코드 블록 안의 줄도 절이 아니다", "§코드 블록 안의 줄도 절이"),
+    "띄어 쓴 한글 낱말이 이어짐": ("`AGENTS.md` §교훈 목록을 본다.", "§교훈 목록을 본다"),
+    "띄어 쓴 영문자가 이어짐": ("`AGENTS.md` §교훈 list", "§교훈 list"),
+}
+
+# 절 이름을 앞부분만 남기고 줄였을 때 옛 이름 참조가 걸리는지 본다. 예: "안전 원칙" → "안전".
+SHORTENED_NAMES = tasks.agents_sections(AGENTS_TEXT.replace("## 8. 안전 원칙 (필수)", "## 8. 안전 (필수)")
+                                        .replace("## 2. 작업 순서:", "## 2. 작업:"))
+SHORTENED_HIT = {
+    "줄 끝": ("`AGENTS.md` §안전 원칙", "§안전 원칙"),
+    "조사": ("`AGENTS.md` §안전 원칙의 시험 순서", "§안전 원칙의 시험 순서"),
+    "괄호": ("(`AGENTS.md` §안전 원칙).", "§안전 원칙"),
+    "번호": ("`AGENTS.md` §작업 순서 1단계대로", "§작업 순서 1단계대로"),
 }
 
 # AGENTS.md 안에서 파일 이름 없이 쓴 참조.
@@ -114,6 +126,13 @@ class FindAgentsRefs(unittest.TestCase):
                 hits = tasks.find_agents_refs(line, NAMES)
                 self.assertEqual(len(hits), 1, hits)
                 self.assertEqual(hits[0][2], word)
+
+    def test_hits_old_name_after_shortening_section(self):
+        self.assertIn("안전", SHORTENED_NAMES)
+        for name, (line, word) in SHORTENED_HIT.items():
+            with self.subTest(name):
+                hits = tasks.find_agents_refs(line, SHORTENED_NAMES)
+                self.assertEqual([h[2] for h in hits], [word])
 
     def test_self_refs_in_agents_md(self):
         for name, line in SELF_PASS.items():
