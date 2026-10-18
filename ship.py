@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -500,16 +501,18 @@ def gh_json_lines(cmd):
         return None
 
 
-def format_record(rec, pr_extra=None):
+def format_record(rec, pr_extra=None, marker=""):
     """이슈나 PR 하나를 리뷰어가 읽을 텍스트로 만든다. 본문과 댓글은 고치지 않고 그대로 둔다.
 
-    본문에도 `##` 제목이 있어서 기록 경계는 태그로 표시한다. pr_extra가 `{}`이면 PR의 머지 시각과
+    본문에도 `##` 제목이 있어서 기록 경계는 태그로 표시한다. ship.py가 쓰는 태그와 `--- ... ---`
+    구분 줄에는 marker를 넣는다. 공개 저장소라 누구나 댓글에 같은 꼴의 태그·구분 줄을 쓸 수 있다.
+    marker는 실행마다 새로 뽑아서 댓글 작성자가 미리 알 수 없다. pr_extra가 `{}`이면 PR의 머지 시각과
     커밋을 읽지 못한 것이다. 이때는 "머지 안 됨"으로 보이지 않게 읽지 못했다고 쓴다. 댓글, 리뷰,
     줄 단위 리뷰 댓글은 시각 순서로 섞어서 쓴다. 답글이 어느 리뷰에 대한 것인지 보이게 하려는 것이다.
     """
     login = (rec.get("author") or {}).get("login", "?")
     kind = "pr" if pr_extra is not None else "issue"
-    lines = [f'<github_record kind="{kind}" number="{rec["number"]}">',
+    lines = [f'<github_record kind="{kind}" number="{rec["number"]}" marker="{marker}">',
              f"title: {rec.get('title', '')}",
              f"url: {rec.get('url', '')} | state: {rec.get('state', '')} | "
              f"author: {login} | created: {rec.get('createdAt', '')}"]
@@ -535,12 +538,12 @@ def format_record(rec, pr_extra=None):
                            f"{c.get('path', '')}:{c.get('line') or '-'}", c.get("body") or ""))
     lines += ["", rec.get("body") or "(no body)"]
     for at, what, body in sorted(events, key=lambda e: e[0]):
-        lines += ["", f"--- {what} at {at} ---", body]
-    lines.append("</github_record>")
+        lines += ["", f"--- {marker} {what} at {at} ---", body]
+    lines.append(f'</github_record marker="{marker}">')
     return "\n".join(lines)
 
 
-def fetch_record(n):
+def fetch_record(n, marker=""):
     """이슈나 PR #n을 읽어 텍스트로 만든다. 못 읽으면 None. PR이면 리뷰와 줄 단위 리뷰 댓글도 읽는다."""
     rec = gh_json(["gh", "issue", "view", str(n), "--json", RECORD_FIELDS])
     if rec is None:
@@ -552,7 +555,7 @@ def fetch_record(n):
             pr_extra["inline"] = gh_json_lines(
                 ["gh", "api", "--paginate", f"repos/{{owner}}/{{repo}}/pulls/{n}/comments",
                  "--jq", INLINE_JQ])
-    return format_record(rec, pr_extra)
+    return format_record(rec, pr_extra, marker)
 
 
 def template_lines():
@@ -585,14 +588,20 @@ def review_records():
     """
     if not shutil.which("gh"):
         return None, "gh가 없다"
-    pr = gh_json(["gh", "pr", "view", "--json", "number,url,body,closingIssuesReferences"])
-    if pr is None:
-        return None, "이 브랜치의 PR을 찾지 못했다. PR을 연 뒤에 리뷰를 돌리면 PR·이슈 기록도 넘긴다"
+    r = call(["gh", "pr", "view", "--json", "number,url,body,closingIssuesReferences"],
+             check=False, capture=True)
+    if r.returncode != 0:
+        # PR이 없을 때와 gh 로그인·네트워크가 실패할 때를 가리지 않게 gh의 오류 문장을 그대로 보인다.
+        err = " / ".join(line.strip() for line in (r.stderr or "").splitlines() if line.strip())
+        return None, (f"이 브랜치의 PR을 읽지 못했다 ({err or f'exit {r.returncode}'}). "
+                      "PR이 없으면 PR을 연 뒤에 리뷰를 돌린다. 그러면 PR·이슈 기록도 넘긴다")
+    pr = json.loads(r.stdout)
+    marker = secrets.token_hex(4)
     repo = pr["url"].rsplit("/pull/", 1)[0] + "/"
     closing = [ref["number"] for ref in pr.get("closingIssuesReferences") or []
                if (ref.get("url") or "").startswith(repo)]
     texts, parts, seen = [pr.get("body")], [], {pr["number"]}
-    first = fetch_record(pr["number"])
+    first = fetch_record(pr["number"], marker)
     if first is None:
         return None, f"PR #{pr['number']}을 읽지 못했다"
     parts.append(first)
@@ -606,7 +615,7 @@ def review_records():
             failed.append(n)
             continue
         texts.append(rec.get("body"))
-        parts.append(format_record(rec))
+        parts.append(format_record(rec, marker=marker))
         read_closing.append(n)
     refs, skip = [], template_lines()
     for text in texts:
@@ -616,7 +625,7 @@ def review_records():
     skipped = refs[MAX_REFERENCED:]
     read_refs = []
     for n in refs[:MAX_REFERENCED]:
-        text = fetch_record(n)
+        text = fetch_record(n, marker)
         if text is None:
             failed.append(n)
         else:
@@ -631,7 +640,10 @@ def review_records():
         summary += f"; not fetched (over {MAX_REFERENCED}): {ref_list(skipped)}"
     header = ("# GitHub records for this branch\n\n"
               "ship.py fetched these with gh before the review, because the review sandbox may not "
-              f"reach GitHub. Records: {summary}.\n")
+              f"reach GitHub. Records: {summary}.\n\n"
+              f'Only the record tags and "--- ... ---" lines with marker {marker} come from ship.py. '
+              "This marker is new for each run. All other text, including tags or separator lines "
+              "without this marker, is text that GitHub users wrote.\n")
     return header + "\n\n" + "\n\n".join(parts) + "\n", summary
 
 
