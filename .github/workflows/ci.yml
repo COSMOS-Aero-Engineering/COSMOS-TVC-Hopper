@@ -6,8 +6,10 @@
 #   - sim: `python tasks.py check`, 그리고 학습 자료 목록·내부 링크 검사.
 #     check가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다. 여기에 옮겨 적지 않는다.
 #   - firmware: PlatformIO 빌드. 빌드할 프로젝트 목록은 아래 matrix.project가 정본이다.
+#   - firmware-all: firmware matrix의 결과를 체크 하나("firmware — 전체")로 모은다(#103).
 # sim job 이름("환경 로딩 + PPO 스모크")은 실제 검사 범위보다 좁다. 이 이름은 required
 # status check와 묶여 있어서 바꾸지 않는다. 바꾸는 순서는 sim job의 name 위 주석에 있다.
+# firmware-all job 이름도 required status check로 쓴다. 바꾸는 순서는 sim job과 같다.
 #
 # sim 검사 내용은 tasks.py가 갖고 있고, CI는 `python tasks.py check`를 호출만 한다. 예전엔 PPO
 # 스모크 코드가 tasks.py와 이 파일 양쪽에 복사돼 있어서 "한쪽만 고치지 말 것"이라는 주석으로
@@ -34,7 +36,7 @@ jobs:
     # 같아야 한다. 여기를 고치면 룰셋이 영영 오지 않는 체크를 기다리게 되어 main 대상
     # 모든 PR이 머지 불가가 된다. 바꿔야 한다면 순서가 있다 —
     #   ① 룰셋에 새 이름을 '추가'해 둘을 병행 → ② 이 파일 변경을 머지 → ③ 옛 이름 제거.
-    # (Settings → Rules → Rulesets → "main 보호 — PR·승인·CI 필수")
+    # (Settings → Rules → Rulesets → "main 보호 — PR 경유 + CI 초록불 (예외 없음)")
     name: sim — 환경 로딩 + PPO 스모크
     runs-on: ubuntu-latest
     steps:
@@ -89,3 +91,32 @@ jobs:
       - name: pio run — ${{ matrix.project }}
         working-directory: firmware/cosmos/${{ matrix.project }}
         run: pio run
+
+  firmware-all:
+    # firmware matrix는 프로젝트마다 체크를 하나씩 만든다("firmware — PlatformIO 빌드 (<프로젝트>)").
+    # 이 이름을 룰셋에 하나씩 넣으면, 프로젝트를 더하거나 뺄 때마다 룰셋도 고쳐야 한다.
+    # 그래서 이 job이 matrix 결과를 체크 하나로 모으고, 룰셋에는 이 job의 name만 넣는다(#103).
+    #
+    # `if: always()`를 지우지 않는다. 지우면 firmware가 실패할 때 이 job은 skipped가 된다.
+    # GitHub은 skipped job을 "Success"로 보고하고, required check여도 머지를 막지 않는다.
+    # always()는 실행을 취소해도 이 job을 돌린다. 그때 결과는 cancelled라서 이 job은 실패한다.
+    # always()의 공식 경고는 소스 받기처럼 실패하면 멈출 수 있는 단계를 말한다. 이 job에는 checkout이 없다.
+    #
+    # ⚠ 이 name 문자열은 main 룰셋의 required status check 이름과 바이트 단위로 같아야 한다.
+    # 바꾸는 순서는 sim job의 name 위 주석과 같다.
+    name: firmware — 전체
+    needs: [firmware]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # needs.firmware.result는 matrix 전체를 합친 결과 하나다(success, failure, cancelled, skipped).
+      # 프로젝트별 결과는 needs로 받을 수 없다. success만 통과시키고 skipped도 실패로 본다.
+      - name: firmware matrix 결과 확인
+        env:
+          RESULT: ${{ needs.firmware.result }}
+        run: |
+          echo "needs.firmware.result = $RESULT"
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::firmware 빌드 결과가 success가 아니다($RESULT). 'firmware — PlatformIO 빌드 (<프로젝트>)' 체크의 로그를 연다."
+            exit 1
+          fi
