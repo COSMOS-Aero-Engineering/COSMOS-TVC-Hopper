@@ -22,12 +22,12 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 | `sanity_check.py` | 환경이 안 깨졌는지 빠르게 확인(무작위 액션 20스텝) |
 | `train.py` | PPO(stable-baselines3) 학습 스크립트. 학습 seed 10000(평가 seed 0~199와 분리) |
 | `export_episode.py` | 에피소드 1회를 웹 대시보드 CSV 형식(`docs/design/02-web-dashboard-design.md` §4)으로 `episode_logs/`에 저장. 정책 `pd`(기준 PD)·`zero`·`ppo`, 옆에 시드·물리 상수·결과를 담은 `.meta.json`. 실물 시험 로그와 같은 3D 뷰어로 재생하기 위한 것 |
-| `hopper_attitude_ppo.zip` | 학습된 모델 1회분 — PLACEHOLDER 물리값 기준이라 **성능 숫자 자체는 의미 없음**, 파이프라인이 도는지 확인용 |
+| `hopper_attitude_ppo.zip` | 학습된 모델 1회분 — PLACEHOLDER 물리값 기준이라 **성능 숫자 자체는 의미 없음**, 파이프라인이 도는지 확인용. #186 전 6차원 관측으로 학습했다. `pd_gate.py --model`과 `export_episode.py`는 이 모델에 `obs[:6]`만 넘긴다. 새 관측(제한 뒤 스로틀)을 쓰려면 다시 학습한다 |
 
 ## 관측 / 행동 (실제 구현 기준 — 이전 계획의 12/4차원 문서와 다름, 이게 현재 정답)
 
 ```
-관측 obs (6): [phi, theta, psi, wx, wy, wz]   — 자세각(rad) + 바디 각속도(rad/s)
+관측 obs (7): [phi, theta, psi, wx, wy, wz, throttle]   — 자세각(rad) + 바디 각속도(rad/s) + 변화율 제한 뒤 스로틀(0-1, #186)
 행동 act (5): [a1, a2, a3, a4, throttle]       — 베인 4개 각도(-1~1) + 스로틀(-1~1, 내부에서 0~1 변환)
 과제: 초기 교란(±0.3rad)에서 수평(phi=theta=0)으로 복귀·유지
 ```
@@ -46,7 +46,9 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
   켜면 스로틀 명령 계단 1.0 → 0.75에서 요 PD가 불합격한다(`yaw_check.py` 3번 B). #120의 스로틀 변화율 제한을 넣어도
   회전자 상수를 랜덤화하면 불합격이 남아서 기본값은 끔으로 둔다.
 - 스로틀 변화율 제한(#120): `params.yaml`의 `throttle_slew_rate`(지금 0.25/s, 고도 제어에 충분한지는 #185에서 `altitude_check.py`로 확인했다). 스로틀 명령이 한 스텝에 바뀌는 양을
-  자른다. 회전자 항 스위치와 상관없이 늘 쓴다. 제한 뒤 실제 스로틀은 `step()`의 `info["throttle"]`에 있고 관측에는 없다.
+  자른다. 회전자 항 스위치와 상관없이 늘 쓴다. 제한 뒤 실제 스로틀은 `step()`의 `info["throttle"]`와 관측 `obs[6]`에 있다(#186).
+  다음 스텝에 쓸 수 있는 스로틀이 이 값에 달려서 관측에 넣었다. `reset()` 직후 `obs[6]`은 1.0이다(첫 스텝은 제한하지 않는다).
+  관측 이름과 순서는 `hopper_aviary.py`의 `OBS_NAMES`다. 회전자 회전수는 관측에 없다(실물에서 받을 신호가 아직 없다, #186).
   펌웨어 요구사항은 `docs/design/00-hopper-master-design.md` §8.1의 8번.
   식, 상수 근거, 결과는 [`modelling-notes-ch3.md`](../docs/design/modelling-notes-ch3.md) §3의 "EDF 회전자 반작용·자이로 항".
 

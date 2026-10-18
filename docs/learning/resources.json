@@ -466,7 +466,7 @@
       "title": "Gymnasium Create a Custom Environment",
       "url": "https://gymnasium.farama.org/introduction/create_custom_env/",
       "scope": "관측·행동 공간과 reset/step",
-      "exercise": "우리 환경의 관측 6개와 행동 5개를 코드에서 찾는다.",
+      "exercise": "우리 환경의 관측 7개와 행동 5개를 코드에서 찾는다.",
       "note": "예제 GridWorld는 호퍼의 물리 모델이 아니다.",
       "language": "영어"
     },

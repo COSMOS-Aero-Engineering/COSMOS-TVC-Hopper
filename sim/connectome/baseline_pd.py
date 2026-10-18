@@ -41,7 +41,7 @@ class PDController:
         self.throttle_norm = float(np.clip(throttle, 0.0, 1.0) * 2.0 - 1.0)
 
     def predict(self, obs, deterministic: bool = True):
-        phi, theta, psi, wx, wy, wz = np.asarray(obs, dtype=np.float64)
+        phi, theta, psi, wx, wy, wz = np.asarray(obs, dtype=np.float64)[:6]   # obs[6]은 제한 뒤 스로틀(#186)
         u_roll = -(self.kp * phi + self.kd * wx)
         u_pitch = -(self.kp * theta + self.kd * wy)
         u_yaw = -(self.kp_yaw * psi + self.kd_yaw * wz)

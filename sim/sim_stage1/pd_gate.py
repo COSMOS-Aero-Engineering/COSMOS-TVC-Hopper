@@ -16,7 +16,7 @@ import sys
 
 import numpy as np
 
-from hopper_aviary import HopperAttitudeEnv
+from hopper_aviary import N_STATE, HopperAttitudeEnv
 
 EVAL_SEEDS = range(200)
 MAX_CRASH = 0.05
@@ -24,10 +24,23 @@ MAX_MEDIAN_TILT_DEG = 5.0
 
 
 def pd(obs, kp=8.0, kd=2.0):
-    phi, theta, psi, wx, wy, wz = obs
+    phi, theta, psi, wx, wy, wz = obs[:N_STATE]   # obs[6]은 제한 뒤 스로틀(#186). PD는 쓰지 않는다
     ux = np.clip(-kp * phi - kd * wx, -1, 1)   # tau_x = (F1+F3)*l
     uy = np.clip(kp * theta + kd * wy, -1, 1)  # tau_y = -(F2+F4)*l
     return np.array([ux, uy, ux, uy, 1.0], dtype=np.float32)
+
+
+def model_policy(model):
+    """SB3 모델을 관측 → 행동 함수로 바꾼다.
+
+    #186 전 모델(관측 6차원, 저장소의 hopper_attitude_ppo.zip)은 앞 N_STATE개만 받는다. 동역학은 #186 전과 같아서
+    이 모델의 평가 결과도 #186 전과 같다. 관측 차원이 6도 환경 관측 차원도 아니면 멈춘다.
+    """
+    n_model = int(model.observation_space.shape[0])
+    n_env = int(HopperAttitudeEnv().observation_space.shape[0])
+    if n_model not in (N_STATE, n_env):
+        raise ValueError(f"모델 관측 {n_model}차원: 환경 관측 {n_env}차원이나 #186 전 {N_STATE}차원이어야 한다.")
+    return lambda o: model.predict(o[:n_model], deterministic=True)[0]
 
 
 def evaluate(policy, seeds=EVAL_SEEDS):
@@ -74,7 +87,7 @@ def main():
     if args.model:
         from stable_baselines3 import PPO
         model = PPO.load(args.model, device="cpu")
-        results[f"PPO ({args.model})"] = evaluate(lambda o: model.predict(o, deterministic=True)[0])
+        results[f"PPO ({args.model})"] = evaluate(model_policy(model))
 
     print(f"평가 seed {EVAL_SEEDS.start}~{EVAL_SEEDS.stop - 1}, 도메인 랜덤화 켬\n")
     print("| 정책 | 평균 리턴 | 평균 길이(step) | 넘어짐 | 최종 기울기 중앙값 |")
