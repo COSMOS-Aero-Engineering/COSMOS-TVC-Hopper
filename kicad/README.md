@@ -45,7 +45,9 @@
 ## 열어보는 법
 
 1. KiCad 10 설치(무료, [kicad.org](https://www.kicad.org/)) — 이미 이 PC엔 설치돼 있음
-   (`%LOCALAPPDATA%\Programs\KiCad\10.0\`).
+   (`%LOCALAPPDATA%\Programs\KiCad\10.0\`). **KiCad 9 이하에서는 회로도가 열리지 않는다.** 파일이
+   KiCad 10 형식(형식 번호 `20260306`)이기 때문이다. KiCad 9.0.9는 "KiCad를 10.0 이상으로 올리라"는
+   오류 창을 띄운다(#139).
 2. `cosmos-avionics/cosmos-avionics.kicad_pro`를 더블클릭 → KiCad가 열림 → Eeschema(회로도 편집기)
    아이콘 클릭.
 3. **회로도를 바꾼 뒤에는 Inspect → Electrical Rules Checker(ERC)를 돌린다.** kicad-cli로도 돌릴 수 있다
@@ -203,6 +205,13 @@ python kicad/_tools/validate_sch.py      # 구조 자체검증(문법/넷 연결
 인자나 `KICAD_SYMBOL_DIR`(또는 `KICAD10_SYMBOL_DIR`) 환경변수로 주고, 둘 다 없으면 흔한 설치
 위치를 훑어 찾는다. 출력 파일 위치는 `--out <파일>`로 바꾼다(기본은 위 `.kicad_sch`).
 `validate_sch.py`에 파일 경로를 인자로 주면 그 파일을 검사한다(기본은 같은 회로도).
+
+생성기는 **KiCad 10 심볼 라이브러리만** 쓴다(#139). 파일 머리에 KiCad 10 형식 번호를 적고, 심볼 정의는
+설치된 라이브러리에서 그대로 복사하기 때문이다. 두 버전이 다르면 KiCad가 파일을 못 열거나 잘못 읽는다.
+KiCad 9 라이브러리 폴더를 `--kicad-symbols`로 주면 생성기가 멈춘다. 자동으로 찾을 때는 KiCad 9 폴더를
+건너뛴다. `python tasks.py check`의 `kicadver` 작업은 커밋된 `.kicad_sch` 머리가 생성기 값과 같은지 본다.
+팀이 KiCad 버전을 올리면 `gen_schematic.py` 머리의 버전 상수 4개(`SCH_FILE_VERSION` 등)를 KiCad 소스
+`eeschema/sch_file_versions.h`의 값으로 함께 고친 뒤 다시 생성한다.
 
 `_tools/*.py`에 사용자 홈 폴더 경로(Windows `Users`, Linux `home`, macOS `Users` 아래)가 다시 들어오면
 `python tasks.py check`가 실패한다. `userpath` 작업이 `파일:줄:칸`을 출력하므로 그 줄을 위 방식
