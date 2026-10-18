@@ -15,6 +15,7 @@ description: COSMOS 저장소에서 GitHub 이슈 하나를 맡아 PR까지 끝�
    - 사람만 하는 일(`AGENTS.md` §핵심 규칙 8)이면 라벨 `agent physically incapable`을 달고, 사람이 정할 것을 댓글로 쓰고 멈춘다.
 3. **worktree.** `python ship.py wt <n>`을 실행한다. 출력의 마지막 줄이 폴더, 그 앞 줄이 브랜치 이름이다. 그 폴더로 이동해서 `AGENTS.md`를 읽는다.
    - 이어서 `gh issue comment <n> --body "claimed by <브랜치 이름>"`.
+   - `wt`는 본문 `### 상위 PRD` 칸의 PRD 아래 sub-issue로도 잇는다. 출력에 `[잇지 않음]`이 있으면 worktree는 그대로 쓰고, 원인(칸의 값, 권한)을 고칠 수 있으면 고친 뒤 `python ship.py link <n>`을 다시 실행한다. 고칠 수 없으면 9단계에서 후속 이슈로 남긴다.
 4. **조사 후 구현.** Best practice를 먼저 조사한다(공식 문서, 데이터시트, 쓰는 도구가 권장하는 방식, 잘 관리된 참고 프로젝트, 이 저장소의 기존 코드). 출처는 PR "근거"에 적는다. 이슈 범위만 고친다. 범위 밖 문제는 새 이슈로 남긴다.
 5. **검사.** 바꾼 영역의 검사를 돌린다(`python tasks.py check`, `pio run` 등). 무거운 명령은 `python ship.py capped 8G -- <명령>`. 통과할 때까지 고친다. 커밋 제목은 `[태그] 무엇을 바꿨는지`.
 6. **PR.** `git push -u origin HEAD` 후 `gh pr create --base main`. 본문은 `.github/pull_request_template.md`를 채우고 `Closes #<n>`을 넣는다. 실제로 해 본 확인만 체크한다. 작성자가 김민찬·김준원이 아니면 `--reviewer junwonkim07`을 붙인다. 본문을 쓰기 전에 `ste-ko` 스킬을 불러온다.
