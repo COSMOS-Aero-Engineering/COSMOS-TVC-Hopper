@@ -47,6 +47,19 @@ Windows 명령은 [uv 공식 설치 문서](https://docs.astral.sh/uv/getting-st
 설치 스크립트가 오류를 내고 멈춘다(#99). 이 옵션은 이 명령이 새로 띄우는 PowerShell 프로세스에만
 적용된다. PC에 저장된 실행 정책은 바꾸지 않는다([Microsoft 문서](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-5.1#set-a-different-policy-for-one-session)).
 
+Windows는 [Microsoft Visual C++ 재배포 패키지](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)(x64)도
+한 번 설치한다. torch가 이 패키지의 DLL(`msvcp140.dll` 등)을 쓰는데, torch 설치 파일에는 이 DLL이
+들어 있지 않다([PyTorch Windows FAQ](https://docs.pytorch.org/docs/stable/notes/windows.html#import-error)).
+이 패키지가 없는 새 PC에서는 `python tasks.py check`가 `smoke` 단계에서 `c10.dll` 오류로 멈췄다(#108).
+
+```powershell
+# Windows PowerShell. 관리자 권한 확인 창(UAC)이 뜨면 "예"를 누른다.
+winget install --id Microsoft.VCRedist.2015+.x64 --exact --source winget
+```
+
+`winget`을 찾을 수 없다는 오류가 나면 [vc_redist.x64.exe](https://aka.ms/vc14/vc_redist.x64.exe)를 받아 실행한다.
+설치를 잊어도 `python tasks.py setup`이 이 패키지가 있는지 확인한다. 없으면 위 명령을 출력하고 멈춘다.
+
 그다음은 어느 OS든 같다. (Mac은 **Apple Silicon만** 된다 — 고정된 torch 2.14.0에 Intel Mac용
 휠이 없다. Intel Mac이면 Windows/Linux PC를 쓰거나, 부장에게 말해서 torch 버전을 조정한다.)
 
@@ -201,6 +214,7 @@ gh pr create --base main --reviewer junwonkim07
 | `pip install` 중 `OSError: [Errno 2] No such file or directory: ...torch\include\...` | Windows 경로 길이 260자 제한 (torch는 경로가 아주 깊다) | 저장소를 더 짧은 경로로 옮기거나(예: `C:\dev\COSMOS-TVC-Hopper`), [긴 경로 지원 활성화](https://pip.pypa.io/warnings/enable-long-paths) |
 | 설치 후 OneDrive가 몇 GB를 동기화하기 시작함 | `.venv`(torch 포함 ~1GB)가 OneDrive 폴더 안에 생겨서 | OneDrive 설정 → 백업/폴더 선택에서 `.venv` 제외. 지워도 `python tasks.py setup`으로 언제든 다시 만든다 |
 | uv 설치 명령이 `Error: PowerShell requires an execution policy in [Unrestricted, RemoteSigned, Bypass] to run uv`를 출력하고 멈춤 | `-ExecutionPolicy ByPass` 없이 `irm https://astral.sh/uv/install.ps1 \| iex`만 실행함. Windows 기본 실행 정책(`Restricted`)에서는 uv 설치 스크립트가 스스로 멈춘다 | 위 [소프트웨어팀](#소프트웨어팀)의 Windows 명령을 그대로 다시 실행한다. 오류 메시지가 권하는 `Set-ExecutionPolicy`는 하지 않아도 된다 |
+| `python tasks.py`가 `Microsoft Visual C++ 재배포 패키지(x64)가 이 PC에 없다`를 출력하고 멈춤. 또는 torch를 불러올 때 `OSError: [WinError 126]`, `c10.dll`, `Microsoft Visual C++ Redistributable is not installed`가 나옴 | Windows에 VC++ 재배포 패키지(x64)가 없다. torch가 쓰는 `msvcp140.dll` 등은 torch 설치 파일에 들어 있지 않다(#108) | 위 [소프트웨어팀](#소프트웨어팀)의 `winget install --id Microsoft.VCRedist.2015+.x64 --exact --source winget`을 실행한다. winget이 없으면 [vc_redist.x64.exe](https://aka.ms/vc14/vc_redist.x64.exe)를 받아 실행한다. 설치가 끝나면 멈춘 명령을 다시 실행한다 |
 | `uv: command not found` / `uv 이(가) 없다` | uv 미설치 또는 설치 후 터미널 미재시작 | 위 [소프트웨어팀](#소프트웨어팀) 설치 명령 실행 후 터미널을 새로 연다 |
 | `환경을 uv.lock 에 맞추지 못했다` 또는 CI의 `uv sync --locked` 실패 | `pyproject.toml`만 고치고 `uv.lock`을 갱신하지 않음 | `python tasks.py lock` 후 `uv.lock`·`sim/requirements.txt`를 함께 커밋 |
 
