@@ -3,11 +3,16 @@
 
     python tasks.py                 작업 목록
     python tasks.py setup           uv.lock 그대로 .venv 구성
-    python tasks.py check           CI와 같은 검사 (skills → shiptest → compile → sanity → gate → yaw → smoke → conncheck)
+    python tasks.py check           CI sim job의 check 단계와 같은 검사 (CI 전체는 아님, 아래 참고)
     python tasks.py check --force   캐시 무시하고 전부 다시 실행
     python tasks.py graph           작업 그래프와 캐시 상태 보기
     python tasks.py lock            의존성 다시 풀고 uv.lock/requirements.txt 갱신
     python tasks.py train           PPO 본 학습 (200k 스텝, 오래 걸림)
+
+check와 CI: CI(.github/workflows/ci.yml)의 sim job이 `python tasks.py check`를 그대로 돌린다.
+CI는 그 밖에 학습 자료 목록·내부 링크 검사와 펌웨어 PlatformIO 빌드를 ci.yml에서 직접 돌린다.
+이 둘은 check에 없다. 로컬에서 check를 통과해도 이 둘은 따로 확인한다(명령은 ci.yml).
+check가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다.
 
 왜 Makefile이 아니라 이 파일인가: 팀 개발 환경이 Windows 위주인데 Windows엔 `make`가 기본으로
 없다. 반면 파이썬은 소프트웨어팀이 어차피 설치해야 한다. 표준 라이브러리만 쓰므로 추가 설치도
@@ -464,8 +469,8 @@ TASKS = {t.name: t for t in [
          inputs=[".claude/skills/**/*", ".agents/skills/**/*", "ship.py"]),
     Task("shiptest", "ship.py 단위 검사 - gh 없이 가짜 응답으로 (#109)", task_shiptest,
          inputs=["ship.py", "test_ship.py"]),
-    Task("check", "CI와 같은 검사 - skills + shiptest + compile + sanity + gate + yaw + smoke"
-         " + conncheck", task_check,
+    Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
+         " 단계 목록은 graph)", task_check,
          deps=["skills", "shiptest", "compile", "sanity", "gate", "yaw", "smoke", "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True),
