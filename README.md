@@ -251,6 +251,8 @@ gh pr create --base main --reviewer junwonkim07
 ### OpenCode 리뷰 데이터 분리
 
 `ship.py review`의 OpenCode 대체 리뷰는 모델 조회와 실행 모두 이 작업 폴더의
-`.cosmos-cache/opencode/data`를 `XDG_DATA_HOME`으로 쓴다(#56). 개인 OpenCode DB를 옮기거나 지우지 않는다.
+`.cosmos-opencode/data`를 `XDG_DATA_HOME`으로 쓴다(#56). 개인 OpenCode DB를 옮기거나 지우지 않는다.
 자식 프로세스에서만 적용하며 개인 `OPENCODE_DB` 재정의도 넘기지 않는다. 이 폴더는 Git에서 제외된다.
 데이터 폴더가 분리되므로 개인 OpenCode에 저장한 인증을 복사하지 않으며, 대체 리뷰는 무료 모델을 쓴다.
+개인 설정·플러그인·캐시·상태 폴더는 이번 변경의 격리 대상이 아니다.
+리뷰 DB는 `tasks.py clean`이 지우는 작업 캐시와 분리해 보존한다.

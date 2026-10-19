@@ -483,7 +483,7 @@ def logged_in(cmd):
 def opencode_env():
     """OpenCode 자식 프로세스만 저장소 전용 데이터 폴더를 쓴다(#56)."""
     env = os.environ.copy()
-    data = ROOT / ".cosmos-cache" / "opencode" / "data"
+    data = ROOT / ".cosmos-opencode" / "data"
     data.mkdir(parents=True, exist_ok=True)
     env["XDG_DATA_HOME"] = str(data.resolve())
     env.pop("OPENCODE_DB", None)  # 절대경로 DB 재정의도 개인 DB로 돌아가지 않게 한다.

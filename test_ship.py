@@ -521,12 +521,20 @@ class CmdReviewTest(unittest.TestCase):
 
 
 class OpenCodeIsolationTest(unittest.TestCase):
+    def test_call_passes_environment_to_real_subprocess_boundary(self):
+        env = {"XDG_DATA_HOME": "isolated"}
+        with mock.patch.object(ship, "exe_of", side_effect=lambda name: name), \
+                mock.patch.object(ship.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run, \
+                redirect_stdout(io.StringIO()):
+            ship.call(["opencode", "models"], env=env)
+        self.assertIs(run.call_args.kwargs["env"], env)
+
     def test_child_data_directory_does_not_change_parent_environment(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(ship, "ROOT", Path(tmp)), \
                 mock.patch.dict(ship.os.environ, {"XDG_DATA_HOME": "existing-data", "OPENCODE_DB": "personal.db"}):
             env = ship.opencode_env()
             self.assertEqual(ship.os.environ["XDG_DATA_HOME"], "existing-data")
-            self.assertEqual(Path(env["XDG_DATA_HOME"]), Path(tmp).resolve() / ".cosmos-cache/opencode/data")
+            self.assertEqual(Path(env["XDG_DATA_HOME"]), Path(tmp).resolve() / ".cosmos-opencode/data")
             self.assertTrue(Path(env["XDG_DATA_HOME"]).is_dir())
             self.assertNotIn("OPENCODE_DB", env)
             self.assertEqual(ship.os.environ["OPENCODE_DB"], "personal.db")
