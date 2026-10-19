@@ -22,7 +22,7 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 | `sanity_check.py` | 환경이 안 깨졌는지 빠르게 확인(무작위 액션 20스텝) |
 | `train.py` | PPO(stable-baselines3) 학습 스크립트. 학습 seed 10000(평가 seed 0~199와 분리) |
 | `export_episode.py` | 에피소드 1회를 웹 대시보드 CSV 형식(`docs/design/02-web-dashboard-design.md` §4)으로 `episode_logs/`에 저장. 정책 `pd`(기준 PD)·`zero`·`ppo`, 옆에 시드·물리 상수·결과를 담은 `.meta.json`. 실물 시험 로그와 같은 3D 뷰어로 재생하기 위한 것 |
-| `hopper_attitude_ppo.zip` | 학습된 모델 1회분 — PLACEHOLDER 물리값 기준이라 **성능 숫자 자체는 의미 없음**, 파이프라인이 도는지 확인용. #186 전 6차원 관측으로 학습했다. `pd_gate.py --model`과 `export_episode.py`는 이 모델에 `obs[:6]`만 넘긴다. 새 관측(제한 뒤 스로틀)을 쓰려면 다시 학습한다 |
+| `hopper_attitude_ppo.zip` | 학습된 모델 1회분 — PLACEHOLDER 물리값 기준이라 **성능 숫자 자체는 의미 없음**, 파이프라인이 도는지 확인용. 7차원 관측(제한 뒤 스로틀 포함)으로 다시 학습했다(#201, `python tasks.py train`, 200k 스텝, seed 10000). 평가 seed 0-199에서 PD 2.5°보다 못한 13.8°이고 스로틀을 거의 0으로 낸다(원인은 #90). `pd_gate.py --model`과 `export_episode.py`는 모델 관측 차원이 환경과 다르면 멈춘다 |
 
 ## 관측 / 행동 (실제 구현 기준 — 이전 계획의 12/4차원 문서와 다름, 이게 현재 정답)
 

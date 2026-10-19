@@ -80,7 +80,7 @@ ROTOR_RAND_LOG = {"rotor_inertia": True, "rotor_omega_max": False, "rotor_tau": 
 # 관측 벡터의 이름과 순서(#186). 앞 6개는 물리 상태(self.state), 마지막은 직전 스텝에 실제로 쓴 스로틀(0-1)이다.
 # 순서를 바꾸면 학습한 모델과 pd_gate.pd() 같은 obs[:6] 사용처가 조용히 틀린다. 새 값은 끝에 더한다.
 OBS_NAMES = ("phi", "theta", "psi", "wx", "wy", "wz", "throttle")
-N_STATE = 6               # obs[:N_STATE]가 물리 상태다. 6차원 관측으로 학습한 모델은 이 부분만 받는다
+N_STATE = 6               # obs[:N_STATE]가 물리 상태다. PD처럼 스로틀을 보지 않는 제어기가 이 부분만 쓴다
 RESET_THROTTLE_OBS = 1.0  # reset() 직후 obs[6]. 첫 스텝은 제한하지 않으므로 값 자체는 동역학에 영향이 없다.
                           # 1.0은 pd_gate.py·yaw_check.py 시나리오 A의 고정 스로틀이다
 

@@ -79,7 +79,7 @@ def make_policy(name, model_path):
     except ImportError as e:
         raise SystemExit("--policy ppo 는 stable-baselines3가 필요합니다 (sim/README.md 환경 세팅).") from e
     model = PPO.load(model_path)
-    return model_policy(model)   # #186 전 6차원 모델은 obs[:6]만 받는다
+    return model_policy(model)   # 모델 관측 차원이 환경(7)과 다르면 멈춘다(#201)
 
 
 def git_commit():
