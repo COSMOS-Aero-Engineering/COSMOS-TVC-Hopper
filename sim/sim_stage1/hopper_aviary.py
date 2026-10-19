@@ -80,7 +80,7 @@ ROTOR_RAND_LOG = {"rotor_inertia": True, "rotor_omega_max": False, "rotor_tau": 
 # 관측 벡터의 이름과 순서(#186). 앞 6개는 물리 상태(self.state), 마지막은 직전 스텝에 실제로 쓴 스로틀(0-1)이다.
 # 순서를 바꾸면 학습한 모델과 pd_gate.pd() 같은 obs[:6] 사용처가 조용히 틀린다. 새 값은 끝에 더한다.
 OBS_NAMES = ("phi", "theta", "psi", "wx", "wy", "wz", "throttle")
-N_STATE = 6               # obs[:N_STATE]가 물리 상태다. 6차원 관측으로 학습한 모델은 이 부분만 받는다
+N_STATE = 6               # obs[:N_STATE]가 물리 상태다. PD처럼 스로틀을 보지 않는 제어기가 이 부분만 쓴다
 RESET_THROTTLE_OBS = 1.0  # reset() 직후 obs[6]. 첫 스텝은 제한하지 않으므로 값 자체는 동역학에 영향이 없다.
                           # 1.0은 pd_gate.py·yaw_check.py 시나리오 A의 고정 스로틀이다
 
@@ -139,6 +139,25 @@ def vane_lift_gain(p: dict) -> float:
             f"sin(alpha_max) = {np.sin(alpha_max):.4f}·Ft. params.yaml의 CLalpha/vane_geometry를 확인할 것."
         )
     return float(CL)
+
+
+G = 9.81   # m/s². 호버 스로틀 계산에만 쓴다. Stage 1 자세 동역학은 위치를 구속해서 중력을 쓰지 않는다
+
+
+def hover_throttle(mass: float, Kf: float, omega_t_per_throttle: float) -> float:
+    """추력이 무게와 같아지는 스로틀(0-1)을 계산한다(#204). 호버 스로틀의 정본은 이 함수 하나다.
+
+    환경의 추력 식 Ft = Kf·(u·omega_t_per_throttle)²에서 Ft = mass·G를 u로 푼다:
+      u = sqrt(mass·G / (Kf·omega_t_per_throttle²))
+    params.yaml 명목값(0.735 kg, Kf 1.1e-6, 3000)이면 최대 추력 9.9 N이고 u = 0.853이다.
+    u가 1을 넘으면 최대 추력이 무게보다 작아서 기체가 뜨지 못한다. 이때는 ValueError를 낸다.
+    """
+    u = float(np.sqrt(mass * G / (Kf * omega_t_per_throttle ** 2)))
+    if not 0.0 < u <= 1.0:
+        raise ValueError(f"호버 스로틀 {u:.3f}: 0보다 크고 1 이하여야 한다. 최대 추력 "
+                         f"{Kf * omega_t_per_throttle ** 2:.2f} N, 무게 {mass * G:.2f} N. "
+                         "params.yaml의 mass·Kf·omega_t_per_throttle을 확인할 것.")
+    return u
 
 
 class HopperAttitudeEnv(gym.Env):

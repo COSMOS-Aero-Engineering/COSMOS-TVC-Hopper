@@ -33,14 +33,16 @@ def pd(obs, kp=8.0, kd=2.0):
 def model_policy(model):
     """SB3 모델을 관측 → 행동 함수로 바꾼다.
 
-    #186 전 모델(관측 6차원, 저장소의 hopper_attitude_ppo.zip)은 앞 N_STATE개만 받는다. 동역학은 #186 전과 같아서
-    이 모델의 평가 결과도 #186 전과 같다. 관측 차원이 6도 환경 관측 차원도 아니면 멈춘다.
+    모델의 관측 차원은 환경 관측 차원(7, OBS_NAMES)과 같아야 한다. 저장소의 hopper_attitude_ppo.zip은
+    7차원 관측으로 다시 학습했다(#201). #186 전 6차원 모델은 obs[6](제한 뒤 스로틀)을 보지 못하므로
+    앞 6개만 잘라 넘기지 않고 멈춘다. 그런 모델은 그 모델을 만든 커밋에서 평가한다(6차원 zip의 마지막 커밋은 c611188).
     """
     n_model = int(model.observation_space.shape[0])
     n_env = int(HopperAttitudeEnv().observation_space.shape[0])
-    if n_model not in (N_STATE, n_env):
-        raise ValueError(f"모델 관측 {n_model}차원: 환경 관측 {n_env}차원이나 #186 전 {N_STATE}차원이어야 한다.")
-    return lambda o: model.predict(o[:n_model], deterministic=True)[0]
+    if n_model != n_env:
+        raise ValueError(f"모델 관측 {n_model}차원, 환경 관측 {n_env}차원: 차원이 같아야 한다. "
+                         "python train.py로 다시 학습하거나 그 모델을 만든 커밋에서 평가할 것.")
+    return lambda o: model.predict(o, deterministic=True)[0]
 
 
 def evaluate(policy, seeds=EVAL_SEEDS):

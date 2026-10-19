@@ -32,10 +32,9 @@ import sys
 
 import numpy as np
 
-from hopper_aviary import HopperAttitudeEnv
+from hopper_aviary import G, HopperAttitudeEnv, hover_throttle
 from pd_gate import EVAL_SEEDS, pd
 
-G = 9.81                  # m/s²
 KP_POS = 1.0              # 1/s,  ArduPilot Copter PSC_D_POS_P 기본값
 KP_VEL = 5.0              # 1/s,  ArduPilot Copter PSC_D_VEL_P 기본값
 KI_VEL = 2.0              # 1/s², 가정. Kf 오차를 1-2 s 안에 없애는 크기
@@ -61,7 +60,7 @@ def run(env, seed, scenario):
     """한 seed를 돌리고 지표 사전을 돌려준다."""
     obs, _ = env.reset(seed=seed)
     k_nom = env.nominal_Kf * env.omega_t_per_throttle ** 2   # 제어기가 아는 추력 계수(명목)
-    u_hover_nom = np.sqrt(env.mass * G / k_nom)
+    u_hover_nom = hover_throttle(env.mass, env.nominal_Kf, env.omega_t_per_throttle)
     z, vz, integ = Z0, 0.0, 0.0
     u_prev_cmd, u_applied = u_hover_nom, None
     max_err, cmd_rates, touchdown = 0.0, [], None
@@ -134,7 +133,7 @@ def main():
         raise ValueError("params.yaml의 domain_rand.enabled가 false다. 이 검사는 랜덤화를 켠 상태에서만 잰다.")
     env.rotor_enabled = args.rotor or env.rotor_enabled
     k_nom = env.nominal_Kf * env.omega_t_per_throttle ** 2
-    u_h = np.sqrt(env.mass * G / k_nom)
+    u_h = hover_throttle(env.mass, env.nominal_Kf, env.omega_t_per_throttle)
     kf_lo, kf_hi = 1 - env.dr.get("Kf_range", 0.0), 1 + env.dr.get("Kf_range", 0.0)
     print(f"고도 검사 (#185): 질량 {env.mass} kg, 최대 추력 {k_nom:.2f} N(명목), 회전자 항 "
           f"{'켬' if env.rotor_enabled else '끔'}, params.yaml throttle_slew_rate = {env.throttle_slew_rate}")

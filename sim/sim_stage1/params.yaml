@@ -3,7 +3,7 @@
 #    sim/hopper_aviary.py 코드는 손대지 않아도 됨 (일부러 그렇게 분리해둠).
 
 # --- 질량 특성 ---
-mass: 0.735          # kg, PLACEHOLDER — 01-avionics-integration-final.md §8.1 AUW 추정(마스터 §5.1의 660 g은 합계 오류). 조립 후 저울 실측 필요. Stage 1 동역학은 이 값을 안 쓴다
+mass: 0.735          # kg, PLACEHOLDER — 01-avionics-integration-final.md §8.1 AUW 추정(마스터 §5.1의 660 g은 합계 오류). 조립 후 저울 실측 필요. Stage 1 자세 동역학은 이 값을 안 쓴다. hopper_aviary.hover_throttle()이 호버 스로틀(명목 0.853)을 계산할 때만 쓴다(#204)
 Jxx: 0.005           # kg*m^2, PLACEHOLDER — Onshape 질량 속성(재질 지정 후) 계산 또는 바이필라 진자 실험으로 재산출
 Jyy: 0.005           # kg*m^2, PLACEHOLDER — 좌우 대칭 가정으로 Jxx와 동일하게 둠
 Jzz: 0.002           # kg*m^2, PLACEHOLDER — 세로축 관성모멘트, 가장 부정확할 가능성 높음
@@ -92,7 +92,7 @@ Kf: 1.1e-6           # PLACEHOLDER(역산값), Ft = Kf * omega_t_equiv^2 (omega_
 omega_t_per_throttle: 3000.0   # 임의 단위(실제 rpm 아님), PLACEHOLDER
 
 # throttle_slew_rate: 스로틀 변화율 제한(#120). 스로틀(0-1)이 1초에 바뀔 수 있는 최댓값, 단위 1/s.
-#   0.25/s = 1초에 25 %p. 스로틀 1.0 → 0.75(호버 추정)를 1초에 걸쳐 바꾼다.
+#   0.25/s = 1초에 25 %p. 스로틀 1.0 → 호버 스로틀 0.853(hopper_aviary.hover_throttle(), #204)을 0.59초에 걸쳐 바꾼다.
 #   목적: 회전수가 바뀔 때 회전자 반작용(−s·I_r·dΩ/dt)이 기체를 요로 돌린다. 변화율을 줄이면 이 토크가 작아진다.
 #   근거: #120 측정(명목 I_r 1e-5, 회전자 항 켬)에서 25 % 변화를 1 s 이상에 걸치면 요 PD가 합격했다.
 #   올릴 때와 내릴 때 같은 제한이다. 에피소드 첫 스텝은 자르지 않는다. null이면 제한하지 않는다.

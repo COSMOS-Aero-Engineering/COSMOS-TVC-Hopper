@@ -18,18 +18,20 @@
    이때 누설은 손계산이 0인 축만 본다. 롤 명령의 Δωy 같은 자이로 결합은 손계산에 들어 있다.
 2. 회전자 항·스로틀 변화율 손계산 (#86, #120, 도메인 랜덤화 끔)
    가-다는 회전자 항을 켜고 spin_dir +1과 -1을 각각 본다. 가-다는 회전자 식만 보려고 스로틀 변화율 제한을 끈다.
-   가. 반작용: 베인 0, 스로틀 1.0 → 0.75 계단. 베인 토크가 없으면 z축 각운동량 Jzz·ωz + s·I_r·Ω가
-       매 스텝 그대로다. 회전수가 다 따라간 뒤 Δωz = −s·I_r·omega_max·(0.75 − 1.0)/Jzz다.
+   가·다·라와 3번 B의 계단 목표 u_h는 호버 스로틀이다. hopper_aviary.hover_throttle()이 params.yaml의
+   mass·Kf·omega_t_per_throttle에서 계산한다: u_h = sqrt(mass·g / (Kf·omega_t_per_throttle²)), 명목값 0.853(#204).
+   가. 반작용: 베인 0, 스로틀 1.0 → u_h 계단. 베인 토크가 없으면 z축 각운동량 Jzz·ωz + s·I_r·Ω가
+       매 스텝 그대로다. 회전수가 다 따라간 뒤 Δωz = −s·I_r·omega_max·(u_h − 1.0)/Jzz다.
        이 값은 1차 지연 모델과 상관없다. Δωx·Δωy는 0이다.
    나. 자이로: 베인 0, 스로틀 1.0, ω0 = (0.5, 0, 0) rad/s, Jyy = Jxx로 둔 대칭 기체.
        해석해에서 (ωx, ωy)는 크기를 지키며 각속도 s·I_r·omega_max/Jxx로 +Z축 둘레를 돈다.
        |ω|는 상대오차 1e-4 안에서 그대로여야 한다. 0.3초 뒤 (ωx, ωy)는 해석해와
        사다리꼴 규칙의 위상 오차 한도(스텝당 (rate·dt)³/12 rad) 안에서 같아야 한다. ωz는 0이다.
-   다. 추력 지연(#122): 회전자 항을 켜면 추력도 지연된 회전수에서 나온다. 스로틀 1.0 → 0.75 계단 뒤
+   다. 추력 지연(#122): 회전자 항을 켜면 추력도 지연된 회전수에서 나온다. 스로틀 1.0 → u_h 계단 뒤
        THRUST_PROBE_STEPS번째 스텝에 롤 명령을 주고 그 스텝의 Δω를 손계산과 상대오차 1e-4 안에서 비교한다.
-       손계산은 1차 지연의 해석해 u_k = 0.75 + 0.25·e^(−k·dt/tau)(u = Ω/omega_max)로 추력 Kf·(u_k·omega_t_per_throttle)²를 쓴다.
-       추력이 지연 없이 스로틀을 따르면(#122 전 모델) Δω가 (0.75/u_k)²배라서 이 검사가 실패한다.
-   라. 스로틀 변화율 제한(#120): 명령 1.0 → 0.75 → 1.0 계단에서 환경이 실제로 쓴 스로틀(info["throttle"])이
+       손계산은 1차 지연의 해석해 u_k = u_h + (1 − u_h)·e^(−k·dt/tau)(u = Ω/omega_max)로 추력 Kf·(u_k·omega_t_per_throttle)²를 쓴다.
+       추력이 지연 없이 스로틀을 따르면(#122 전 모델) Δω가 (u_h/u_k)²배라서 이 검사가 실패한다.
+   라. 스로틀 변화율 제한(#120): 명령 1.0 → u_h → 1.0 계단에서 환경이 실제로 쓴 스로틀(info["throttle"])이
        첫 스텝은 그대로, 그 뒤는 스텝마다 throttle_slew_rate·dt씩 바뀌는지 본다(허용 오차 SLEW_TOL).
    마. 베인 서보 동특성(#161): 서보 모델을 켜고(params.yaml servo 상수) 베인 1에 계단 명령을 준다.
        (1) 1차 지연: 0 → +alpha_max 계단 뒤 k 스텝째 베인각이 해석해 alpha_max·(1 − e^(−k·dt/tau))와 같다.
@@ -43,8 +45,9 @@
    pd_gate.py의 롤·피치 PD에 요 PD(같은 게인 kp=8, kd=2)를 섞는다. 같은 seed로 두 스로틀 시나리오를 잰다.
    회전자 상수(inertia·omega_max·tau)도 seed마다 domain_rand.rotor_*_range에서 뽑은 값이다(#121).
      A: 스로틀 1.0 고정(#65와 같다). 반작용 토크는 0이고 자이로 항만 작용한다.
-     B: t = 1 s에 스로틀 명령 1.0 → 0.75 계단. 0.75는 호버 스로틀 추정값이다.
-        01 문서 §8.1의 AUW 735 g, 정적 추력 1300 gf에서 √(735/1300) = 0.75(추력 ∝ 스로틀²).
+     B: t = 1 s에 스로틀 명령 1.0 → u_h(호버 스로틀, 명목값 0.853) 계단. 시뮬레이션 추력 식에서 추력이 무게와 같아지는 스로틀이다.
+        #204 전에는 0.75였다. 01 문서 §8.1의 AUW 735 g, 정적 추력 1300 gf에서 √(735/1300)로 구한 값이다.
+        시뮬레이션의 최대 추력은 Kf·3000² = 9.9 N(1009 gf)이라 0.75에서는 추력이 무게의 0.77배였다.
         환경이 params.yaml의 throttle_slew_rate로 명령을 자르므로 실제 스로틀은 경사로 바뀐다(#120).
    각 시나리오를 회전자 항 끔, 켬(spin_dir +1), 켬(spin_dir -1)으로 돌린다.
    - 합격: 모든 seed에서 마지막 |ψ| ≤ 1°. 롤·피치 판정(pd_gate.py와 같은 기준)도 합격이다.
@@ -61,7 +64,7 @@ import sys
 import numpy as np
 import yaml
 
-from hopper_aviary import HopperAttitudeEnv
+from hopper_aviary import HopperAttitudeEnv, hover_throttle
 from pd_gate import EVAL_SEEDS, MAX_CRASH, MAX_MEDIAN_TILT_DEG, gate_passes, pd
 
 PARAMS = os.path.join(os.path.dirname(__file__), "params.yaml")
@@ -71,7 +74,6 @@ LEAK_TOL = 1e-6     # rad/s, 한 스텝 각속도 누설 허용치
 MAX_FINAL_YAW_DEG = 1.0
 
 # 회전자 항 검사(#86)
-THROTTLE_HOVER = 0.75   # 호버 스로틀 추정 √(735 g / 1300 gf), 01 문서 §8.1. 시나리오 B와 반작용 손계산에 쓴다
 STEP_TIME_S = 1.0       # 시나리오 B에서 스로틀을 바꾸는 시각
 GYRO_W0 = 0.5           # rad/s, 자이로 손계산의 첫 롤 각속도
 GYRO_STEPS = 30         # 0.3 s
@@ -184,6 +186,14 @@ def cross_matrix(v):
     return np.array([[0.0, -v[2], v[1]], [v[2], 0.0, -v[0]], [-v[1], v[0], 0.0]])
 
 
+def hover(p):
+    """params.yaml 명목값의 호버 스로틀(0-1). 시나리오 B와 2번 가·다·라의 계단 목표다(#204).
+
+    hopper_aviary.hover_throttle()을 쓴다. altitude_check.py도 같은 함수를 쓴다.
+    """
+    return hover_throttle(p["mass"], p["Kf"], p["omega_t_per_throttle"])
+
+
 def throttle_action(throttle, vanes=(0.0, 0.0, 0.0, 0.0)):
     """스로틀(0-1)을 행동 벡터의 -1~1 값으로 바꾼다."""
     return np.array([*vanes, 2.0 * throttle - 1.0], dtype=np.float32)
@@ -219,6 +229,7 @@ def rotor_env(spin):
 def check_rotor_reaction(p, spin):
     """가. 반작용: 스로틀 계단에서 z축 각운동량 보존과 회전수가 다 따라간 뒤의 Δωz."""
     r = p["rotor"]
+    u_h = hover(p)
     env = rotor_env(spin)
     env.state = np.zeros(6, dtype=np.float32)
     obs, *_ = env.step(throttle_action(1.0))   # 첫 스텝: 회전자가 이미 omega_max로 돌고 있었다고 둔다
@@ -227,11 +238,11 @@ def check_rotor_reaction(p, spin):
     steps = int(np.ceil(max(1.0, 20.0 * r["tau"]) / env.dt))
     drift = 0.0
     for _ in range(steps):
-        obs, *_ = env.step(throttle_action(THROTTLE_HOVER))
+        obs, *_ = env.step(throttle_action(u_h))
         momentum = p["Jzz"] * float(obs[5]) + spin * r["inertia"] * env.rotor_omega
         drift = max(drift, abs(momentum - momentum0))
     got = float(obs[5])
-    want = -spin * r["inertia"] * r["omega_max"] * (THROTTLE_HOVER - 1.0) / p["Jzz"]
+    want = -spin * r["inertia"] * r["omega_max"] * (u_h - 1.0) / p["Jzz"]
     where = f"반작용 spin_dir {spin:+d}"
     print(f"   가. {where}: {steps * env.dt:.1f} s 뒤 ωz = {got:.5f} rad/s, 손계산 {want:.5f} rad/s, "
           f"z축 각운동량 변화 최대 {drift:.2e} N·m·s")
@@ -281,18 +292,19 @@ def check_thrust_lag(p, spin):
     z축에는 반작용 −s·I_r·(Ω_k − Ω_(k−1))/Jzz가 더해진다. 롤 명령은 τz를 만들지 않는다.
     """
     r = p["rotor"]
+    u_h = hover(p)
     env = rotor_env(spin)
     env.state = np.zeros(6, dtype=np.float32)
     env.step(throttle_action(1.0))   # 첫 스텝: 회전자가 이미 omega_max로 돌고 있었다고 둔다(u = 1)
     for _ in range(THRUST_PROBE_STEPS - 1):
-        env.step(throttle_action(THROTTLE_HOVER))
+        env.step(throttle_action(u_h))
     before = env.state.astype(float)
-    action = throttle_action(THROTTLE_HOVER, vanes=COMMANDS["롤 [1,0,1,0]"][:4])
+    action = throttle_action(u_h, vanes=COMMANDS["롤 [1,0,1,0]"][:4])
     obs, *_ = env.step(action)
     got = obs[3:6].astype(float) - before[3:6]
 
     decay = np.exp(-env.dt / r["tau"]) if r["tau"] > 0 else 0.0
-    u0, u1 = (THROTTLE_HOVER + (1.0 - THROTTLE_HOVER) * decay**k for k in (THRUST_PROBE_STEPS - 1, THRUST_PROBE_STEPS))
+    u0, u1 = (u_h + (1.0 - u_h) * decay**k for k in (THRUST_PROBE_STEPS - 1, THRUST_PROBE_STEPS))
     J = np.array([p["Jxx"], p["Jyy"], p["Jzz"]])
     h = np.array([0.0, 0.0, spin * r["inertia"] * r["omega_max"] * 0.5 * (u0 + u1)])
     want = np.linalg.solve(np.diag(J) - 0.5 * env.dt * cross_matrix(h), env.dt * hand_torque(p, action, u1))
@@ -311,8 +323,9 @@ def check_thrust_lag(p, spin):
 
 
 def check_slew(p):
-    """라. 스로틀 변화율 제한(#120): 명령 계단 1.0 → 0.75 → 1.0에서 실제 스로틀이 경사로 바뀌는지 본다."""
+    """라. 스로틀 변화율 제한(#120): 명령 계단 1.0 → 호버 스로틀 → 1.0에서 실제 스로틀이 경사로 바뀌는지 본다."""
     rate = p["throttle_slew_rate"]
+    u_h = hover(p)
     if rate is None:
         print("   라. 스로틀 변화율 제한: params.yaml throttle_slew_rate = null (제한 없음, 검사 건너뜀)")
         return []
@@ -321,8 +334,8 @@ def check_slew(p):
     env.servo_enabled = False   # 베인 0 명령이라 결과는 같다. 서보 모델은 마.에서 본다
     env.reset(seed=0)
     d = rate * env.dt
-    n = int(np.ceil((1.0 - THROTTLE_HOVER) / d)) + 5   # 경사가 끝나고 5스텝 더
-    commands = [1.0] + [THROTTLE_HOVER] * n + [1.0] * n
+    n = int(np.ceil((1.0 - u_h) / d)) + 5   # 경사가 끝나고 5스텝 더
+    commands = [1.0] + [u_h] * n + [1.0] * n
     want, got = [], []
     for k, cmd in enumerate(commands):
         _, _, _, _, info = env.step(throttle_action(cmd))
@@ -330,9 +343,9 @@ def check_slew(p):
         # 손계산: 첫 스텝은 명령 그대로. 그 뒤는 명령 쪽으로 d씩 가고 명령에서 멈춘다
         prev = want[-1] if want else cmd
         want.append(cmd if k == 0 else min(max(cmd, prev - d), prev + d))
-    ramp_s = (1.0 - THROTTLE_HOVER) / rate
+    ramp_s = (1.0 - u_h) / rate
     err = float(np.max(np.abs(np.array(got) - np.array(want))))
-    print(f"   라. 스로틀 변화율 제한 {rate:g}/s: 명령 1.0 → {THROTTLE_HOVER:g} → 1.0, 경사 {ramp_s:.2f} s씩, "
+    print(f"   라. 스로틀 변화율 제한 {rate:g}/s: 명령 1.0 → {u_h:.3f}(호버) → 1.0, 경사 {ramp_s:.2f} s씩, "
           f"실제 스로틀과 손계산의 차이 최대 {err:.1e}")
     failures = []
     if not err <= SLEW_TOL:
@@ -517,11 +530,11 @@ def roll_step_pitch_peak(rotor, spin=1):
     return float(np.degrees(peak))
 
 
-def check_yaw_pd(rotor_switch, slew_rate):
+def check_yaw_pd(rotor_switch, slew_rate, u_h):
     print(f"3. 요 PD (랜덤화 켬, 회전자 상수 포함, 평가 seed {EVAL_SEEDS.start}-{EVAL_SEEDS.stop - 1}, kp=8, kd=2)")
-    print(f"   A: 스로틀 1.0 고정. B: t = {STEP_TIME_S:g} s에 스로틀 명령 1.0 → {THROTTLE_HOVER:g} 계단(호버 추정)")
+    print(f"   A: 스로틀 1.0 고정. B: t = {STEP_TIME_S:g} s에 스로틀 명령 1.0 → {u_h:.3f} 계단(호버 스로틀, params.yaml 명목값)")
     print("   스로틀 변화율 제한(params.yaml throttle_slew_rate): "
-          + (f"{slew_rate:g}/s → B의 실제 스로틀은 {(1.0 - THROTTLE_HOVER) / slew_rate:.2f} s에 걸쳐 바뀐다"
+          + (f"{slew_rate:g}/s → B의 실제 스로틀은 {(1.0 - u_h) / slew_rate:.2f} s에 걸쳐 바뀐다"
              if slew_rate is not None else "없음 → B의 실제 스로틀도 계단이다"))
     print(f"   params.yaml rotor.enabled = {str(rotor_switch).lower()} → "
           + ("A·B의 회전자 항 켬 줄을 판정한다\n" if rotor_switch else "A·회전자 항 끔 줄만 판정한다\n"))
@@ -531,7 +544,7 @@ def check_yaw_pd(rotor_switch, slew_rate):
     print("   |---|---|---|---|---|---|---|---|---|")
     failures = []
     initial_max = None
-    for scenario, step_throttle in (("A", None), ("B", THROTTLE_HOVER)):
+    for scenario, step_throttle in (("A", None), ("B", u_h)):
         for rotor, spin in ((False, 1), (True, 1), (True, -1)):
             m = run_yaw_pd(rotor, spin, step_throttle)
             initial_max = m["initial_max_deg"]
@@ -563,7 +576,7 @@ def main():
     with open(PARAMS, "r", encoding="utf-8") as f:
         p = yaml.safe_load(f)
     rotor_switch = bool(p.get("rotor", {}).get("enabled", False))
-    failures = check_torque(p) + check_rotor(p) + check_yaw_pd(rotor_switch, p["throttle_slew_rate"])
+    failures = check_torque(p) + check_rotor(p) + check_yaw_pd(rotor_switch, p["throttle_slew_rate"], hover(p))
     if failures:
         print("\n요 축 판정: 불합격")
         for msg in failures:
