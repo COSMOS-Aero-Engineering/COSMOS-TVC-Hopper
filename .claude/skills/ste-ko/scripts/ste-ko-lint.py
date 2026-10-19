@@ -13,8 +13,9 @@ beamonic/ste-ko 의 scripts/lint.py (MIT) 를 고쳐 쓴 것이다. 바꾼 점�
   warn  고칠 신호다. 문맥상 맞으면 그대로 둔다.
   info  근거가 있을 때만 구체화한다. 기본 출력에서 숨기고 --all 로 본다.
 
-표준 입력(`-`)은 UTF-8로 먼저 읽고, 아니면 파이썬의 표준 입력 인코딩(한국어 Windows의 파이프는
-cp949)으로 읽는다. 둘 다 아니면 종료 코드 2 를 낸다.
+파일은 UTF-8로 읽는다. 표준 입력(`-`)은 UTF-8로 먼저 읽고, 아니면 파이썬의 표준 입력 인코딩
+(한국어 Windows의 파이프는 cp949)으로 읽는다. 둘 다 아니면 종료 코드 2 를 낸다. 파일과 표준 입력
+모두 맨 앞의 UTF-8 BOM을 뗀다.
 
 의존성 없음. 표준 라이브러리만 쓴다.
 """
@@ -26,6 +27,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -144,7 +146,7 @@ def load_dictionary(path=None):
     if not path.exists():
         return []
     out, section = [], None
-    for line in path.read_text(encoding="utf-8").split("\n"):
+    for line in read_file(path).split("\n"):
         h = re.match(r"^#{2,3}\s+([A-Z])(?:-(\d))?\.", line)
         if h:
             section = h.group(1) + (h.group(2) or "")
@@ -168,6 +170,16 @@ def load_dictionary(path=None):
             if pat:
                 out.append((re.compile(pat), t, good, section, level))
     return out
+
+
+def read_file(path):
+    """UTF-8 파일을 읽는다. 맨 앞에 BOM(U+FEFF)이 있으면 뗀다.
+
+    Windows PowerShell 5.1의 `Set-Content -Encoding UTF8` 과 `Out-File -Encoding UTF8` 은 파일 앞에
+    BOM을 붙인다. utf-8 코덱은 BOM을 떼지 않는다. 그러면 첫 줄이 U+FEFF로 시작해서 코드 펜스와
+    frontmatter를 알아보지 못하고, 그 안의 글을 검사해서 틀린 hard 지적을 냈다(#195).
+    """
+    return Path(path).read_text(encoding="utf-8-sig")
 
 
 def suffix_stem(stem):
@@ -398,15 +410,38 @@ def self_test():
         assert run.returncode == 1, f"{io_encoding}: 종료 코드 {run.returncode}. {err}"
         for want in (b"3.2\thard", b"8.1\thard"):
             assert want in run.stdout, f"{io_encoding}: {want!r} 를 못 잡았다. {run.stdout!r}"
+
+    # 파일 입력의 UTF-8 BOM(#195). Windows PowerShell 5.1이 UTF-8로 저장한 파일은 앞에 BOM이 있다.
+    # 고치기 전에는 첫 줄의 코드 펜스와 frontmatter를 알아보지 못해서 그 안의 `3~5` 를 8.1 hard로 냈다.
+    bom_cases = {
+        "```\n범위 — 3~5 개다.\n```\n": [],
+        "---\ntitle: 3~5\n---\n본문이다.\n": [],
+        "결과가 화면에 보여집니다.\n": [(1, "3.2", "hard")],
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        for text, want in bom_cases.items():
+            path = Path(tmp) / "bom.md"
+            path.write_bytes(codecs.BOM_UTF8 + text.encode("utf-8"))
+            read = read_file(path)
+            assert read == text, f"BOM을 떼지 않았다: {read!r}"
+            got = [(n, r, lv) for n, r, lv, _ in check_text(read, "문서", [])]
+            assert got == want, f"BOM 파일: {text!r} → {got}"
+            # 명령줄로 파일 경로를 줄 때도 main() 이 BOM을 떼는지 본다.
+            run = subprocess.run([sys.executable, __file__, str(path), "--no-vocab"],
+                                 capture_output=True, check=False)
+            err = run.stderr.decode("utf-8", "replace")
+            code = 1 if want else 0
+            assert run.returncode == code, f"BOM 파일 CLI: 종료 코드 {run.returncode}. {err}"
+            assert b"8.1\thard" not in run.stdout, f"BOM 파일 CLI: {text!r} → {run.stdout!r}"
     print("self-test OK")
 
 
 def decode_input(data, fallback):
     """표준 입력에서 읽은 바이트를 글로 바꾼다. (글, 쓴 대체 인코딩) 을 돌려준다.
 
-    UTF-8로 먼저 읽고, 앞에 BOM이 있으면 뗀다. 파일 입력은 utf-8로 읽어서 BOM을 떼지 않는다
-    (#195). UTF-8이 아니면 fallback(파이썬이 표준 입력에 쓰는 인코딩. 한국어 Windows의 파이프는
-    cp949)으로 읽고, 그 이름을 돌려준다. UTF-8로 읽었으면 None 이다. 둘 다 아니면 UnicodeDecodeError 를 낸다.
+    UTF-8로 먼저 읽고, 앞에 BOM이 있으면 뗀다. 파일 입력의 read_file 과 같다(#195). UTF-8이
+    아니면 fallback(파이썬이 표준 입력에 쓰는 인코딩. 한국어 Windows의 파이프는 cp949)으로 읽고,
+    그 이름을 돌려준다. UTF-8로 읽었으면 None 이다. 둘 다 아니면 UnicodeDecodeError 를 낸다.
     """
     try:
         return data.decode("utf-8-sig"), None
@@ -509,7 +544,7 @@ def main():
             if not Path(f).is_file():
                 print(f"{f}: 파일이 없다", file=sys.stderr)
                 continue
-            results.append((f, check_text(Path(f).read_text(encoding="utf-8"), a.surface, vocab)))
+            results.append((f, check_text(read_file(f), a.surface, vocab)))
 
     count = {"hard": 0, "warn": 0, "info": 0}
     rows = []
