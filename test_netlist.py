@@ -38,6 +38,12 @@ class ExportedPins(unittest.TestCase):
                 node.set("pin", "2" if node.get("pin") == "1" else "1")
         self.assertFalse(self.run_artifact(tree))
 
+    def test_unexpected_exported_pin_fails(self):
+        tree = ET.parse(ARTIFACT)
+        net = tree.find("./nets/net")
+        ET.SubElement(net, "node", ref="UNEXPECTED", pin="99", pintype="passive")
+        self.assertFalse(self.run_artifact(tree))
+
     def test_missing_imu_pin_fails(self):
         tree = ET.parse(ARTIFACT)
         for net in tree.findall("./nets/net"):

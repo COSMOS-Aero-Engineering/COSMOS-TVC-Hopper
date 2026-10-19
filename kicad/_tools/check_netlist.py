@@ -14,6 +14,7 @@ from check_imu_nets import load_components, EXPECTED, J6_PIN_NAME
 def check(path):
     actual = defaultdict(list)
     root = ET.parse(path).getroot()
+    # Current generator uses one sheet; KiCad prefixes its local labels with /.
     for net in root.findall("./nets/net"):
         nodes = net.findall("node")
         for node in nodes:

@@ -884,6 +884,7 @@ def task_kicadver():
 
     .kicad_pro의 PCB 설정과 .kicad_pcb가 함께 커밋됐는지(#197), KiCad 10.0.6이 쓴 null이 없는지(#196)도 본다.
 
+    실제 XML 넷리스트 fixture의 전체 핀 연결 회귀 검사도 함께 실행한다(#66).
     KiCad가 없어도 돈다. KiCad로 실제로 여는 확인은 kicad/README.md의 kicad-cli 명령으로 한다.
     """
     run([sys.executable, "-m", "unittest", "-q", "test_kicad_version", "test_netlist"], cwd=ROOT)
