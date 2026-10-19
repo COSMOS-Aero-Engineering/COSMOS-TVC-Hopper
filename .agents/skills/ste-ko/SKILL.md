@@ -154,6 +154,12 @@ python3 scripts/ste-ko-lint.py --self-test
 | `warn` | 번역투, 공문투, 빈 동사, 명사화, 문장 길이 신호 | 0 (`--strict`면 1) |
 | `info` | 모호어, 완충어, 수치 표현. 근거가 있을 때만 바꾼다 | 0, 기본 출력에서 숨김 |
 
+표준 입력(`-`)은 UTF-8로 먼저 읽는다. UTF-8이 아니면 파이썬의 표준 입력 인코딩(한국어 Windows는 cp949)으로 읽고 stderr에 알린다. 둘 다 아니면 종료 코드 2를 낸다.
+
+파일은 UTF-8로 읽는다. 파일과 표준 입력 모두 맨 앞의 UTF-8 BOM을 뗀다. Windows PowerShell 5.1의 `Set-Content -Encoding UTF8`과 `Out-File -Encoding UTF8`은 파일 앞에 BOM을 붙인다.
+
+Windows PowerShell 5.1은 파이프로 넘기는 글을 기본으로 ASCII(`$OutputEncoding`)로 바꾼다. 그래서 한글이 검사기에 닿기 전에 `?`가 되고, 한글 규칙을 놓친 채 종료 코드 0이 나올 수 있다. 먼저 `$OutputEncoding = [System.Text.Encoding]::UTF8`을 실행하거나 파일 경로를 준다. PowerShell 7의 기본값은 UTF-8이다.
+
 결론 위치(6.1), 명사 나열(2.1), 사실과 추론 구분(6.2)은 형태소 분석이나 문맥이 필요해서 검사기가 보지 않는다. 사람이나 모델이 읽고 판단한다.
 
 ## 참고 파일

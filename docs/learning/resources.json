@@ -215,7 +215,7 @@
       "url": "https://www.youtube.com/watch?v=0WCi1rhueH4",
       "scope": "프로젝트와 편집기 소개",
       "exercise": "프로젝트 파일과 회로도 파일을 구분한다.",
-      "note": "수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다.",
+      "note": "영상은 KiCad 9.0 기준이다. 설치는 KiCad 10으로 한다. KiCad 9는 팀 회로도 `cosmos-avionics.kicad_sch`를 열지 못한다([KiCad README](../../kicad/README.md), #139). 수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다.",
       "language": "영어"
     },
     {
@@ -466,7 +466,7 @@
       "title": "Gymnasium Create a Custom Environment",
       "url": "https://gymnasium.farama.org/introduction/create_custom_env/",
       "scope": "관측·행동 공간과 reset/step",
-      "exercise": "우리 환경의 관측 6개와 행동 5개를 코드에서 찾는다.",
+      "exercise": "우리 환경의 관측 7개와 행동 5개를 코드에서 찾는다.",
       "note": "예제 GridWorld는 호퍼의 물리 모델이 아니다.",
       "language": "영어"
     },

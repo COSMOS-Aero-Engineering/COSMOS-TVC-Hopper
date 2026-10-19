@@ -80,7 +80,7 @@ class ConnectomeGraph:
                 "노드를 거른 뒤 엣지 인덱스를 다시 매기지 않은 경우가 대부분이다."
             )
         if (self.edge_w <= 0).any():
-            raise ValueError("edge_w 에 0 이하가 있다 — 크기는 항상 양수여야 한다(부호는 edge_sign).")
+            raise ValueError("edge_w 에 0 이하가 있다. 크기는 항상 양수여야 한다(부호는 edge_sign).")
         if not np.isin(self.edge_sign, (-1.0, 1.0)).all():
             raise ValueError("edge_sign 은 +1 또는 -1 만 가능하다.")
         for name, idx in (("sensory_idx", self.sensory_idx), ("motor_idx", self.motor_idx)):

@@ -31,13 +31,13 @@
 | `firmware/cosmos/throttle_serial/` | DShot 벤치 펌웨어 | ESC 없이 확인 |
 | `firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 원본(MIT). 통합 펌웨어의 출발점 | 손대지 않음 |
 | `firmware/singlecopter.param.md` | ArduPilot SingleCopter 대안 경로 | 보존 |
-| `sim/sim_stage1/` | Stage 1 환경(`hopper_aviary.py`, 관측 6·행동 5), `params.yaml`, `train.py`, `export_episode.py` | #21 베인 제어력 정정(CL 기하 인자·`vane_arm_l`, PR #35). 값은 아직 추정값 |
+| `sim/sim_stage1/` | Stage 1 환경(`hopper_aviary.py`, 관측 7·행동 5), `params.yaml`, `train.py`, `export_episode.py` | #21 베인 제어력 정정(CL 기하 인자·`vane_arm_l`, PR #35). 값은 아직 추정값 |
 | `sim/connectome/` | 확장 트랙 A: 커넥톰 제약 정책망 | 파이프라인 검증 |
-| `kicad/` | 회로도(생성물)와 생성·검증 스크립트(`_tools/`) | ERC 미실행 |
+| `kicad/` | 회로도(생성물)와 생성·검증 스크립트(`_tools/`) | ERC 실행(10/17, 오류 4·경고 129). Y축 반전 결함 #66 — 배선에 쓰지 말 것(극성 반대) |
 | `web/` | CSV 재생 3D 뷰어(W-A 뼈대) | 신규, 10/16 |
 | `data/` | 실험 로그. 파일명 `YYYYMMDD-TCx-런번호` | 비어 있음 |
 | `tasks.py`, `pyproject.toml`, `sim/pyproject.toml`, `uv.lock` | 작업 실행기와 파이썬 의존성 고정. `sim/requirements.txt`는 생성물 | |
-| `ship.py` | ship-issue 도구(`tools`/`wt`/`capped`/`review`/`skills`). 5절 작업 순서의 명령을 모든 PC에 준다. 표준 라이브러리만 쓴다 | 10/16 |
+| `ship.py`, `test_ship.py` | ship-issue 도구(`tools`/`wt`/`link`/`capped`/`review`/`skills`). `AGENTS.md` §작업 순서의 명령을 모든 PC에 준다. 표준 라이브러리만 쓴다. `test_ship.py`는 gh 없이 가짜 응답으로 도는 단위 검사다(`python tasks.py shiptest`, `check`에 포함) | 10/16, `link`와 `test_ship.py`는 #109 |
 | `.claude/skills/ship-issue/`, `.claude/skills/ste-ko/` | AI 도구용 스킬(정본). 이슈·PR·커밋 문장은 `ste-ko`를 따른다 | 10/16 |
 | `.agents/skills/` | Codex용 스킬 복사본. 직접 고치지 않는다. `python ship.py skills`가 정본에서 만든다 | 10/16 |
 | `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/task.yml` | PR 본문 양식(결정·교차 리뷰·알게 된 것 포함), 작업 이슈 양식 | 10/16 |

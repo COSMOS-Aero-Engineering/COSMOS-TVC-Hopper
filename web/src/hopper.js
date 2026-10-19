@@ -14,6 +14,7 @@ const CAD = {
   vane_inner_r: 4,
   vane_outer_r: 41,     // vane_ring_id/2 + 3
   vane_chord: 25,
+  vane_thick: 2.5,
   foot_circle: 360,
   foot_z: -140,
   top_plate_z: 180,     // 01-avionics §7.7 상판 178~182
@@ -22,6 +23,17 @@ const CAD = {
 // 베인 1~4 = FWD / LEFT / AFT / RIGHT (01-avionics §1)
 const VANE_AZ_DEG = [0, 90, 180, 270];
 const VANE_COLORS = [0xe4572e, 0x29a3a3, 0x7a7a7a, 0x7a7a7a];
+
+// servo = ±1일 때 베인 편향각. sim/sim_stage1/params.yaml의 alpha_max_deg와 같은 값이다(alpha = servo × alpha_max).
+export const VANE_ALPHA_MAX_DEG = 10;
+
+// servo > 0일 때 힌지(스파, 반경 방향 축) 회전 부호. 시뮬레이션의 힘 방향에서 정했다.
+// hopper_aviary.py step(): tau_x = (F1+F3)·l, tau_y = -(F2+F4)·l, 베인은 무게중심 아래 l에 있다.
+// 그래서 servo > 0이면 베인 1·3의 측력은 +Y, 베인 2·4의 측력은 +X다.
+// 베인은 배기를 측력의 반대쪽으로 꺾는다. 그래서 판의 아래 끝(뒷전)이 측력의 반대쪽으로 가야 한다.
+// 반경축 둘레 +회전은 아래 끝을 접선 +방향(위에서 볼 때 반시계)으로 보낸다. 이 두 조건에서 아래 부호가 나온다.
+// 실물 서보의 회전 방향은 TC-1에서 펌웨어 write_servo() 부호로 이 정의에 맞춘다(01-avionics §1).
+const VANE_HINGE_SIGN = [-1, 1, 1, -1];
 
 function place(mesh, x, y, z) {
   mesh.position.copy(bodyToThreeVec(x, y, z));
@@ -49,7 +61,8 @@ export function buildHopper() {
   const ring = new THREE.Mesh(ringGeo, grey);
   g.add(place(ring, 0, 0, CAD.vane_ring_bot_z));
 
-  // 베인 4개: 반경 방향 평판, 시위는 세로(body Z)
+  // 베인 4개: 반경 방향 평판, 시위는 세로(body Z). CAD vane_one()처럼 스파(반경 방향 축) 둘레로 돈다.
+  // pivot: 베인 방위만 맞춘다(로컬 X = 반경 바깥, 로컬 Y = body Z). hinge: 로컬 X 둘레 편향각만 바꾼다.
   const span = CAD.vane_outer_r - CAD.vane_inner_r;
   const vanes = VANE_AZ_DEG.map((az, i) => {
     const pivot = new THREE.Group();
@@ -57,12 +70,14 @@ export function buildHopper() {
     const rMid = CAD.vane_inner_r + span / 2;
     pivot.position.copy(bodyToThreeVec(rMid * Math.cos(a), rMid * Math.sin(a), CAD.vane_pivot_z));
     pivot.rotation.y = a; // 반경 방향으로 돌려 놓는다 (three Y = body Z 축 회전)
+    const hinge = new THREE.Group();
     const plate = new THREE.Mesh(
-      new THREE.BoxGeometry(span, CAD.vane_chord, 2.5),
+      new THREE.BoxGeometry(span, CAD.vane_chord, CAD.vane_thick),
       new THREE.MeshStandardMaterial({ color: VANE_COLORS[i] }));
-    pivot.add(plate);
+    hinge.add(plate);
+    pivot.add(hinge);
     g.add(pivot);
-    return pivot;
+    return hinge;
   });
 
   // 다리 4개: 45° 계열 (01-avionics §1), 베인링 하단에서 발까지
@@ -87,4 +102,15 @@ export function buildHopper() {
   g.add(fwd);
 
   return { group: g, vanes };
+}
+
+// 베인 애니메이션 (02 문서 §5.3, PRD #29 작업 6).
+// servos: servo1..4, -1~1 정규화 값. null이면 중립(0°)으로 둔다.
+// µs 값은 받지 않는다. µs → 각도 변환은 서보 보정(TC-1) 전이라 정할 수 없다. 범위 검사는 main.js가 한다.
+export function poseVanes(vanes, servos) {
+  const max = THREE.MathUtils.degToRad(VANE_ALPHA_MAX_DEG);
+  vanes.forEach((hinge, i) => {
+    const s = servos[i];
+    hinge.rotation.x = s === null ? 0 : VANE_HINGE_SIGN[i] * s * max;
+  });
 }

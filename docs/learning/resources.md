@@ -41,7 +41,7 @@
 | ID · 단계 · 형식 · 언어 | 자료와 볼 범위 | 보고 나서 할 일 · 적용 한계 |
 |---|---|---|
 | K01 · 입문 · 글·그림 · 영어 | [KiCad 10 공식 첫 프로젝트](https://docs.kicad.org/10.0/en/getting_started_in_kicad/getting_started_in_kicad.html)<br>Schematic Editor, Electrical Rules Check | 기존 회로도를 열고 CS 넷 하나를 추적한다.<br>설치된 버전과 문서 버전을 확인한다. ERC는 실제 전압·기능 시험을 대신하지 않는다. |
-| K02 · 입문 · 영상 · 영어 | [DigiKey KiCad 9.0 1: Intro & Download](https://www.youtube.com/watch?v=0WCi1rhueH4)<br>프로젝트와 편집기 소개 | 프로젝트 파일과 회로도 파일을 구분한다.<br>수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다. |
+| K02 · 입문 · 영상 · 영어 | [DigiKey KiCad 9.0 1: Intro & Download](https://www.youtube.com/watch?v=0WCi1rhueH4)<br>프로젝트와 편집기 소개 | 프로젝트 파일과 회로도 파일을 구분한다.<br>영상은 KiCad 9.0 기준이다. 설치는 KiCad 10으로 한다. KiCad 9는 팀 회로도 `cosmos-avionics.kicad_sch`를 열지 못한다([KiCad README](../../kicad/README.md), #139). 수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다. |
 | K03 · 첫 실습 · 영상 · 영어 | [DigiKey KiCad 9.0 2: Schematic Layout](https://www.youtube.com/watch?v=0Q6gU7-QqUg)<br>심볼 선택, 배치, 값 수정, 넷 연결 | 별도 연습 프로젝트에서 커넥터 두 개를 연결한다.<br>수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다. |
 | K04 · 첫 실습 · 영상 · 영어 | [DigiKey KiCad 9.0 3: Custom Schematic Symbol](https://www.digikey.com/en/videos/d/digi-key-electronics/kicad-9-0-getting-started-part-3-create-a-custom-schematic-symbol-digikey)<br>심볼 라이브러리와 핀 속성 | 심볼 핀 번호와 실제 보드 핀 번호의 차이를 적는다.<br>수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다. |
 | K05 · 첫 실습 · 영상 · 영어 | [DigiKey KiCad 9.0 4: Finishing the Schematic](https://www.youtube.com/watch?v=KN3fHXhNkTU)<br>넷 이름, 외부 부품, ERC | ERC 오류 하나의 원인을 기록한다.<br>수분 경보기 예제다. 우리 회로·전원·PCB 제조 승인을 뜻하지 않는다. KiCad 10과 UI가 다를 수 있다. |
@@ -72,7 +72,7 @@
 | ID · 단계 · 형식 · 언어 | 자료와 볼 범위 | 보고 나서 할 일 · 적용 한계 |
 |---|---|---|
 | R01 · 입문 · 글·그림 · 영어 | [Gymnasium Basic Usage](https://gymnasium.farama.org/introduction/basic_usage/)<br>reset, step, observation, action, 종료 신호 | step 반환값 다섯 개의 뜻을 적는다.<br>공식 설치 명령 대신 저장소 uv.lock을 사용한다. |
-| R02 · 첫 실습 · 글·코드 · 영어 | [Gymnasium Create a Custom Environment](https://gymnasium.farama.org/introduction/create_custom_env/)<br>관측·행동 공간과 reset/step | 우리 환경의 관측 6개와 행동 5개를 코드에서 찾는다.<br>예제 GridWorld는 호퍼의 물리 모델이 아니다. |
+| R02 · 첫 실습 · 글·코드 · 영어 | [Gymnasium Create a Custom Environment](https://gymnasium.farama.org/introduction/create_custom_env/)<br>관측·행동 공간과 reset/step | 우리 환경의 관측 7개와 행동 5개를 코드에서 찾는다.<br>예제 GridWorld는 호퍼의 물리 모델이 아니다. |
 | R03 · 입문 · 글·코드 · 영어 | [SB3 Quickstart](https://stable-baselines3.readthedocs.io/en/master/guide/quickstart.html)<br>learn와 predict의 구분 | 학습과 평가에서 바뀌는 것이 무엇인지 적는다.<br>공식 첫 예제는 A2C다. 우리 코드의 PPO와 구분하고 의존성은 lock을 따른다. |
 | R04 · 첫 실습 · 글·코드 · 영어 | [SB3 PPO 문서](https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html)<br>PPO 생성자, learn, predict | 우리 학습 코드의 n_steps와 batch_size 위치를 찾는다.<br>최신 master 문서와 고정된 설치 버전은 다를 수 있다. |
 | R05 · 첫 실습 · 글 · 영어 | [SB3 RL Tips and Tricks](https://stable-baselines3.readthedocs.io/en/master/guide/rl_tips.html)<br>평가 환경, 여러 실행, 정규화 | 훈련 seed와 평가 seed를 구분한 평가 계획을 쓴다.<br> |

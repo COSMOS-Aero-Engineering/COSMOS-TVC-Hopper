@@ -1,6 +1,6 @@
 # cad/ — 파라메트릭 CAD
 
-CLAUDE.md/AGENTS.md 원칙: **프리핸드 CAD 금지.** 코드 기반 파라메트릭 설계 우선.
+이 폴더의 원칙: **프리핸드 CAD 금지.** 코드 기반 파라메트릭 설계 우선. (예전 `AGENTS.md`에 있던 원칙이다. 2026-09-17 정리에서 `AGENTS.md`에서는 빠졌다.)
 
 ## 현재 정본
 
@@ -36,6 +36,9 @@ export 완료됨, `print_parts/README.md` 참고).
 1. [OpenSCAD](https://openscad.org/downloads.html) 설치(무료). `hopper_params.scad` 열고 F5.
 2. 부품 실측값이 바뀌면 파일 맨 위 `MEASURED` 블록만 수정 — 나머지는 자동 갱신.
 3. 콘솔 `echo()` 출력으로 조립 정합성(클램프가 EDF 몸통 범위 안에 있는지, 트레이가 안 겹치는지 등) 확인.
+   명령행에서는 저장소 루트에서 `python tasks.py cad`. echo에 `!!` 경고가 있거나 OpenSCAD가 WARNING·ERROR를
+   내면 실패한다. CI도 PR마다 같은 검사를 돌린다(#61). OpenSCAD는 환경변수 `OPENSCAD`, PATH,
+   `C:\Program Files\OpenSCAD` 순서로 찾고, 없으면 건너뛴다.
 4. 개별 모듈만 남기고 `F6`(Render) → STL export → `print_parts/`에 저장 (순서: [`print_parts/README.md`](print_parts/README.md)).
 5. 슬라이서에서 확인(PETG, 인필 40%, 벽 4라인 — PLA 금지, 모터 폐열).
 6. 실제 외주 발주 시 그 STL을 `print-orders/<날짜>/`로 복사해서 커밋.

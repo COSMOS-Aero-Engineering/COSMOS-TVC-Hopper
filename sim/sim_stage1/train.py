@@ -41,4 +41,6 @@ for _ in range(3000):
         total_reward = 0.0
         obs, _ = env.reset()
 
-print("학습 완료 — hopper_attitude_ppo.zip 저장됨")
+# print에 em dash처럼 cp949에 없는 문자를 쓰지 않는다. 한국어 Windows에서 출력을 파일로 돌리면
+# zip을 저장한 뒤 여기서 UnicodeEncodeError로 멈추고 exit 1을 낸다(#147).
+print("학습 완료: hopper_attitude_ppo.zip 저장됨")

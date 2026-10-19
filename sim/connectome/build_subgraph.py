@@ -147,7 +147,7 @@ def fetch_flywire(force: bool = False) -> None:
     for name in FILES:
         dest = CACHE / name
         if dest.exists() and not force:
-            print(f"[캐시] {name} — 이미 있다 ({dest.stat().st_size / 1e6:.0f} MB)")
+            print(f"[캐시] {name}: 이미 있다 ({dest.stat().st_size / 1e6:.0f} MB)")
             continue
         url = f"{FLYWIRE_BASE}/{name}"
         print(f"[받는 중] {url}")
@@ -198,7 +198,7 @@ def build_flywire(max_nodes: int, min_syn: int, drop_modulatory: bool) -> Connec
                 type_of[rid] = ctype or "DN"
     print(f"[분류] CX 후보 {len(cx_ids)}개 · 하강뉴런 {len(dn_ids)}개")
     if not cx_ids:
-        raise RuntimeError("CX 세포타입을 하나도 못 찾았다 — cell_type 컬럼 값을 확인할 것.")
+        raise RuntimeError("CX 세포타입을 하나도 못 찾았다. cell_type 컬럼 값을 확인할 것.")
 
     # -- 2) 연결 읽기: CX 내부 + CX->DN 1홉 ---------------------------------
     kept: list[tuple[int, int, int, str]] = []
@@ -239,7 +239,7 @@ def build_flywire(max_nodes: int, min_syn: int, drop_modulatory: bool) -> Connec
     kept = [e for e in kept if e[0] in keep and e[1] in keep]
     if not kept:
         raise RuntimeError(
-            "자르고 나니 남은 연결이 없다 — --min-syn 을 낮추거나 --max-nodes 를 키울 것."
+            "자르고 나니 남은 연결이 없다. --min-syn 을 낮추거나 --max-nodes 를 키울 것."
         )
 
     # 남은 노드만 다시 모아 지역 인덱스를 새로 매긴다. (여기를 빼먹으면 edge_index가
@@ -258,7 +258,7 @@ def build_flywire(max_nodes: int, min_syn: int, drop_modulatory: bool) -> Connec
     is_dn = np.array([rid in dn_ids for rid in nodes])
     motor_idx = np.flatnonzero(is_dn).astype(np.int64)
     if motor_idx.size == 0:
-        raise RuntimeError("남은 노드에 하강뉴런이 없다 — --max-nodes 를 키울 것.")
+        raise RuntimeError("남은 노드에 하강뉴런이 없다. --max-nodes 를 키울 것.")
 
     # 감각 주입 위치: FlyWire는 '뇌만' 담고 있어서 평형곤(haltere, 초파리의 자이로)
     # 감각뉴런이 아예 없다. 그래서 IMU를 EPG/PEN 링에 직접 꽂는다 — 이건 생물학적

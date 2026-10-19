@@ -13,13 +13,21 @@ beamonic/ste-ko 의 scripts/lint.py (MIT) 를 고쳐 쓴 것이다. 바꾼 점�
   warn  고칠 신호다. 문맥상 맞으면 그대로 둔다.
   info  근거가 있을 때만 구체화한다. 기본 출력에서 숨기고 --all 로 본다.
 
+파일은 UTF-8로 읽는다. 표준 입력(`-`)은 UTF-8로 먼저 읽고, 아니면 파이썬의 표준 입력 인코딩
+(한국어 Windows의 파이프는 cp949)으로 읽는다. 둘 다 아니면 종료 코드 2 를 낸다. 파일과 표준 입력
+모두 맨 앞의 UTF-8 BOM을 뗀다.
+
 의존성 없음. 표준 라이브러리만 쓴다.
 """
 import argparse
+import codecs
 import glob
 import json
+import os
 import re
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -138,7 +146,7 @@ def load_dictionary(path=None):
     if not path.exists():
         return []
     out, section = [], None
-    for line in path.read_text(encoding="utf-8").split("\n"):
+    for line in read_file(path).split("\n"):
         h = re.match(r"^#{2,3}\s+([A-Z])(?:-(\d))?\.", line)
         if h:
             section = h.group(1) + (h.group(2) or "")
@@ -162,6 +170,16 @@ def load_dictionary(path=None):
             if pat:
                 out.append((re.compile(pat), t, good, section, level))
     return out
+
+
+def read_file(path):
+    """UTF-8 파일을 읽는다. 맨 앞에 BOM(U+FEFF)이 있으면 뗀다.
+
+    Windows PowerShell 5.1의 `Set-Content -Encoding UTF8` 과 `Out-File -Encoding UTF8` 은 파일 앞에
+    BOM을 붙인다. utf-8 코덱은 BOM을 떼지 않는다. 그러면 첫 줄이 U+FEFF로 시작해서 코드 펜스와
+    frontmatter를 알아보지 못하고, 그 안의 글을 검사해서 틀린 hard 지적을 냈다(#195).
+    """
+    return Path(path).read_text(encoding="utf-8-sig")
 
 
 def suffix_stem(stem):
@@ -249,7 +267,7 @@ def check_text(text, surface, vocab):
             n = len(sent.split())
             if n > limit["eojeol"]:
                 hits.append((lineno, "4.1", "warn",
-                             f"{n}어절 (신호 {limit['eojeol']}). 뜻이 둘이면 나눈다 — {sent[:30]}…"))
+                             f"{n}어절 (신호 {limit['eojeol']}). 뜻이 둘이면 나눈다: {sent[:30]}…"))
             words = sent.split()
             if words and not is_heading and not is_list:
                 tails.append(words[-1].rstrip(".!?"))
@@ -267,7 +285,7 @@ def check_text(text, surface, vocab):
         for m in DOUBLE_PASSIVE.finditer(clean):
             add(m, "3.2", "hard", f"이중피동 `{m.group()}`")
         for m in TILDE_RANGE.finditer(clean):
-            add(m, "8.1", "hard", f"범위에 물결표 `{m.group()}` — 마크다운이 취소선으로 읽는다. `-` 를 쓴다")
+            add(m, "8.1", "hard", f"범위에 물결표 `{m.group()}`. 마크다운이 취소선으로 읽는다. `-` 를 쓴다")
         for m in NOMINALIZED.finditer(clean):
             add(m, "2.5", "warn", f"동작을 명사로 씀 `{m.group()}` → 동사로 (`검토를 진행했다` → `검토했다`)")
         for pat, bad, good, section, level in vocab:
@@ -293,7 +311,7 @@ def check_text(text, surface, vocab):
         n = len(sentences(strip_noise(joined)))
         if n > limit["para"]:
             first = block.strip().split("\n")[0][:28]
-            hits.append((0, "4.7", "info", f"문단에 {n}문장 (신호 {limit['para']}) — {first}…"))
+            hits.append((0, "4.7", "info", f"문단에 {n}문장 (신호 {limit['para']}): {first}…"))
 
     return sorted(hits, key=lambda h: (h[0], h[1]))
 
@@ -352,7 +370,146 @@ def self_test():
     assert ("10.4", "warn") in rules("좋은 질문입니다. 답은 이렇다.", "대화")
     long = "이 문장은 " + "아주 " * 30 + "길다."
     assert ("4.1", "warn") in rules(long)
+
+    # 지적 메시지가 만드는 글자는 cp949에 있어야 한다. 한국어 Windows에서 출력을 파일이나
+    # 파이프로 돌리면 cp949로 쓰기 때문이다. 입력 글은 cp949에 있는 글자만 쓴다.
+    para = " ".join(["짧은 문장이다."] * 7)
+    for text, rule in ((long, "4.1"), ("항목은 3~5개다.", "8.1"), (para, "4.7")):
+        msgs = [m for _, r, _, m in check_text(text, "문서", vocab) if r == rule]
+        assert msgs, f"{rule} 를 못 잡았다: {text!r}"
+        for m in msgs:
+            try:
+                m.encode("cp949")
+            except UnicodeEncodeError as e:
+                raise AssertionError(f"{rule} 메시지에 cp949에 없는 글자: {m!r}") from e
+
+    # 표준 입력 디코딩. UTF-8을 먼저 읽고, 아니면 대체 인코딩으로 읽고, 둘 다 아니면 멈춘다.
+    em_utf8 = "범위 — 3~5 개다.\n"
+    assert decode_input(em_utf8.encode("utf-8"), "cp949") == (em_utf8, None)
+    assert decode_input(b"\xef\xbb\xbf" + em_utf8.encode("utf-8"), "cp949") == (em_utf8, None)
+    assert decode_input("범위는 3~5 개다.".encode("cp949"), "cp949") == ("범위는 3~5 개다.", "cp949")
+    for data, fallback in ((b"\xff\xfe\xff", "utf-8"), (b"\xff", "cp949"), (b"\xff", "없는-인코딩")):
+        try:
+            decode_input(data, fallback)
+        except UnicodeDecodeError:
+            pass
+        else:
+            raise AssertionError(f"읽지 못할 입력을 읽었다: {data!r}, {fallback}")
+
+    # 입력 인코딩이 cp949일 때 UTF-8 글을 파이프로 준다(#187). 고치기 전에는 오류 처리가 strict면
+    # UnicodeDecodeError로 멈췄다. 한국어 Windows의 파이프(surrogateescape)는 멈추지 않고 한글을
+    # 깨진 글자로 읽어서 3.2 같은 한글 규칙을 조용히 놓쳤다.
+    piped = ("결과가 화면에 보여집니다.\n" + em_utf8).encode("utf-8")
+    for io_encoding in ("cp949", "cp949:surrogateescape"):
+        env = dict(os.environ, PYTHONIOENCODING=io_encoding)
+        env.pop("PYTHONUTF8", None)
+        run = subprocess.run([sys.executable, __file__, "-", "--no-vocab"], input=piped,
+                             capture_output=True, env=env, check=False)
+        err = run.stderr.decode("cp949", "replace")
+        assert "Traceback" not in err, f"{io_encoding}: {err}"
+        assert run.returncode == 1, f"{io_encoding}: 종료 코드 {run.returncode}. {err}"
+        for want in (b"3.2\thard", b"8.1\thard"):
+            assert want in run.stdout, f"{io_encoding}: {want!r} 를 못 잡았다. {run.stdout!r}"
+
+    # 파일 입력의 UTF-8 BOM(#195). Windows PowerShell 5.1이 UTF-8로 저장한 파일은 앞에 BOM이 있다.
+    # 고치기 전에는 첫 줄의 코드 펜스와 frontmatter를 알아보지 못해서 그 안의 `3~5` 를 8.1 hard로 냈다.
+    bom_cases = {
+        "```\n범위 — 3~5 개다.\n```\n": [],
+        "---\ntitle: 3~5\n---\n본문이다.\n": [],
+        "결과가 화면에 보여집니다.\n": [(1, "3.2", "hard")],
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        for text, want in bom_cases.items():
+            path = Path(tmp) / "bom.md"
+            path.write_bytes(codecs.BOM_UTF8 + text.encode("utf-8"))
+            read = read_file(path)
+            assert read == text, f"BOM을 떼지 않았다: {read!r}"
+            got = [(n, r, lv) for n, r, lv, _ in check_text(read, "문서", [])]
+            assert got == want, f"BOM 파일: {text!r} → {got}"
+            # 명령줄로 파일 경로를 줄 때도 main() 이 BOM을 떼는지 본다.
+            run = subprocess.run([sys.executable, __file__, str(path), "--no-vocab"],
+                                 capture_output=True, check=False)
+            err = run.stderr.decode("utf-8", "replace")
+            code = 1 if want else 0
+            assert run.returncode == code, f"BOM 파일 CLI: 종료 코드 {run.returncode}. {err}"
+            assert b"8.1\thard" not in run.stdout, f"BOM 파일 CLI: {text!r} → {run.stdout!r}"
     print("self-test OK")
+
+
+def decode_input(data, fallback):
+    """표준 입력에서 읽은 바이트를 글로 바꾼다. (글, 쓴 대체 인코딩) 을 돌려준다.
+
+    UTF-8로 먼저 읽고, 앞에 BOM이 있으면 뗀다. 파일 입력의 read_file 과 같다(#195). UTF-8이
+    아니면 fallback(파이썬이 표준 입력에 쓰는 인코딩. 한국어 Windows의 파이프는 cp949)으로 읽고,
+    그 이름을 돌려준다. UTF-8로 읽었으면 None 이다. 둘 다 아니면 UnicodeDecodeError 를 낸다.
+    """
+    try:
+        return data.decode("utf-8-sig"), None
+    except UnicodeDecodeError as e:
+        utf8_error = e
+    try:
+        return data.decode(fallback), fallback
+    except (UnicodeDecodeError, LookupError):
+        raise utf8_error from None
+
+
+def is_utf8(encoding):
+    """인코딩 이름이 UTF-8을 가리키는지 본다. 모르는 이름이면 False."""
+    try:
+        return codecs.lookup(encoding).name == "utf-8"
+    except LookupError:
+        return False
+
+
+def read_stdin():
+    """표준 입력을 읽는다. 읽지 못하면 원인을 stderr에 쓰고 None 을 돌려준다.
+
+    sys.stdin.read() 는 로캘 인코딩으로 읽는다. 한국어 Windows에서 파이프와 파일은 cp949로 읽어서,
+    UTF-8 글을 주면 UnicodeDecodeError 로 멈췄다. 그래서 바이트로 읽고 decode_input 으로 바꾼다.
+    """
+    stream = getattr(sys.stdin, "buffer", None)
+    if stream is None:  # io.StringIO 처럼 바이트 버퍼가 없는 표준 입력. 이미 글이다.
+        return sys.stdin.read()
+    fallback = sys.stdin.encoding or "utf-8"
+    try:
+        text, used = decode_input(stream.read(), fallback)
+    except UnicodeDecodeError as e:
+        tried = "UTF-8이" if is_utf8(fallback) else f"UTF-8도 {fallback}도"
+        print(f"<stdin>: 표준 입력을 읽지 못했다. {tried} 아니다(바이트 위치 {e.start})."
+              " 글을 UTF-8 파일로 저장하고 그 경로를 준다.", file=sys.stderr)
+        return None
+    if used:
+        print(f"<stdin>: 표준 입력이 UTF-8이 아니어서 {used}로 읽었다.", file=sys.stderr)
+    return text
+
+
+def keep_output_alive():
+    """출력 인코딩에 없는 글자를 만나도 멈추지 않게 한다.
+
+    한국어 Windows에서 출력을 파일이나 파이프로 돌리면 파이썬은 cp949로 쓴다. cp949에는
+    em dash(—) 같은 글자가 없다. 지적 메시지는 검사한 글의 일부를 그대로 담으므로, 메시지
+    문자열만 고쳐서는 막지 못한다. 인코딩은 그대로 두고 못 쓰는 글자만 `\\u2014` 처럼 쓴다.
+    stderr의 기본 오류 처리와 같은 방식이다.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError, OSError):
+            pass  # reconfigure가 없는 스트림으로 바뀐 경우. 이때는 손대지 않는다.
+
+
+def to_json(rows):
+    """JSON 글을 만든다. 출력 인코딩에 없는 글자가 있으면 `\\uXXXX` 이스케이프로 쓴다.
+
+    backslashreplace는 BMP 밖 글자를 `\\U0001f600` 처럼 써서 JSON 문법에 맞지 않는다.
+    그래서 JSON은 여기서 미리 이스케이프한다.
+    """
+    text = json.dumps(rows, ensure_ascii=False, indent=2)
+    try:
+        text.encode(sys.stdout.encoding or "utf-8")
+    except (UnicodeEncodeError, LookupError):
+        text = json.dumps(rows, ensure_ascii=True, indent=2)
+    return text
 
 
 def main():
@@ -366,6 +523,7 @@ def main():
     ap.add_argument("--no-vocab", action="store_true", help="1.3 어휘 검사를 끈다")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args()
+    keep_output_alive()
 
     if a.self_test:
         self_test()
@@ -377,13 +535,16 @@ def main():
     results = []
     for p in a.paths:
         if p == "-":
-            results.append(("<stdin>", check_text(sys.stdin.read(), a.surface, vocab)))
+            text = read_stdin()
+            if text is None:
+                return 2
+            results.append(("<stdin>", check_text(text, a.surface, vocab)))
             continue
         for f in glob.glob(p, recursive=True) or [p]:
             if not Path(f).is_file():
                 print(f"{f}: 파일이 없다", file=sys.stderr)
                 continue
-            results.append((f, check_text(Path(f).read_text(encoding="utf-8"), a.surface, vocab)))
+            results.append((f, check_text(read_file(f), a.surface, vocab)))
 
     count = {"hard": 0, "warn": 0, "info": 0}
     rows = []
@@ -394,7 +555,7 @@ def main():
 
     shown = [r for r in rows if a.all or r["level"] != "info"]
     if a.json:
-        print(json.dumps(shown, ensure_ascii=False, indent=2))
+        print(to_json(shown))
     else:
         for r in shown:
             loc = f"{r['file']}:{r['line']}" if r["line"] else r["file"]
