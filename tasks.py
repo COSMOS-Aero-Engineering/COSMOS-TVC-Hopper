@@ -43,6 +43,7 @@ check의 cad 작업은 OpenSCAD가 필요하다. 없는 PC에서는 건너뛰고
 """
 import argparse
 import ast
+import fnmatch
 import hashlib
 import json
 import os
@@ -311,6 +312,25 @@ def _digest(path):
     return h.hexdigest()
 
 
+def glob_inputs(root, pattern):
+    """root.glob(pattern)과 같은 경로를 낸다. 단 "**/이름" 형식이면 SKIP_DIRS 안으로 들어가지 않는다.
+
+    root.glob("**/*.md")는 .venv의 파일 약 1만 8천 개 사이를 전부 돈다. 그 결과는 collect_inputs()가
+    SKIP_DIRS로 버리지만, 도는 데만 패턴 하나에 약 0.17초가 든다(2026-10-19 서버 측정, #183).
+    그래서 이 형식만 os.walk로 돌면서 SKIP_DIRS를 건너뛴다. 결과는 root.glob()에서 SKIP_DIRS 안의
+    경로를 뺀 것과 같다(test_agentsref.py가 비교한다). 다른 형식은 root.glob()을 그대로 쓴다.
+    fnmatch.filter()는 root.glob()처럼 Windows에서만 대소문자를 가리지 않는다.
+    """
+    head, sep, name = pattern.partition("/")
+    if head != "**" or not sep or "/" in name or "**" in name:
+        yield from root.glob(pattern)
+        return
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for filename in fnmatch.filter(filenames, name):
+            yield Path(dirpath) / filename
+
+
 def collect_inputs(patterns, root=None):
     """글롭 패턴들을 (저장소 기준 상대경로, 내용해시) 목록으로 펼친다.
 
@@ -322,7 +342,7 @@ def collect_inputs(patterns, root=None):
     root = ROOT if root is None else root
     found = set()
     for pattern in list(patterns) + ["tasks.py"]:
-        for p in root.glob(pattern):
+        for p in glob_inputs(root, pattern):
             if not p.is_file():
                 continue
             rel = p.relative_to(root)
@@ -867,6 +887,161 @@ def task_kicadver():
     run([sys.executable, "-m", "unittest", "-q", "test_kicad_version"], cwd=ROOT)
 
 
+# 다른 문서가 글로 쓴 AGENTS.md 절 이름이 AGENTS.md 제목에 실제로 있는지 본다(#183).
+# AGENTS.md를 가리킬 때는 번호 대신 절 이름을 쓴다(AGENTS.md §교훈, 2026-10-16). 그래서 참조가
+# 마크다운 링크가 아닌 글이고, docs/learning/check_library.py의 링크 검사에 걸리지 않는다.
+# 검사할 파일 형식. 지금 참조는 .md, .py, .yml에만 있다. 주석이나 문서 문자열에 참조를 쓸 수 있는
+# 다른 글 형식도 넣는다. 이진 파일(.pdf, .png)은 넣지 않는다.
+AGENTS_REF_SCAN = ["**/*.md", "**/*.py", "**/*.yml", "**/*.yaml", "**/*.toml", "**/*.js",
+                   "**/*.html", "**/*.scad", "**/*.ino", "**/*.cpp", "**/*.h", "**/*.ps1",
+                   "**/*.sh"]
+# 검사기 단위 검사 파일은 없는 절 이름을 일부러 담는다. 그래서 검사 대상에서 뺀다.
+AGENTS_REF_SKIP = {"test_agentsref.py"}
+# 다른 문서의 참조 형식: AGENTS.md 또는 `AGENTS.md` 바로 뒤의 §. 저장소의 참조는 전부 이 형식이다.
+AGENTS_REF_RE = re.compile(r"AGENTS\.md`?[ \t]*§")
+# AGENTS.md 안의 참조 형식: 앞에 파일 이름 없이 쓴 §. "§0"이나 "§8.4"처럼 숫자로 시작하면
+# 다른 문서의 번호 참조라서 보지 않는다.
+AGENTS_SELF_REF_RE = re.compile(r"§(?=[^\s\d])")
+# AGENTS.md 안에서 § 앞 낱말이 이 형식이면 다른 문서의 절이다. 예: "README §협업 규칙 6".
+# 낱말 끝의 조사는 먼저 뗀다(AGENTS_PARTICLE_RE). 예: "README의 §협업 규칙 6".
+AGENTS_FOREIGN_RE = re.compile(r"(?:README|\.md`?|문서|마스터|PRD)$")
+# § 앞 낱말 끝에 붙는 조사. 하나만 뗀다.
+AGENTS_PARTICLE_RE = re.compile(r"(?:의|에서|에|와|과|도|은|는)$")
+# 절 이름 바로 뒤에 오면 참조가 그 절이 아니라고 보는 글자. _cites_section() 참고.
+AGENTS_REF_TAIL_RE = re.compile(r"[A-Za-z0-9_]|\s+[^\W\d_]")
+
+
+def agents_sections(text):
+    """AGENTS.md 본문에서 참조로 쓸 수 있는 절 이름 집합을 돌려준다.
+
+    `## ` 제목만 본다. 제목 앞 번호("2. ")와 끝의 괄호("(필수)",
+    "(사람과 모든 AI 도구 공통, 2026-10-16)")는 뺀다.
+    콜론이 있으면 콜론 앞부분도 이름으로 받는다. "작업 순서: 이슈에서 PR까지"는 "§작업 순서"로 쓴다.
+    코드 블록 안의 줄은 제목이 아니다.
+    """
+    names = set()
+    fenced = False
+    for line in text.split("\n"):
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+            continue
+        m = re.match(r"## (?!#)(.+)", line)
+        if fenced or not m:
+            continue
+        title = re.sub(r"^\d+(?:\.\d+)*\.?\s+", "", m.group(1).strip())
+        title = re.sub(r"\s*\([^()]*\)$", "", title).strip()
+        if not title:
+            continue
+        names.add(title)
+        if ":" in title:
+            names.add(title.split(":", 1)[0].strip())
+    return names
+
+
+def _cites_section(rest, names):
+    """§ 바로 뒤 글자 rest가 names 중 하나로 시작하는지 본다.
+
+    참조는 글 속에 있어서 절 이름이 어디서 끝나는지 글자만으로는 모른다. "§교훈에서는",
+    "§작업 순서인지", "§핵심 규칙 8"이 그 예다. 한국어 조사와 어미는 종류가 많고 겹쳐 붙는다.
+    그래서 절 이름으로 시작하고 그 바로 뒤가 아래 둘이 아니면 맞는 참조로 본다.
+    - 영문자, 숫자, 밑줄이 바로 붙음("§교훈2").
+    - 띄어쓰기 뒤에 글자(한글, 영문자)가 옴("§안전 원칙"을 절 "안전"으로 줄인 경우). 옛 이름의
+      뒷부분인지 다음 낱말인지 구별할 수 없어서 틀렸다고 본다. 띄어쓰기 뒤 숫자("§핵심 규칙 8")와
+      문장 부호는 받는다.
+    한계: 절 이름 뒤에 한글이 바로 붙으면 조사인지 낱말의 일부인지 구별하지 않는다. 절 "교훈"이
+    있으면 "§교훈들"도 통과한다.
+    """
+    for name in names:
+        if rest.startswith(name) and not AGENTS_REF_TAIL_RE.match(rest[len(name):]):
+            return True
+    return False
+
+
+def _cited_word(rest):
+    """오류 메시지에 쓸 참조 글자. 절 이름에 공백이 있을 수 있어서 공백에서는 자르지 않는다.
+    문장 부호 앞까지, 많아야 15글자까지 자른다."""
+    return re.match(r"[^.,;:()`'\"\]]{0,15}", rest).group().rstrip()
+
+
+def iter_agents_refs(text, self_refs=False):
+    """text의 AGENTS.md 절 참조를 전부 낸다. (줄 번호, 칸 번호, § 뒤 글자)를 하나씩 낸다.
+
+    줄과 칸은 1부터 세고, 칸은 § 위치다. 줄은 find_user_paths()와 같게 줄바꿈 문자로만 나눈다.
+    self_refs가 참이면 text가 AGENTS.md 자신이다. 이때는 파일 이름 없이 쓴 "§이름"도 이 파일의
+    절로 본다. 단 § 앞 낱말이 다른 문서 이름이면 보지 않는다. 낱말 끝의 조사는 떼고 본다.
+    """
+    for lineno, line in enumerate(text.split("\n"), start=1):
+        starts = {m.end() for m in AGENTS_REF_RE.finditer(line)}
+        if self_refs:
+            for m in AGENTS_SELF_REF_RE.finditer(line):
+                before = line[:m.start()].split()
+                word = AGENTS_PARTICLE_RE.sub("", before[-1]) if before else ""
+                if AGENTS_FOREIGN_RE.search(word) and not word.rstrip("`").endswith("AGENTS.md"):
+                    continue
+                starts.add(m.end())
+        for start in sorted(starts):
+            yield lineno, start, line[start:]
+
+
+def find_agents_refs(text, names, self_refs=False):
+    """text에서 names에 없는 AGENTS.md 절 참조를 찾는다.
+
+    (줄 번호, 칸 번호, 참조 글자) 목록을 돌려준다. 줄, 칸, self_refs는 iter_agents_refs()와 같다.
+    """
+    return [(lineno, col, "§" + _cited_word(rest))
+            for lineno, col, rest in iter_agents_refs(text, self_refs)
+            if not _cites_section(rest, names)]
+
+
+def scan_agents_refs(root, patterns):
+    """root 아래 문서의 AGENTS.md 절 참조를 검사한다.
+
+    (절 이름 집합, 검사한 참조 수, 찾은 목록)을 돌려준다.
+
+    찾은 목록의 한 항목은 (저장소 기준 상대경로, 줄 번호, 칸 번호, 참조 글자)다.
+    파일 목록은 scan_user_paths()와 같게 collect_inputs()로 만든다. tasks.py도 검사한다.
+    tasks.py의 주석에도 참조를 쓸 수 있기 때문이다.
+    """
+    agents = root / "AGENTS.md"
+    if not agents.is_file():
+        die(f"{agents} 이(가) 없다. 절 참조를 대조할 수 없다.")
+    names = agents_sections(agents.read_text(encoding="utf-8-sig"))
+    if not names:
+        die("AGENTS.md에서 `## ` 제목을 하나도 찾지 못했다.\n"
+            "     제목 형식이 바뀌었으면 agents_sections()를 고칠 것.")
+    files = [rel for rel, _ in collect_inputs(patterns, root) if rel not in AGENTS_REF_SKIP]
+    count, hits = 0, []
+    for rel in files:
+        text = (root / rel).read_text(encoding="utf-8-sig", errors="replace")
+        self_refs = rel == "AGENTS.md"
+        count += sum(1 for _ in iter_agents_refs(text, self_refs))
+        hits.extend((rel, *hit) for hit in find_agents_refs(text, names, self_refs))
+    return names, count, hits
+
+
+def task_agentsref():
+    """다른 문서가 글로 쓴 AGENTS.md 절 이름이 AGENTS.md 제목에 있는지 본다(#183).
+
+    userpath 작업과 같은 이유로 검사기의 단위 검사(test_agentsref.py)를 먼저 돌린다.
+    """
+    run([sys.executable, "-m", "unittest", "-q", "test_agentsref"], cwd=ROOT)
+    names, count, hits = scan_agents_refs(ROOT, AGENTS_REF_SCAN)
+    if not count:
+        # 참조 형식 정규식이 고장 나면 참조를 0건 찾고 늘 통과한다. 그렇게 두지 않는다.
+        die("AGENTS.md 절 참조를 하나도 찾지 못했다. 참조 형식을 바꿨다면 AGENTS_REF_RE를 고칠 것.")
+    for rel, lineno, col, word in hits:
+        # 파일:줄:칸: 형식이다. 편집기와 CI 로그 도구가 이 형식으로 해당 줄을 연다.
+        print(f"{rel}:{lineno}:{col}: AGENTS.md에 없는 절 '{word}'", flush=True)
+    if hits:
+        die(f"AGENTS.md에 없는 절 이름 참조 {len(hits)}건을 찾았다(#183).\n"
+            f"     지금 절 이름: {', '.join(sorted(names))}\n"
+            "     절 이름은 AGENTS.md의 `## ` 제목에서 앞 번호와 끝 괄호를 뺀 것이다.\n"
+            "     절을 지웠거나 이름을 바꿨으면 참조를 지금 이름으로 고칠 것.\n"
+            "     절 이름 뒤에 띄어 쓴 낱말도 틀렸다고 본다(옛 이름의 일부일 수 있다).\n"
+            "     맞는 참조라면 조사를 붙이거나(§안전 원칙을 확인) 괄호로 감쌀 것((§안전 원칙) 확인).")
+    print(f"AGENTS.md 절 참조 {count}건 확인 - 없는 절 없음")
+
+
 def task_check():
     print("\n전부 통과. PR 올려도 된다.")
 
@@ -936,10 +1111,12 @@ TASKS = {t.name: t for t in [
     Task("kicadver", "생성 회로도의 KiCad 형식 번호가 생성기와 같은지 확인 (#139)", task_kicadver,
          inputs=["kicad/_tools/*.py", "kicad/cosmos-avionics/*.kicad_sch",
                  "test_kicad_version.py"]),
+    Task("agentsref", "다른 문서가 쓴 AGENTS.md 절 이름이 AGENTS.md 제목에 있는지 확인 (#183)",
+         task_agentsref, inputs=AGENTS_REF_SCAN),
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
          " 단계 목록은 graph)", task_check,
-         deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "cad", "vcruntime",
-               "compile", "sanity", "gate", "yaw", "smoke", "conncheck"]),
+         deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "agentsref", "cad",
+               "vcruntime", "compile", "sanity", "gate", "yaw", "smoke", "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True, needs_torch=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
