@@ -9,15 +9,15 @@ RC receiver,6,team #70: budget (Spektrum sat ~3 g / SBUS RX ~15 g; FS-iA6B manua
 UBEC 5V 3A,11,listing: Hobbywing 3A UBEC 43x17x7 mm 11 g,box,0,-60,140,17,43,7,under avionics shelf (01-avionics 7.3)
 perfboard 5x7 + headers + level shifters,12,ESTIMATE (weigh),box,0,-67,162,70,50,4,mock_avionics position
 4x MG90S servo,53.6,official: TowerPro MG90S 13.4 g each,servo4,0,0,-36,82,0,0,servo body centre r = 64+4+14
-vane ring + leg root bosses (printed),71.02,STL 139.8 cm3 (incl. leg root bosses) x PETG 1.27 x infill 0.40 (team #70 method; lower bound),ring,0,0,-37,38,66,37,STL bbox
-4 vanes (printed),5.44,STL 10.7 cm3 x 1.27 x 0.40,ring,0,0,-36,4,41,25,hopper_params.scad vanes
-4 couplers (printed),3.61,STL 7.1 cm3 x 1.27 x 0.40,servo4,0,0,-36,57,0,0,coupler in servo cavity
+vane ring + leg root bosses (printed),71.5745,"LOWER_BOUND ESTIMATE: STL 140.89477 cm3 (incl. leg root bosses) x PETG 1.27 x infill 0.40 (team #70 method; lower bound); infill-only, walls/skins omitted; NOT flight mass",ring,0,0,-37,38,66,37,STL bbox
+4 vanes (printed),5.4478,"LOWER_BOUND ESTIMATE: STL 10.72410 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",ring,0,0,-36,4,41,25,hopper_params.scad vanes
+4 couplers (printed),3.6138,"LOWER_BOUND ESTIMATE: STL 7.11376 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",servo4,0,0,-36,57,0,0,coupler in servo cavity
 4 CF spars 3 mm x 60 mm,2.54,"team #70: CF rod D3 x 60 mm x4, 1.5 g/cm3",servo4,0,0,-36,34,0,0,vane spar
-top plate (printed),15.29,STL 30.1 cm3 x 1.27 x 0.40,ring,0,0,192,39,63,4,top_plate_bot_z 190 + t/2
-EDF clamp (printed),7.67,STL 15.1 cm3 x 1.27 x 0.40,ring,0,0,76,37.5,54,12,edf_clamp_z 70 + h/2
-battery shelf (printed),8.64,STL 17.0 cm3 x 1.27 x 0.40,box,0,62,150,80,70,6,shelf +Y
-avionics shelf (printed),9.35,STL 18.4 cm3 x 1.27 x 0.40,box,0,-66,150,80,74,6,shelf -Y
-ESC bracket (printed),3.61,STL 7.1 cm3 x 1.27 x 0.40,box,0,-46,125,44,16,44,esc_bracket
+top plate (printed),15.2716,"LOWER_BOUND ESTIMATE: STL 30.06217 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",ring,0,0,192,39,63,4,top_plate_bot_z 190 + t/2
+EDF clamp (printed),7.6568,"LOWER_BOUND ESTIMATE: STL 15.07240 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",ring,0,0,76,37.5,54,12,edf_clamp_z 70 + h/2
+battery shelf (printed),9.0678,"LOWER_BOUND ESTIMATE: STL 17.85008 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",box,0,62,150,80,70,6,shelf +Y
+avionics shelf (printed),9.2547,"LOWER_BOUND ESTIMATE: STL 18.21783 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",box,0,-66,150,80,74,6,shelf -Y
+ESC bracket (printed),3.5881,"LOWER_BOUND ESTIMATE: STL 7.06320 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",box,0,-46,125,44,16,44,esc_bracket
 "foot pads (EVA, BOM D5)",0.4,team #70: 5.7 cm3 x EVA 0.07 (printed PETG would be ~2.9 g),rods4,0,0,-144,180,180,-144,feet at r 180
 4 CF columns 6x4 x 212 mm,19.98,"team #70 method: CF tube OD6/ID4 x 212 mm x4, 1.5 g/cm3",rods4,0,0,-22,48,48,190,col_mount_r 48 z -22..190 (col_len 212)
 4 CF legs 6x4 x 153 mm,14.44,team #70 method: CF tube OD6/ID4 x 153.2 mm x4,rods4,0,0,-50,56,180,-140,leg_root_r 56 z-50 -> foot r180 z-140
@@ -26,4 +26,5 @@ servo extensions + XT60 + main wires + ties,55,ESTIMATE (servo ext 4x5 g + XT60/
 kill switch,10,ESTIMATE (BOM B6 not chosen),box,0,59,196,22,14,10,showcase.scad kill switch on top plate
 fasteners M2/M3 + inserts,8,ESTIMATE,ring,0,0,40,30,60,120,spread
 4x servo horn (alu),4,team #70: est ~1 g each (unmeasured),servo4,0,0,-36,66,0,0,on servo output = vane_pivot_z
-"trim ballast (washers/nuts on 2x M5, -Y)",72,TRIM: set after weighing so lateral CG < 2 mm (0-72 g). 72 g = zero offset with current table,box,0,-89,138,12,32,18,"avionics shelf ballast holes (local x 89, y +-10), below plate"
+trim steel annulus candidate -1,36,DESIGN CANDIDATE not measured: steel density 7.85; D18 ID5.5; pair target72g; actual trim pending slice/weigh,ring,-10,-89,136.96117390205376,2.75,9,19.8776521958925,same annular geometry as p_ballast; shelf bottom147 - 0.1 gap - half-height
+trim steel annulus candidate +1,36,DESIGN CANDIDATE not measured: steel density 7.85; D18 ID5.5; pair target72g; actual trim pending slice/weigh,ring,10,-89,136.96117390205376,2.75,9,19.8776521958925,same annular geometry as p_ballast; shelf bottom147 - 0.1 gap - half-height

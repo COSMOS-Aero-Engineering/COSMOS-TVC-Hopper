@@ -136,5 +136,54 @@ class RealOpenscad(unittest.TestCase):
         self.assertTrue(any("0줄" in f for f in self.check('render_mode = "preview";\ncube(1);\n')))
 
 
+
+class ExportedMeshRegression(unittest.TestCase):
+    """An empty or open STL must fail the same exporter used by tasks.py cad."""
+
+    def export(self, content):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("cad_export", Path(__file__).parent / "cad/tools/export_print_parts.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            source = tmp / "fixture.scad"
+            source.write_text(module.MARKER, encoding="utf-8")
+            def fake_run(args, **kwargs):
+                output = Path(args[args.index("-o") + 1])
+                output.write_text(content, encoding="utf-8")
+                return mock.Mock(returncode=0, stderr='ECHO: "fixture"\n')
+            with mock.patch.object(module, "find_openscad", return_value="fixture"), \
+                    mock.patch.object(module, "SCAD", source), \
+                    mock.patch.object(module.subprocess, "run", side_effect=fake_run), \
+                    mock.patch("sys.argv", ["export", "--out", str(tmp), "--only", "top_plate"]), \
+                    redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as result:
+                    module.main()
+                return result.exception.code
+
+    def test_empty_stl_fails_export(self):
+        self.assertEqual(self.export("solid fixture\nendsolid fixture\n"), 1)
+
+    def test_open_triangle_fails_export(self):
+        content = "solid fixture\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid fixture\n"
+        self.assertEqual(self.export(content), 1)
+
+
+
+class OffsetRingMassRegression(unittest.TestCase):
+    def test_ring_centroid_preserves_mount_position(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("cg_estimate", Path(__file__).parent / "cad/cg/cg_estimate.py")
+        cg = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cg)
+        row = dict(shape="ring", mass_g=36.0, x=10.0, y=-89.0, z=136.96,
+                   p1=2.75, p2=9.0, p3=19.88)
+        mass, centre, _ = cg.props([row])
+        self.assertAlmostEqual(mass, 0.036)
+        for actual, expected in zip(centre, (0.010, -0.089, 0.13696)):
+            self.assertAlmostEqual(actual, expected)
+
+
 if __name__ == "__main__":
     unittest.main()

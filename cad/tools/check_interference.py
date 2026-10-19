@@ -43,8 +43,13 @@ module p_perfboard() { rotate([0, 0, 270]) translate([shelf_r_inner + 25, 0, she
 module p_receiver() { rotate([0, 0, 270]) translate([shelf_r_inner + 25 - 14, 22, shelf_top_z + 12 + 0.8 + 7.5]) cube([26.2, 47, 15], center = true); }
 module p_ubec() { rotate([0, 0, 270]) translate([shelf_r_inner + 30, 0, shelf_top_z - shelf_t - 3.5 - 0.1]) cube([17, 43, 7], center = true); }
 module p_bail() { bail(); }
-module p_ballast() {   // 최대 무게추: 와셔 묶음 Ø12 x 높이 18, 선반 판 아래
-    rotate([0, 0, 270]) for (sy = [-ballast_y, ballast_y]) translate([ballast_x, sy, shelf_top_z - shelf_t - 18.1]) cylinder(h = 18, r = 6, $fn = 24); }
+module p_ballast() {   // 질량표와 같은 강철 고리 2개. 재료 밀도·구멍을 포함해 높이를 계산한다.
+    rotate([0, 0, 270]) for (sy = [-ballast_y, ballast_y])
+        translate([ballast_x, sy, shelf_top_z - shelf_t - ballast_h - 0.1]) difference() {
+            cylinder(h = ballast_h, d = ballast_od, $fn = 48);
+            translate([0,0,-1]) cylinder(h = ballast_h + 2, d = ballast_hole_d, $fn = 32);
+        }
+}
 """
 
 PARTS = {
@@ -95,7 +100,10 @@ def main():
                                capture_output=True, text=True, encoding="utf-8", errors="replace")
             # 정상적인 빈 결과(교집합 없음)와 렌더 실패를 구분한다(#61 리뷰). 빈 결과는 OpenSCAD가
             # "top level object is empty"를 출력한다. 그 밖에 STL이 없거나 exit가 0이 아니면 실패다.
-            empty = "empty" in r.stderr.lower()
+            lines = r.stderr.splitlines()
+            empty = any(line.strip().rstrip(".") == "Current top level object is empty" for line in lines)
+            if any(line.lstrip().startswith(("ERROR:", "WARNING:")) for line in lines):
+                sys.exit(f"{name}: OpenSCAD 오류 또는 경고\n{r.stderr[-1500:]}")
             if not empty and (r.returncode != 0 or not stl.exists()):
                 sys.exit(f"{name}: OpenSCAD 렌더 실패 (exit {r.returncode})\n{r.stderr[-1500:]}")
             return stl, empty, r

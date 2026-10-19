@@ -67,6 +67,11 @@ batt_shelf_y_half = 42;   // 배터리 선반 반폭. 턱 두께 3이라 턱 사
 ballast_x = 89;    // 선반 로컬 x(반경 방향)
 ballast_y = 10;    // 로컬 |y|
 ballast_hole_d = 5.5;
+// 설계 후보의 재료·형상·질량을 같은 식으로 묶는다. 구매·실측 완료값이 아니다.
+ballast_target_g = 72;
+ballast_density_g_cm3 = 7.85; // 강철 가정
+ballast_od = 18;
+ballast_h = ballast_target_g * 1000 / (2 * ballast_density_g_cm3 * PI * (pow(ballast_od/2,2) - pow(ballast_hole_d/2,2)));
 
 shelf_top_z   = 150;   // 선반 윗면 z (배기면 기준). 상판 하면(178)까지 28mm, EDF 립(92)에서 58mm 위
 shelf_t       = 3;     // 선반 판 두께
@@ -98,12 +103,15 @@ servo_ear_to_shaft = 3;       // 출력축 ↔ 가까운 쪽 이어 홀 거리 �
 servo_screw_d = 1.7;         // M2 셀프탭 하부 구멍 (커플러 혼 고정용)
 // 2026-10-16(#59): 서보 귀 나사 구멍을 슬롯으로 바꿨다. TowerPro 공식 MG90S 치수는 귀 끝-끝 전체 길이 32.1 mm
 // (https://towerpro.com.tw/product/mg90s-3/ 의 E)라서, 위 servo_ear_pitch 33(SG90 실측)은 구멍 간격일 수 없다
-// (귀 끝-끝을 잰 것으로 보임). 실물 MG90S를 아직 재지 못했으므로, 가까운 구멍은 축에서 2.5-10.5 mm,
-// 먼 구멍은 16.5-30.5 mm 범위를 덮는 슬롯으로 뚫는다(구멍 간격 27-33 mm, 축 위치 3-10 mm를 모두 덮음).
+// (귀 끝-끝을 잰 것으로 보임). 실물 MG90S를 아직 재지 못했으므로, 가까운 구멍은 축에서 9.0-10.5 mm,
+// 먼 구멍은 16.5-30.5 mm 범위를 덮는 슬롯으로 뚫는다(설계 홀 피치 25.5-41 mm; 실제 서보 적합성은 미확정).
 // 슬롯 폭 2.2 mm = M2 볼트 관통, 너트는 캐비티 안쪽에서 조인다.
 servo_slot_w    = 2.2;
-servo_slot_near = [2.5, 10.5];   // 출력축에서 가까운 구멍까지 거리 범위(mm)
+servo_slot_near = [9.0, 10.5];   // 혼 통과 구멍과 와셔 지지면을 피하는 설계 수용 범위(mm)
 servo_slot_far  = [16.5, 30.5];  // 먼 구멍까지 거리 범위(mm)
+servo_horn_pass_d = 10.5;
+servo_washer_od_max = 5;        // M2 체결 와셔의 허용 외경 상한(구매 전 확인)
+servo_web_min = 1;              // 구멍과 와셔 지지면 사이 최소 재료 폭(mm)
 servo_boss_t  = 4;           // 서보 장착판 두께(반경 방향)
 servo_standoff = 16;         // 링 바깥면 ↔ 장착판 사이 캐비티 깊이 (혼 + 스파 커플러가 들어감)
 
@@ -301,10 +309,10 @@ module servo_boss_cuts() {
             translate([servo_plate_r - 2, dy, vane_pivot_z])
                 rotate([0,90,0])
                     cylinder(h = servo_boss_t + 6, r = servo_slot_w/2, center=false, $fn=20);
-    // 출력축·혼 통과 구멍 (Ø14 — 혼이 판을 지나 캐비티로 들어갈 수 있게 넉넉히)
+    // 혼 단면(9 x 2.2 mm, 각 변 +0.4 mm 여유)의 대각선보다 큰 통과 구멍.
     translate([servo_plate_r - 2, 0, vane_pivot_z])
         rotate([0,90,0])
-            cylinder(h = servo_boss_t + 6, r = 7, center=false, $fn=40);
+            cylinder(h = servo_boss_t + 6, r = servo_horn_pass_d/2, center=false, $fn=40);
 }
 
 // 스파 관통 보어 + 베인 하드스톱 슬롯 (링 벽을 반경 방향으로 뚫는다)
@@ -728,5 +736,10 @@ echo(str("배터리 선반 턱 사이 ", 2*batt_shelf_y_half - 6, " mm vs 배터
 ballast_gap = min([for (hx = [wire_slot_px0, wire_slot_px0 + perf_hole_dy]) for (sy = [-1, 1])
     norm([ballast_x - hx, ballast_y - sy * perf_hole_dx/2]) - ballast_hole_d/2 - (insert_d/2 + 2.2)]);
 echo(str("무게추 구멍과 만능기판 인서트 보스 최소 간격 ", ballast_gap, " mm → ", ballast_gap >= 2 ? "정상" : "!! 너무 가까움 !!"));
+echo(str("서보 와셔 지지면 여유 ", servo_slot_near[0] - servo_horn_pass_d/2 - servo_washer_od_max/2,
+         " mm → ", servo_slot_near[0] - servo_horn_pass_d/2 - servo_washer_od_max/2 >= servo_web_min ? "정상" : "!! 지지면 부족 !!"));
+echo(str("혼 통과 여유 → ", servo_horn_pass_d >= norm([coupler_horn_w + 0.4, coupler_horn_t + 0.4]) ? "정상" : "!! 통과 불가 !!"));
+echo(str("무게추 후보: 강철 고리 2개 D", ballast_od, " x H", ballast_h, " mm, 구멍 ", ballast_hole_d,
+         " mm, 합계 ", ballast_target_g, " g (가정, 실측 전)"));
 echo(str("발 바닥 z = ", foot_z, " mm"));
 echo(str("상판top~발bottom 실제 전고 = ", top_plate_top_z - foot_z, " mm  (설계 H_total 참고값 = ", H_total, " mm)"));

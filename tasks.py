@@ -797,7 +797,8 @@ def task_cad():
                            capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
         die("발주 STL 검사 실패(cad/tools/export_print_parts.py):\n" + (r.stdout + r.stderr)[-3000:])
-    print("발주 STL 검사 통과 - " + (r.stdout.strip().splitlines() or ["?"])[-1])
+    print(r.stdout.strip())
+    print("발주 STL 검사 통과")
 
 
 # 한국어 Windows에서 출력을 파일이나 파이프로 돌리면 파이썬은 cp949로 쓴다. 출력 문자열에

@@ -6,7 +6,7 @@ parts.csv의 부품마다 질량(g)과 모양·위치(mm, 배기면 z=0, +X=FWD,
 
 모양(shape)과 열 의미:
   box    x,y,z = 중심, p1,p2,p3 = 크기(x,y,z)
-  ring   z = 중심, p1 = 안 반경, p2 = 바깥 반경, p3 = 높이 (x, y는 0)
+  ring   x,y,z = 중심, p1 = 안 반경, p2 = 바깥 반경, p3 = 높이
   servo4 z = 높이, p1 = 반경. 0°/90°/180°/270° 네 곳에 질량을 1/4씩 둔다(서보, 커플러, 스파)
   rods4  z = 시작 높이, p1 = 시작 반경, p2 = 끝 반경, p3 = 끝 높이. 45° 계열 막대 4개(기둥, 다리)
 
@@ -42,7 +42,7 @@ def points(row):
             for j in range(N):
                 r = math.sqrt(p1 ** 2 + (p2 ** 2 - p1 ** 2) * (j + 0.5) / N)
                 for k in range(N):
-                    pts.append((r * math.cos(a), r * math.sin(a), z + p3 * ((k + 0.5) / N - 0.5)))
+                    pts.append((x + r * math.cos(a), y + r * math.sin(a), z + p3 * ((k + 0.5) / N - 0.5)))
     elif s == "servo4":
         pts = [(p1 * math.cos(math.radians(a)), p1 * math.sin(math.radians(a)), z) for a in (0, 90, 180, 270)]
     elif s == "rods4":
@@ -82,6 +82,8 @@ def main():
         for k in ("mass_g", "x", "y", "z", "p1", "p2", "p3"):
             r[k] = float(r[k])
 
+    if any("LOWER_BOUND" in r["mass_source"] for r in rows):
+        print("주의: 출력물 질량은 인필만 계산한 하한 시나리오다. 외벽·상하면을 포함한 슬라이서 질량 전에는 발주·제어 상수로 확정하지 않는다.")
     M, c, J = props(rows)
     zcg, lat = c[2] * 1000, math.hypot(c[0], c[1]) * 1000
     est = sum(r["mass_g"] for r in rows if "ESTIMATE" in r["mass_source"])
@@ -94,6 +96,12 @@ def main():
     print(f"l = z_cg - ({VANE_PIVOT_Z_MM:.0f}) = {zcg - VANE_PIVOT_Z_MM:.1f} mm")
     print(f"J (CG 기준) Jxx {J[0]:.5f}  Jyy {J[1]:.5f}  Jzz {J[2]:.5f} kg m^2")
     print(f"무게 {M * 9.81:.2f} N, 정적 추력 사양 12.75 N(1300 gf) 기준 TWR {12.75 / (M * 9.81):.2f}")
+
+    if any("LOWER_BOUND" in r["mass_source"] for r in rows):
+        solid = [dict(r, mass_g=r["mass_g"] / 0.40) if "LOWER_BOUND" in r["mass_source"] else dict(r) for r in rows]
+        sm, sc, _ = props(solid)
+        print(f"PETG 실체 시나리오(인필 100 %, 다른 부품 가정 동일): {sm*1000:.0f} g, CG ({sc[0]*1000:+.1f}, {sc[1]*1000:+.1f}, {sc[2]*1000:.1f}) mm, TWR {12.75/(sm*9.81):.2f}")
+        print("두 시나리오는 실제 슬라이서 결과나 CG 신뢰구간이 아니다. 아래 +-10 % 민감도도 출력물 질량 오차 전체를 포함하지 않는다.")
 
     rng = random.Random(0)
     zs, lats = [], []
