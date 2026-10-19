@@ -84,8 +84,14 @@ KiCad 10.0.7이 쓴 파일이다. KiCad 10.0.6은 같은 파일을 다르게 쓴
   바꾸므로 `git diff`에는 나오지 않는다. 그런데 KiCad 10.0.6 프로젝트 관리자의 파일 목록은 이 파일 옆에
   빨간 원을 그렸다. KiCad의 git 상태 표시로 보인다. 판단은 `git status`와 `git diff`로 한다.
 
-KiCad 10.0.6 PC에서 저장했으면 커밋하기 전에 `git restore kicad/cosmos-avionics/cosmos-avionics.kicad_pro`로
-되돌린다. `python tasks.py check`의 `kicadver` 작업은 커밋된 `.kicad_pro`에서 두 값이 `null`이면 실패한다.
+KiCad 10.0.6 PC에서 저장했으면 커밋하기 전에 둘 중 하나를 한다.
+
+- 보기만 하고 저장했으면 `git restore kicad/cosmos-avionics/cosmos-avionics.kicad_pro`로 되돌린다.
+- 일부러 바꾼 설정이 있으면(PCB 설계 규칙 등) 되돌리지 않는다. `git restore`는 그 설정도 지운다.
+  KiCad 10.0.7 이상에서 프로젝트를 열고 바꾼 편집기에서 다시 저장한다. 서버 KiCad 10.0.7은 회로도를 다시
+  저장할 때 두 `null`을 `{}`로 되돌렸다.
+
+`python tasks.py check`의 `kicadver` 작업은 커밋된 `.kicad_pro`에서 두 값이 `null`이면 실패한다.
 KiCad 10.0.8 이후 버전이 이 파일을 어떻게 쓰는지는 아직 확인하지 못했다.
 
 ## PCB를 저장하면 바뀌는 `.kicad_pro` (#197)
