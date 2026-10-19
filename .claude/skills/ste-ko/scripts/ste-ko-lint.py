@@ -426,14 +426,22 @@ def self_test():
             assert read == text, f"BOM을 떼지 않았다: {read!r}"
             got = [(n, r, lv) for n, r, lv, _ in check_text(read, "문서", [])]
             assert got == want, f"BOM 파일: {text!r} → {got}"
+            # 명령줄로 파일 경로를 줄 때도 main() 이 BOM을 떼는지 본다.
+            run = subprocess.run([sys.executable, __file__, str(path), "--no-vocab"],
+                                 capture_output=True, check=False)
+            err = run.stderr.decode("utf-8", "replace")
+            code = 1 if want else 0
+            assert run.returncode == code, f"BOM 파일 CLI: 종료 코드 {run.returncode}. {err}"
+            assert b"8.1\thard" not in run.stdout, f"BOM 파일 CLI: {text!r} → {run.stdout!r}"
     print("self-test OK")
 
 
 def decode_input(data, fallback):
     """표준 입력에서 읽은 바이트를 글로 바꾼다. (글, 쓴 대체 인코딩) 을 돌려준다.
 
-    UTF-8로 먼저 읽고, 앞에 BOM이 있으면 뗀다. 파일 입력의 read_file 과 같다(#195). UTF-8이 아니면 fallback(파이썬이 표준 입력에 쓰는 인코딩. 한국어 Windows의 파이프는
-    cp949)으로 읽고, 그 이름을 돌려준다. UTF-8로 읽었으면 None 이다. 둘 다 아니면 UnicodeDecodeError 를 낸다.
+    UTF-8로 먼저 읽고, 앞에 BOM이 있으면 뗀다. 파일 입력의 read_file 과 같다(#195). UTF-8이
+    아니면 fallback(파이썬이 표준 입력에 쓰는 인코딩. 한국어 Windows의 파이프는 cp949)으로 읽고,
+    그 이름을 돌려준다. UTF-8로 읽었으면 None 이다. 둘 다 아니면 UnicodeDecodeError 를 낸다.
     """
     try:
         return data.decode("utf-8-sig"), None
