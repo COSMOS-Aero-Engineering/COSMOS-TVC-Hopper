@@ -63,6 +63,39 @@
    `_tools/gen_schematic.py`의 `COMPONENTS` 좌표를 고치고 다시 생성한다.
 5. 보기만 하고 저장했으면 `git status`로 확인한다. 두 파일이 바뀌지 않아야 정상이다. KiCad는 같은 폴더에
    `cosmos-avionics.kicad_prl`과 `.history/`도 만든다. 둘 다 `.gitignore`가 무시한다.
+6. PCB 편집기를 열어 저장했으면 아래 "PCB를 저장하면 바뀌는 `.kicad_pro`" 절을 따른다.
+
+## PCB를 저장하면 바뀌는 `.kicad_pro` (#197)
+
+**규칙: `.kicad_pro`의 PCB 설정은 `.kicad_pcb`와 같은 PR에 커밋한다.** PCB 작업이 아니면 둘 다 되돌린다.
+#197의 선택지 (a)다(AI 결정, 차장 위임, 2026-10-19).
+
+### 무엇이 바뀌나 (2026-10-19, 서버 KiCad 10.0.7 GUI)
+
+- 프로젝트 관리자에서 PCB 편집기를 열면 KiCad가 "PCB 파일이 없다. 만들까?"라고 묻는다. 예를 누르고
+  Ctrl+S로 저장하면 `cosmos-avionics.kicad_pcb`(2038 B)가 생긴다.
+- 같은 저장에서 `.kicad_pro`가 9375 B에서 17187 B가 된다(235줄 추가, 1줄 삭제).
+- 바뀐 곳은 `board.design_settings` 하나다. 기본 선 폭과 글자 크기(`defaults`), DRC 규칙(`rules`,
+  `rule_severities`), 티어드롭, 길이 맞춤 패턴 같은 PCB 설정이다. 회로도 설정(`schematic`, `erc`)은 바뀌지 않는다.
+- KiCad 10.0.7 소스 `pcbnew/board.cpp`는 보드의 설계 설정을 프로젝트 파일의 `board.design_settings`에 둔다.
+  그래서 PCB 설계 규칙은 `.kicad_pcb`가 아니라 `.kicad_pro`에 있다. `.kicad_pcb`만 커밋하면 규칙이 빠진다.
+- 회로도에는 영향이 없다. 바뀐 `.kicad_pro`로 `gen_schematic.py`를 돌린 결과는 커밋된 `.kicad_sch`와
+  바이트 단위로 같다(diff 0줄). PCB를 저장한 뒤 회로도 편집기에서 저장해도 `.kicad_sch`와 `.kicad_pro`는
+  바뀌지 않았다. PCB를 한 번 더 저장해도 `.kicad_pro`는 바뀌지 않았다.
+
+### 할 일
+
+1. PCB 작업을 커밋하는 PR은 `cosmos-avionics.kicad_pcb`와 KiCad가 저장한 `cosmos-avionics.kicad_pro`를
+   함께 커밋한다. `.kicad_pro`만 먼저 다른 PR로 바꾸지 않는다(선택지 (b)를 고르지 않았다). 두 파일은 함께
+   있어야 뜻이 있고, 회로도 재생성에 영향이 없어서 나눌 이유가 없다.
+2. 같은 PR에서 `python kicad/_tools/gen_schematic.py`를 다시 돌린다. `.kicad_sch`가 바뀌면 같은 PR에
+   커밋한다. KiCad 10.0.7에서는 바뀌지 않았다. 다른 KiCad 버전은 아직 확인하지 못했다.
+3. PCB 작업이 아닌데 PCB 편집기에서 저장했으면 `git restore kicad/cosmos-avionics/cosmos-avionics.kicad_pro`로
+   되돌리고, 새로 생긴 `cosmos-avionics.kicad_pcb`를 지운다. `git status`에 두 파일이 없으면 끝이다.
+
+`python tasks.py check`의 `kicadver` 작업이 1번을 검사한다. `.kicad_pro`의 `board.design_settings`가 비어
+있지 않은데 같은 폴더에 `.kicad_pcb`가 없으면 실패한다. 반대로 `.kicad_pcb`가 있는데 `board.design_settings`가
+비어 있어도 실패한다.
 
 ## 회로 구성 (`_tools/gen_schematic.py`에 넷리스트 그대로 있음)
 

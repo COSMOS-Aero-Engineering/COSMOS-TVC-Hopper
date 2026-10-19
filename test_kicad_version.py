@@ -9,7 +9,9 @@ CI에는 KiCad가 없다. 그래서 KiCad로 여는 확인은 PR에서 사람이
 커밋된 생성물의 머리와 라이브러리 버전 판정만 본다. 표준 라이브러리만 쓴다.
 #140부터 생성기는 결과를 kicad-cli로 다시 저장한다. 그래서 KiCad에서 열어 편집 없이 저장해도
 파일이 바뀌지 않는다. 여기서는 커밋된 파일이 그 형식인지와 kicad-cli 단계의 보조 함수를 본다.
+#197부터 .kicad_pro의 PCB 설정(board.design_settings)과 .kicad_pcb가 함께 커밋됐는지도 본다.
 """
+import json
 import os
 import re
 import subprocess
@@ -24,6 +26,8 @@ sys.path.insert(0, str(ROOT / "kicad" / "_tools"))
 import gen_schematic  # noqa: E402  (위 경로를 넣은 뒤에 불러야 한다)
 
 SCHEMATIC = ROOT / "kicad" / "cosmos-avionics" / "cosmos-avionics.kicad_sch"
+PROJECT = SCHEMATIC.with_suffix(".kicad_pro")
+BOARD = SCHEMATIC.with_suffix(".kicad_pcb")
 
 
 def write_libraries(folder, version):
@@ -65,6 +69,59 @@ class CommittedSchematic(unittest.TestCase):
         text = path.read_bytes().decode("utf-8").replace("\r\n", "\n")
         self.assertIn('(generator "eeschema")', text[:400])
         self.assertTrue(text.endswith("\n\t(embedded_fonts no)\n)\n"), text[-200:])
+
+
+def board_settings_problem(project, board):
+    """.kicad_pro의 PCB 설정과 .kicad_pcb가 함께 있는지 본다(#197). 문제가 없으면 None."""
+    settings = json.loads(project.read_text(encoding="utf-8"))
+    has_settings = bool(settings.get("board", {}).get("design_settings"))
+    if has_settings and not board.is_file():
+        return (f"{project.name} has PCB settings (board.design_settings), but {board.name} "
+                f"is not committed. KiCad writes these settings when the PCB editor saves a "
+                f"board. Commit them only with the board, or restore {project.name}. "
+                f"See kicad/README.md (#197).")
+    if board.is_file() and not has_settings:
+        return (f"{board.name} is committed, but {project.name} has no PCB settings "
+                f"(board.design_settings). KiCad keeps the board design rules in "
+                f"{project.name}. Commit the {project.name} that KiCad saved with the board. "
+                f"See kicad/README.md (#197).")
+    return None
+
+
+class ProjectFile(unittest.TestCase):
+    """.kicad_pro의 PCB 설정은 .kicad_pcb와 같은 PR에 커밋한다(#197, kicad/README.md)."""
+
+    def test_committed_project_and_board_agree(self):
+        self.assertIsNone(board_settings_problem(PROJECT, BOARD))
+
+    def test_board_settings_without_board_fail(self):
+        folder = Path(self._tmp_dir())
+        project = folder / PROJECT.name
+        project.write_text(json.dumps({"board": {"design_settings": {"rules": {}}}}),
+                           encoding="utf-8")
+        problem = board_settings_problem(project, folder / BOARD.name)
+        self.assertIn("is not committed", problem)
+
+    def test_board_without_board_settings_fails(self):
+        folder = Path(self._tmp_dir())
+        project = folder / PROJECT.name
+        project.write_text(json.dumps({"board": {"design_settings": {}}}), encoding="utf-8")
+        (folder / BOARD.name).write_text("(kicad_pcb)\n", encoding="utf-8")
+        problem = board_settings_problem(project, folder / BOARD.name)
+        self.assertIn("has no PCB settings", problem)
+
+    def test_board_with_board_settings_passes(self):
+        folder = Path(self._tmp_dir())
+        project = folder / PROJECT.name
+        project.write_text(json.dumps({"board": {"design_settings": {"rules": {}}}}),
+                           encoding="utf-8")
+        (folder / BOARD.name).write_text("(kicad_pcb)\n", encoding="utf-8")
+        self.assertIsNone(board_settings_problem(project, folder / BOARD.name))
+
+    def _tmp_dir(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        return tmp.name
 
 
 class KicadSave(unittest.TestCase):
