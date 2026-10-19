@@ -25,4 +25,3 @@
 ![vanes-deflected](vanes-deflected.png)
 
 ![vanes-neutral](vanes-neutral.png)
-
