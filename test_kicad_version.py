@@ -73,16 +73,20 @@ class CommittedSchematic(unittest.TestCase):
 
 
 def board_settings_problem(project, board):
-    """.kicad_pro의 PCB 설정과 .kicad_pcb가 함께 있는지 본다(#197). 문제가 없으면 None."""
+    """.kicad_pro의 PCB 설정과 .kicad_pcb가 함께 있는지 본다(#197). 문제가 없으면 None.
+
+    작업 폴더의 파일을 본다. git이 추적하는지는 보지 않는다. 그래서 .kicad_pcb를 git add하지
+    않아도 로컬에서는 통과한다. 커밋된 상태는 CI가 새로 받은 저장소에서 같은 검사로 본다.
+    """
     settings = json.loads(project.read_text(encoding="utf-8"))
     has_settings = bool(settings.get("board", {}).get("design_settings"))
     if has_settings and not board.is_file():
         return (f"{project.name} has PCB settings (board.design_settings), but {board.name} "
-                f"is not committed. KiCad writes these settings when the PCB editor saves a "
-                f"board. Commit them only with the board, or restore {project.name}. "
+                f"is not in the same folder. KiCad writes these settings when the PCB editor "
+                f"saves a board. Commit them only with the board, or restore {project.name}. "
                 f"See kicad/README.md (#197).")
     if board.is_file() and not has_settings:
-        return (f"{board.name} is committed, but {project.name} has no PCB settings "
+        return (f"{board.name} is in the folder, but {project.name} has no PCB settings "
                 f"(board.design_settings). KiCad keeps the board design rules in "
                 f"{project.name}. Commit the {project.name} that KiCad saved with the board. "
                 f"See kicad/README.md (#197).")
@@ -133,7 +137,7 @@ class ProjectFile(unittest.TestCase):
         project.write_text(json.dumps({"board": {"design_settings": {"rules": {}}}}),
                            encoding="utf-8")
         problem = board_settings_problem(project, folder / BOARD.name)
-        self.assertIn("is not committed", problem)
+        self.assertIn("is not in the same folder", problem)
 
     def test_board_without_board_settings_fails(self):
         folder = Path(self._tmp_dir())

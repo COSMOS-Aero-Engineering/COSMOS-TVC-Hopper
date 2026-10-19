@@ -126,6 +126,11 @@ KiCad 10.0.8 이후 버전이 이 파일을 어떻게 쓰는지는 아직 확인
 있지 않은데 같은 폴더에 `.kicad_pcb`가 없으면 실패한다. 반대로 `.kicad_pcb`가 있는데 `board.design_settings`가
 비어 있어도 실패한다.
 
+이 검사는 작업 폴더의 파일을 본다. git이 파일을 추적하는지는 보지 않는다. 그래서 새 `.kicad_pcb`를
+`git add`하지 않아도 로컬 검사는 통과한다. `git commit -a`와 `git add -u`는 새 파일을 넣지 않는다.
+커밋된 상태는 CI가 새로 받은 저장소에서 같은 검사로 본다. 커밋하기 전에 `git status`에서 두 파일이 모두
+커밋에 들어가는지 확인한다.
+
 ## 회로 구성 (`_tools/gen_schematic.py`에 넷리스트 그대로 있음)
 
 Teensy 4.0·BNO085·MG90S 서보·FS-iA6B 수신기·ESC·UBEC·레벨시프터 전부 **공식 KiCad 심볼이 없어서**
