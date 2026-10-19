@@ -17,6 +17,7 @@ package-lock.json
 
 # tasks.py 작업 캐시 (입력 해시 마커만 들어 있다 — 지워도 무해, 다시 만들어진다)
 .cosmos-cache/
+# ship.py의 OpenCode 리뷰 DB도 이 폴더 안에 둔다. 개인 OpenCode 데이터와 분리한다(#56).
 
 # OS
 .DS_Store

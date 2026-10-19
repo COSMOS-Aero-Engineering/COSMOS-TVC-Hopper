@@ -489,7 +489,7 @@ class CmdReviewTest(unittest.TestCase):
     def run_review(self, records, logged):
         calls = []
 
-        def fake_call(cmd, check=True, capture=False, cwd=None, input=None):
+        def fake_call(cmd, check=True, capture=False, cwd=None, input=None, env=None):
             calls.append((cmd, input))
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
@@ -518,6 +518,38 @@ class CmdReviewTest(unittest.TestCase):
         self.assertEqual(cmd[0], "codex")
         self.assertIsNone(stdin)
         self.assertIn("[주의]", out)
+
+
+class OpenCodeIsolationTest(unittest.TestCase):
+    def test_child_data_directory_does_not_change_parent_environment(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(ship, "ROOT", Path(tmp)), \
+                mock.patch.dict(ship.os.environ, {"XDG_DATA_HOME": "existing-data", "OPENCODE_DB": "personal.db"}):
+            env = ship.opencode_env()
+            self.assertEqual(ship.os.environ["XDG_DATA_HOME"], "existing-data")
+            self.assertEqual(Path(env["XDG_DATA_HOME"]), Path(tmp).resolve() / ".cosmos-cache/opencode/data")
+            self.assertTrue(Path(env["XDG_DATA_HOME"]).is_dir())
+            self.assertNotIn("OPENCODE_DB", env)
+            self.assertEqual(ship.os.environ["OPENCODE_DB"], "personal.db")
+
+    def test_model_discovery_receives_isolated_environment(self):
+        env = {"XDG_DATA_HOME": "isolated"}
+        with mock.patch.object(ship, "ensure_opencode"), \
+                mock.patch.object(ship, "call", return_value=subprocess.CompletedProcess([], 0, "opencode/mimo-free", "")) as call:
+            self.assertEqual(ship.opencode_model("claude", env=env), "opencode/mimo-free")
+            self.assertIs(call.call_args.kwargs["env"], env)
+
+    def test_fallback_discovery_and_review_use_same_environment(self):
+        env = {"XDG_DATA_HOME": "isolated"}
+        with mock.patch.object(ship, "call", return_value=subprocess.CompletedProcess([], 0, "", "")) as call, \
+                mock.patch.object(ship, "logged_in", return_value=False), \
+                mock.patch.object(ship, "review_records", return_value=(None, "no PR")), \
+                mock.patch.object(ship, "opencode_env", return_value=env), \
+                mock.patch.object(ship, "opencode_model", return_value="opencode/mimo-free") as model, \
+                redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as stop:
+            ship.cmd_review(argparse.Namespace(author="claude", base="origin/main"))
+        self.assertEqual(stop.exception.code, 0)
+        self.assertIs(model.call_args.kwargs["env"], env)
+        self.assertIs(call.call_args.kwargs["env"], env)
 
 
 if __name__ == "__main__":
