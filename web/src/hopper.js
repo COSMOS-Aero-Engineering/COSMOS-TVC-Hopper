@@ -22,7 +22,7 @@ const CAD = {
 
 // 베인 1~4 = FWD / LEFT / AFT / RIGHT (01-avionics §1)
 const VANE_AZ_DEG = [0, 90, 180, 270];
-const VANE_COLORS = [0xe4572e, 0x29a3a3, 0x7a7a7a, 0x7a7a7a];
+export const VANE_COLORS = [0xe4572e, 0x29a3a3, 0x8659be, 0xd09b13];
 
 // servo = ±1일 때 베인 편향각. sim/sim_stage1/params.yaml의 alpha_max_deg와 같은 값이다(alpha = servo × alpha_max).
 export const VANE_ALPHA_MAX_DEG = 10;

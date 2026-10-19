@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { parseLog } from './csv.js';
 import { bodyToThreeQuat, bodyToThreeVec } from './frames.js';
-import { buildHopper, poseVanes } from './hopper.js';
+import { buildHopper, poseVanes, VANE_COLORS } from './hopper.js';
 
 const $ = (id) => document.getElementById(id);
 // 반올림해서 0이 되는 작은 음수(-1e-12 등)는 "-0.0" 대신 "0.0"으로 쓴다
@@ -27,6 +27,20 @@ camera.position.copy(bodyToThreeVec(420, -380, 300));
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 30, 0);
 controls.update();
+
+// 카메라만 옮긴다. 기체 자세와 재생 위치를 유지해 같은 로그 행을 비교한다.
+function setCamera(below) {
+  camera.position.copy(below ? bodyToThreeVec(35, -25, -210) : bodyToThreeVec(420, -380, 300));
+  controls.target.copy(below ? bodyToThreeVec(0, 0, -36) : new THREE.Vector3(0, 30, 0));
+  controls.update();
+  $('camera-default').setAttribute('aria-pressed', String(!below));
+  $('camera-below').setAttribute('aria-pressed', String(below));
+}
+$('camera-default').addEventListener('click', () => setCamera(false));
+$('camera-below').addEventListener('click', () => setCamera(true));
+VANE_COLORS.forEach((color, i) => {
+  $(`vane-color-${i + 1}`).style.backgroundColor = `#${color.toString(16).padStart(6, '0')}`;
+});
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 2.2));
 const sun = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -77,6 +91,9 @@ function show(i) {
   $('theta').textContent = deg(r.theta);
   $('psi').textContent = deg(r.psi);
   $('throttle').textContent = r.throttle === null ? '-' : r.throttle.toFixed(2);
+  [r.servo1, r.servo2, r.servo3, r.servo4].forEach((s, j) => {
+    $(`servo${j + 1}`).textContent = s === null ? '-' : s.toFixed(3) + (vanesValid ? '' : ' (단위 미확인)');
+  });
   $('seek').value = idx;
 }
 

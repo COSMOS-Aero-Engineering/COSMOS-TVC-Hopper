@@ -46,6 +46,12 @@ main { flex: 1; display: flex; min-height: 0; }
 }
 #readout div { margin-bottom: 6px; }
 #seek { flex: 1; min-width: 160px; }
+#readout h2 { font-size: 14px; margin: 18px 0 8px; }
+.hint { color: var(--muted); font-size: 12px; }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; border: 1px solid var(--line); }
+button { min-height: 44px; cursor: pointer; }
+button[aria-pressed="true"] { outline: 2px solid #29a3a3; outline-offset: 2px; }
+button:focus-visible { outline: 3px solid #8659be; outline-offset: 3px; }
 @media (max-width: 640px) {
   main { flex-direction: column; }
   #readout { width: auto; border-left: 0; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 12px; }
