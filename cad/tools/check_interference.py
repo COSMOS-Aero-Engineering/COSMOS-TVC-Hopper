@@ -93,14 +93,18 @@ def main():
             stl = tmp / f"{name}.stl"
             r = subprocess.run([exe, "--render", "-o", str(stl), str(scad)],
                                capture_output=True, text=True, encoding="utf-8", errors="replace")
-            empty = "empty" in r.stderr.lower() or not stl.exists()
+            # 정상적인 빈 결과(교집합 없음)와 렌더 실패를 구분한다(#61 리뷰). 빈 결과는 OpenSCAD가
+            # "top level object is empty"를 출력한다. 그 밖에 STL이 없거나 exit가 0이 아니면 실패다.
+            empty = "empty" in r.stderr.lower()
+            if not empty and (r.returncode != 0 or not stl.exists()):
+                sys.exit(f"{name}: OpenSCAD 렌더 실패 (exit {r.returncode})\n{r.stderr[-1500:]}")
             return stl, empty, r
 
         boxes = {}
         for n, body in parts.items():
             stl, empty, r = render(n, body)
             if empty:
-                sys.exit(f"{n}: 렌더 실패\n{r.stderr[-1500:]}")
+                sys.exit(f"{n}: 부품 형상이 비어 있다\n{r.stderr[-1500:]}")
             boxes[n] = (stl, bbox(stl))
         pairs = [(a, b) for a, b in itertools.combinations(PARTS, 2)]
         pairs += [(v, o) for v in DEFLECTED for o in DEFLECT_PAIRS]

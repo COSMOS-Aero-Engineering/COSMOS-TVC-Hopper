@@ -790,6 +790,14 @@ def task_cad():
         die("CAD 검증 실패:\n     " + "\n     ".join(failures) +
             f"\n     {CAD_SCAD.relative_to(ROOT)}를 고친 뒤 다시 실행할 것.")
     print("CAD 검증 echo 통과 - '!!' 경고와 OpenSCAD 경고 없음")
+    # 발주 STL 검사(#59, PR #60): 부품별 STL을 임시 폴더에 뽑고 열린 모서리·빈 STL·OpenSCAD 경고를 본다.
+    with tempfile.TemporaryDirectory() as tmp:
+        r = subprocess.run([sys.executable, str(ROOT / "cad" / "tools" / "export_print_parts.py"), "--out", tmp],
+                           cwd=ROOT, env=dict(os.environ, OPENSCAD=exe, PYTHONIOENCODING="utf-8"),
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        die("발주 STL 검사 실패(cad/tools/export_print_parts.py):\n" + (r.stdout + r.stderr)[-3000:])
+    print("발주 STL 검사 통과 - " + (r.stdout.strip().splitlines() or ["?"])[-1])
 
 
 # 한국어 Windows에서 출력을 파일이나 파이프로 돌리면 파이썬은 cp949로 쓴다. 출력 문자열에
@@ -1102,8 +1110,8 @@ TASKS = {t.name: t for t in [
          inputs=["ship.py", "test_ship.py"]),
     Task("userpath", "kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 확인 (#96)", task_userpath,
          inputs=[*USER_PATH_SCAN, "test_userpath.py"]),
-    Task("cad", "CAD 검증 echo에 '!!' 경고·OpenSCAD 경고가 없는지 확인, OpenSCAD 없으면 건너뜀 (#61)",
-         task_cad, inputs=["cad/hopper_params.scad", "test_cadcheck.py"], tool=openscad_fingerprint),
+    Task("cad", "CAD 검증 echo와 발주 STL(열린 모서리·경고) 확인, OpenSCAD 없으면 건너뜀 (#61, #59)",
+         task_cad, inputs=["cad/hopper_params.scad", "cad/tools/*.py", "test_cadcheck.py"], tool=openscad_fingerprint),
     Task("cp949", "print·raise 등 출력 문자열에 cp949에 없는 글자가 없는지 확인 (#171)."
          f" 범위: {', '.join(CP949_SCAN)}", task_cp949,
          inputs=[*CP949_SCAN, "test_cp949.py",
