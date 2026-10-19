@@ -4,11 +4,11 @@
 
 실행: python sanity_check.py
 """
-from hopper_aviary import HopperAttitudeEnv
+from hopper_aviary import OBS_NAMES, HopperAttitudeEnv
 
 env = HopperAttitudeEnv()
 obs, info = env.reset()
-print("초기 상태 (phi, theta, psi, wx, wy, wz):", obs)
+print("초기 관측:", dict(zip(OBS_NAMES, obs.tolist())))
 
 for i in range(20):
     action = env.action_space.sample()

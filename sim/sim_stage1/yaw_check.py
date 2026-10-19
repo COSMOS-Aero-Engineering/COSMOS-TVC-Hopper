@@ -31,6 +31,13 @@
        추력이 지연 없이 스로틀을 따르면(#122 전 모델) Δω가 (0.75/u_k)²배라서 이 검사가 실패한다.
    라. 스로틀 변화율 제한(#120): 명령 1.0 → 0.75 → 1.0 계단에서 환경이 실제로 쓴 스로틀(info["throttle"])이
        첫 스텝은 그대로, 그 뒤는 스텝마다 throttle_slew_rate·dt씩 바뀌는지 본다(허용 오차 SLEW_TOL).
+   마. 베인 서보 동특성(#161): 서보 모델을 켜고(params.yaml servo 상수) 베인 1에 계단 명령을 준다.
+       (1) 1차 지연: 0 → +alpha_max 계단 뒤 k 스텝째 베인각이 해석해 alpha_max·(1 − e^(−k·dt/tau))와 같다.
+           그 스텝의 Δωx도 그 베인각으로 손계산한 토크와 같다(힘이 스텝 끝 베인각을 따른다).
+       (2) 데드밴드: 베인이 멈추면 명령보다 데드밴드 미만만큼 모자란다. 멈춘 베인각에서 데드밴드의 절반만큼 떨어진 명령에는
+           베인각이 그대로다. 데드밴드의 2배만큼 떨어진 명령에는 움직인다.
+       (3) 속도 제한: tau를 0으로 두고 −alpha_max → +alpha_max 계단을 주면 스텝마다 rate_max·dt씩 움직인다.
+   1번과 2번 가-라는 서보 모델을 끈다(명령각이 바로 베인각). 3번 요 PD는 params.yaml servo.enabled를 따른다.
    1·2번은 랜덤화를 끄므로 회전자 상수도 params.yaml rotor의 명목값이다(#121).
 3. 요 PD (도메인 랜덤화 켬, 평가 seed 0-199)
    pd_gate.py의 롤·피치 PD에 요 PD(같은 게인 kp=8, kd=2)를 섞는다. 같은 seed로 두 스로틀 시나리오를 잰다.
@@ -145,6 +152,7 @@ def check_torque(p):
         env = HopperAttitudeEnv()
         env.dr = {"enabled": False}   # 명목값 한 점. 무게중심 오프셋도 0이다
         env.rotor_enabled = rotor
+        env.servo_enabled = False     # 손계산은 명령각이 바로 베인각이라고 본다. 서보 모델은 2번 마.에서 본다(#161)
         print(f"   {label}\n")
         print("   | 명령 | 환경 Δω (rad/s) | 손계산 Δω (rad/s) |")
         print("   |---|---|---|")
@@ -203,6 +211,7 @@ def rotor_env(spin):
     env.rotor_enabled = True
     env.rotor_spin_dir = spin
     env.throttle_slew_rate = None   # 가-다는 회전자 식만 본다. 변화율 제한은 라.에서 따로 본다
+    env.servo_enabled = False       # 다.의 롤 명령이 바로 베인각이 되게 한다. 서보 모델은 마.에서 따로 본다(#161)
     env.reset(seed=0)
     return env
 
@@ -309,6 +318,7 @@ def check_slew(p):
         return []
     env = HopperAttitudeEnv()
     env.dr = {"enabled": False}
+    env.servo_enabled = False   # 베인 0 명령이라 결과는 같다. 서보 모델은 마.에서 본다
     env.reset(seed=0)
     d = rate * env.dt
     n = int(np.ceil((1.0 - THROTTLE_HOVER) / d)) + 5   # 경사가 끝나고 5스텝 더
@@ -332,9 +342,105 @@ def check_slew(p):
     return failures
 
 
+def servo_env(p):
+    """서보 모델을 켠 명목 환경(랜덤화·회전자 항·스로틀 변화율 제한 끔). 상수는 params.yaml servo 블록이다."""
+    env = HopperAttitudeEnv()
+    env.dr = {"enabled": False}
+    env.rotor_enabled = False
+    env.throttle_slew_rate = None
+    env.servo_enabled = True
+    env.reset(seed=0)
+    env.state = np.zeros(6, dtype=np.float32)
+    return env
+
+
+def vane_action(a1):
+    """베인 1만 a1(-1~1), 나머지 0, 스로틀 1.0인 행동."""
+    return np.array([a1, 0.0, 0.0, 0.0, 1.0], dtype=np.float32)
+
+
+def check_servo(p):
+    """마. 베인 서보 동특성(#161): 1차 지연 해석해, 데드밴드, 속도 제한을 본다."""
+    sv = p.get("servo")
+    if sv is None:
+        print("   마. 베인 서보 동특성: params.yaml에 servo 블록이 없다 (검사 건너뜀)")
+        return []
+    failures = []
+    alpha_max = np.deg2rad(p["alpha_max_deg"])
+    tau, rate, band = sv["tau"], np.deg2rad(sv["rate_max_dps"]), np.deg2rad(sv["deadband_deg"])
+
+    # (1) 1차 지연: 0 → +alpha_max 계단. 속도 제한이 걸리지 않을 때만 해석해와 같다
+    env = servo_env(p)
+    lag_ok = tau > 0 and alpha_max / tau <= rate
+    if lag_ok:
+        worst, before = 0.0, env.state.astype(float)
+        for k in range(1, THRUST_PROBE_STEPS + 1):
+            obs, *_ = env.step(vane_action(1.0))
+            want = alpha_max * (1.0 - np.exp(-k * env.dt / tau))
+            worst = max(worst, abs(env.vane_alpha[0] - want) / want)
+            got_dw = float(obs[3]) - before[3]
+            before = obs.astype(float)
+        # 마지막 스텝의 Δωx: 그 스텝 끝 베인각으로 손계산한 토크. 회전자 항이 꺼져 있고 ωy = ωz = 0이라 교차항은 0이다
+        frac = float(env.vane_alpha[0] / alpha_max)
+        want_dw = hand_torque(p, vane_action(frac))[0] / p["Jxx"] * env.dt
+        dw_err = abs(got_dw - want_dw) / abs(want_dw)
+        print(f"   마. (1) 1차 지연 tau {tau:g} s: 계단 뒤 1-{THRUST_PROBE_STEPS} 스텝 베인각과 해석해의 상대오차 최대 {worst:.1e}, "
+              f"{THRUST_PROBE_STEPS}번째 스텝 베인각 {np.degrees(env.vane_alpha[0]):.3f}°, Δωx {got_dw:.5f} (손계산 {want_dw:.5f}) rad/s")
+        if not worst <= REL_TOL:
+            failures.append(f"마. 서보 1차 지연: 베인각이 해석해와 상대오차 {worst:.3g}만큼 다르다")
+        if not dw_err <= REL_TOL:
+            failures.append(f"마. 서보 1차 지연: Δωx {got_dw:.6g}, 손계산 {want_dw:.6g} (힘이 스텝 끝 베인각을 따르지 않음)")
+    else:
+        print(f"   마. (1) 1차 지연: tau {tau:g} s에서 속도 제한이 먼저 걸리거나 지연이 없어 해석해 비교를 건너뜀")
+
+    # (2) 데드밴드: 0.5 명령으로 멈출 때까지 보낸 뒤 데드밴드의 절반, 2배만큼 명령을 바꾼다
+    # 데드밴드가 0이면 1차 지연은 유한 스텝 안에 멈추지 않는다. 멈춘 베인각을 비교할 수 없어서 건너뛴다
+    if band <= 0:
+        print("   마. (2) 데드밴드: deadband_deg 0이라 검사를 건너뜀")
+    else:
+        env = servo_env(p)
+        for _ in range(int(np.ceil(max(1.0, 20.0 * tau) / env.dt))):
+            env.step(vane_action(0.5))
+        # 1차 지연은 오차가 데드밴드 안에 들어오는 스텝에 멈춘다. 그래서 멈춘 베인각은 명령보다 최대 데드밴드만큼 모자란다
+        rest = float(env.vane_alpha[0])
+        short = 0.5 * alpha_max - rest
+        env.step(vane_action((rest + 0.5 * band) / alpha_max))   # 현재 베인각에서 데드밴드의 절반
+        small = float(env.vane_alpha[0]) - rest
+        env.step(vane_action((rest + 2.0 * band) / alpha_max))   # 현재 베인각에서 데드밴드의 2배
+        large = float(env.vane_alpha[0]) - rest
+        print(f"   마. (2) 데드밴드 {np.degrees(band):g}°: 명령 {np.degrees(0.5 * alpha_max):g}°에서 멈춘 베인각은 {np.degrees(short):.3f}° 모자란다. "
+              f"베인각 +{np.degrees(0.5 * band):.3f}° 명령 → 베인 {np.degrees(small):+.2e}°, +{np.degrees(2.0 * band):.3f}° 명령 → 베인 {np.degrees(large):+.2e}°")
+        if not 0.0 <= short < band + 1e-12:
+            failures.append(f"마. 서보 데드밴드: 멈춘 베인각이 명령보다 {np.degrees(short):.3g}° 모자란다 (0 이상 데드밴드 미만이어야 한다)")
+        if small != 0.0:
+            failures.append(f"마. 서보 데드밴드: 데드밴드 안의 명령 변화에 베인이 {np.degrees(small):.3g}° 움직였다")
+        if not large > 0:
+            failures.append(f"마. 서보 데드밴드: 데드밴드 밖의 명령 변화에 베인이 움직이지 않았다 ({np.degrees(large):.3g}°)")
+
+    # (3) 속도 제한: tau = 0이면 1차 지연이 없어 계단이 속도 제한만으로 경사가 된다
+    env = servo_env(p)
+    env.servo_tau = 0.0
+    env.step(vane_action(-1.0))   # 첫 스텝: 중립(0)에서 −alpha_max 쪽으로 간다
+    for _ in range(int(np.ceil(alpha_max / (rate * env.dt))) + 1):
+        env.step(vane_action(-1.0))
+    start = float(env.vane_alpha[0])
+    n = int(np.ceil(2.0 * alpha_max / (rate * env.dt))) + 2
+    got, want = [], []
+    for k in range(1, n + 1):
+        env.step(vane_action(1.0))
+        got.append(float(env.vane_alpha[0]))
+        want.append(min(start + k * rate * env.dt, alpha_max))
+    err = float(np.max(np.abs(np.array(got) - np.array(want))))
+    print(f"   마. (3) 속도 제한 {np.degrees(rate):g}°/s(tau 0): -{np.degrees(alpha_max):g}° → +{np.degrees(alpha_max):g}° 계단, "
+          f"{n} 스텝 동안 손계산과 차이 최대 {err:.1e} rad")
+    if not err <= 1e-9:
+        failures.append(f"마. 서보 속도 제한: 베인각이 손계산 경사와 {err:.3g} rad 다르다")
+    return failures
+
+
 def check_rotor(p):
     r = p["rotor"]
-    print("2. 회전자 항·스로틀 변화율 손계산 (랜덤화 끔. 가-다는 회전자 항 켬, 변화율 제한 끔)")
+    print("2. 회전자 항·스로틀 변화율·서보 손계산 (랜덤화 끔. 가-다는 회전자 항 켬, 변화율 제한 끔. 마.만 서보 모델 켬)")
     print(f"   inertia = {r['inertia']:g} kg·m², omega_max = {r['omega_max']:g} rad/s, tau = {r['tau']:g} s "
           f"(params.yaml rotor 명목값, 추정값)\n")
     failures = []
@@ -345,6 +451,7 @@ def check_rotor(p):
     for spin in (1, -1):
         failures += check_thrust_lag(p, spin)
     failures += check_slew(p)
+    failures += check_servo(p)
     print()
     return failures
 
@@ -463,7 +570,7 @@ def main():
             print(f"   - {msg}")
         return 1
     print(f"\n요 축 판정: 합격 (토크 손계산 상대오차 ≤ {REL_TOL:g}, 누설 ≤ {LEAK_TOL:g} rad/s, "
-          f"회전자 항 손계산 통과, 마지막 |ψ| ≤ {MAX_FINAL_YAW_DEG}°)")
+          f"회전자 항·스로틀 변화율·서보 손계산 통과, 마지막 |ψ| ≤ {MAX_FINAL_YAW_DEG}°)")
     return 0
 
 

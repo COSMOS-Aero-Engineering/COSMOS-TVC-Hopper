@@ -7,7 +7,7 @@ Stage 1 에피소드를 웹 대시보드 CSV 형식(docs/design/02-web-dashboard
       servo1, servo2, servo3, servo4, throttle, batt_v, rpm, reward
 - source = SIM (실측 데이터와 섞이지 않게 구분)
 - mode   = PID(PD 기준 제어기) | RL(PPO 모델) | MANUAL(무입력)
-- servo1..4 = 액션 a1..a4 그대로(-1~1), 순서 FWD/LEFT/AFT/RIGHT (01-avionics §1)
+- servo1..4 = 액션 a1..a4 그대로(-1~1), 순서 FWD/LEFT/AFT/RIGHT (01-avionics §1). 서보 모델(#161)을 켜도 명령값이다
 - throttle  = 0-1, 변화율 제한(#120) 뒤 환경이 실제로 쓴 값(step()의 info["throttle"])
 - qw..qz    = ZYX 오일러각에서 계산한 쿼터니언 (§5-3, 뷰어의 짐벌락 회피용)
 - batt_v, rpm 은 시뮬레이션에 없어서 비워 둔다
@@ -30,7 +30,8 @@ from datetime import date
 
 import numpy as np
 
-from hopper_aviary import HopperAttitudeEnv
+from hopper_aviary import N_STATE, OBS_NAMES, HopperAttitudeEnv
+from pd_gate import model_policy
 
 COLUMNS = [
     "t_ms", "source", "mode",
@@ -58,7 +59,7 @@ def euler_zyx_to_quat(phi, theta, psi):
 
 def pd_policy(obs, kp=8.0, kd=2.0):
     """롤/피치 PD 기준 제어기. 부호는 tau_x=(F1+F3)l, tau_y=-(F2+F4)l 에 맞춘 것(이슈 #21과 동일)."""
-    phi, theta, _psi, wx, wy, _wz = obs
+    phi, theta, _psi, wx, wy, _wz = obs[:N_STATE]
     ux = float(np.clip(-kp * phi - kd * wx, -1, 1))
     uy = float(np.clip(kp * theta + kd * wy, -1, 1))
     return np.array([ux, uy, ux, uy, 1.0], dtype=np.float32)
@@ -78,7 +79,7 @@ def make_policy(name, model_path):
     except ImportError as e:
         raise SystemExit("--policy ppo 는 stable-baselines3가 필요합니다 (sim/README.md 환경 세팅).") from e
     model = PPO.load(model_path)
-    return lambda obs: model.predict(obs, deterministic=True)[0]
+    return model_policy(model)   # #186 전 6차원 모델은 obs[:6]만 받는다
 
 
 def git_commit():
@@ -91,7 +92,7 @@ def git_commit():
 
 
 def state_row(t_ms, mode, obs):
-    phi, theta, psi, wx, wy, wz = (float(v) for v in obs)
+    phi, theta, psi, wx, wy, wz = (float(v) for v in obs[:N_STATE])
     qw, qx, qy, qz = euler_zyx_to_quat(phi, theta, psi)
     return {
         "t_ms": t_ms, "source": "SIM", "mode": mode,
@@ -185,8 +186,14 @@ def main():
             "rotor": {"enabled": env.rotor_enabled, "inertia": env.nominal_rotor_inertia,
                       "omega_max": env.nominal_rotor_omega_max, "tau": env.nominal_rotor_tau,
                       "spin_dir": env.rotor_spin_dir},
+            # 베인 서보 동특성(#161). 켜면 CSV servo1..4 열(명령)과 힘을 만든 실제 베인각이 다르다
+            "servo": {"enabled": env.servo_enabled, "tau": env.servo_tau,
+                      "rate_max_dps": float(np.degrees(env.servo_rate_max)),
+                      "deadband_deg": float(np.degrees(env.servo_deadband))},
             # 스로틀 변화율 제한(1/s, null이면 없음, #120). CSV throttle 열은 이 제한 뒤 값이다
             "throttle_slew_rate": env.throttle_slew_rate,
+            # 정책이 받은 관측의 이름과 순서(#186). CSV 열이 아니라 정책 입력이다. obs[6] throttle은 직전 스텝의 제한 뒤 스로틀이다
+            "obs_layout": list(OBS_NAMES),
             "episode_params": episode_params(env),
             "result": info,
             "git_commit": commit,

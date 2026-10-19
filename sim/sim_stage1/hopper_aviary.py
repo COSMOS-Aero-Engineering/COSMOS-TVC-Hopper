@@ -12,7 +12,8 @@ Week 2 물리 실험의 "구속 스탠드"(M1, 만능조인트로 위치를 고�
    를 확인하는 것 — 절대적인 학습 성능 숫자 자체는 아직 의미 없음.
    Week 2에서 실측값이 나오는 대로 params.yaml만 교체하면 이 코드는 그대로 재사용됨.
 
-상태(observation) = [phi, theta, psi, wx, wy, wz]  (자세각 rad, 바디 각속도 rad/s)
+관측(observation)  = [phi, theta, psi, wx, wy, wz, throttle]   (OBS_NAMES)
+                     자세각 rad, 바디 각속도 rad/s, 직전 스텝에 실제로 쓴 스로틀 0-1(#186)
 액션(action)       = [a1, a2, a3, a4, throttle]     (베인각 -1~1 정규화, 스로틀 0~1)
 과제               = 초기 교란에서 수평(phi=theta=0)으로 되돌아와 유지하기
                      → 구속 스탠드 첫 실험(실험 B 이후, 자세 제어 첫 검증)과 같은 목표
@@ -25,7 +26,14 @@ EDF 회전자 항(#86): params.yaml의 rotor.enabled를 켜면 회전자 반작�
 
 스로틀 변화율 제한(#120): params.yaml의 throttle_slew_rate(1/s)로 스로틀 명령이 한 스텝에 바뀌는 양을
 ±throttle_slew_rate·dt로 자른다. 회전자 항 스위치와 상관없이 늘 쓴다. 펌웨어도 같은 제한을 쓴다(마스터 설계 §8.1).
-제한 뒤 실제로 쓴 스로틀은 step()의 info["throttle"]에 있다. 이 값은 관측(obs)에 없다.
+제한 뒤 실제로 쓴 스로틀은 step()의 info["throttle"]와 관측 obs[6]에 있다(#186). 제한이 있으면 다음 스텝에 쓸 수
+있는 스로틀이 이 값에 달려서, 관측에 없으면 정책이 못 보는 상태가 된다. reset() 직후 obs[6]은 RESET_THROTTLE_OBS(1.0)다.
+첫 스텝은 제한하지 않으므로 이 값은 첫 스텝을 제약하지 않는다. 회전자 회전수 Ω(rotor.enabled)는 관측에 넣지 않았다.
+실물에서 회전수를 받으려면 ESC 텔레메트리가 필요하고 지금 하드웨어에는 없다(#174, #186 결정).
+
+베인 서보 동특성(#161): params.yaml의 servo.enabled를 켜면 베인각이 명령각을 데드밴드·1차 지연·속도 제한으로 따라간다
+(_advance_servo). 기본값은 끔이다. 끄면 베인각은 행동을 받은 스텝에 바로 명령각이 된다. 켜도 실제 베인각은 관측에 없다.
+MG90S는 위치 피드백이 없어서 실물에서도 재지 못한다. 상수 근거는 params.yaml servo 블록.
 
 도메인 랜덤화: params.yaml의 domain_rand 설정에 따라 매 reset()마다 Jxx/Jyy/Jzz,
 베인 모멘트암(l,r), Kf, 무게중심-추력축 오프셋, 회전자 상수(inertia·omega_max·tau, #121)를
@@ -68,6 +76,13 @@ EPISODE_STREAMS = (
 # 근거: Peng et al. 2018(arXiv:1710.06537)은 질량·감쇠·마찰·게인을 로그로, 나머지를 균등으로 뽑았다.
 #   OpenAI 2018(arXiv:1808.00177) 표 1도 감쇠·액추에이터 게인을 loguniform으로 뽑았다.
 ROTOR_RAND_LOG = {"rotor_inertia": True, "rotor_omega_max": False, "rotor_tau": True}
+
+# 관측 벡터의 이름과 순서(#186). 앞 6개는 물리 상태(self.state), 마지막은 직전 스텝에 실제로 쓴 스로틀(0-1)이다.
+# 순서를 바꾸면 학습한 모델과 pd_gate.pd() 같은 obs[:6] 사용처가 조용히 틀린다. 새 값은 끝에 더한다.
+OBS_NAMES = ("phi", "theta", "psi", "wx", "wy", "wz", "throttle")
+N_STATE = 6               # obs[:N_STATE]가 물리 상태다. 6차원 관측으로 학습한 모델은 이 부분만 받는다
+RESET_THROTTLE_OBS = 1.0  # reset() 직후 obs[6]. 첫 스텝은 제한하지 않으므로 값 자체는 동역학에 영향이 없다.
+                          # 1.0은 pd_gate.py·yaw_check.py 시나리오 A의 고정 스로틀이다
 
 
 def stream_id(name: str) -> int:
@@ -157,6 +172,16 @@ class HopperAttitudeEnv(gym.Env):
         self.CD0 = p["CD0"]
         self.alpha_max = np.deg2rad(p["alpha_max_deg"])
 
+        # 베인 서보 동특성(#161). 블록이 없으면 끈다. step()은 servo_enabled가 참일 때만 _advance_servo()를 부른다.
+        servo = p.get("servo", {})
+        self.servo_enabled = bool(servo.get("enabled", False))
+        self.servo_tau = float(servo.get("tau", 0.0))                              # s
+        self.servo_rate_max = np.deg2rad(float(servo.get("rate_max_dps", np.inf)))  # rad/s
+        self.servo_deadband = np.deg2rad(float(servo.get("deadband_deg", 0.0)))     # rad
+        if self.servo_tau < 0 or self.servo_deadband < 0 or not self.servo_rate_max > 0:
+            raise ValueError("servo.tau와 servo.deadband_deg는 0 이상, servo.rate_max_dps는 0보다 커야 한다.")
+        self.vane_alpha = np.zeros(4)   # rad, 실제 베인각 4개. servo_enabled일 때만 쓴다. reset()이 중립(0)으로 둔다
+
         self.dr = p.get("domain_rand", {"enabled": False})
 
         # EDF 회전자(#86). 상수는 늘 읽는다. step()은 rotor_enabled가 참일 때만 회전자 토크를 넣는다.
@@ -192,9 +217,10 @@ class HopperAttitudeEnv(gym.Env):
             high=np.array([1, 1, 1, 1, 1], dtype=np.float32),
             dtype=np.float32,
         )
-        # 상태: 자세각(rad) + 바디 각속도(rad/s, 대략적 상한으로 클리핑)
-        high = np.array([np.pi, np.pi, np.pi, 50, 50, 50], dtype=np.float32)
-        self.observation_space = spaces.Box(low=-high, high=high, dtype=np.float32)
+        # 관측: 자세각(rad) + 바디 각속도(rad/s, 대략적 상한) + 제한 뒤 스로틀(0-1, #186). 순서는 OBS_NAMES
+        high = np.array([np.pi, np.pi, np.pi, 50, 50, 50, 1], dtype=np.float32)
+        low = np.array([-np.pi, -np.pi, -np.pi, -50, -50, -50, 0], dtype=np.float32)
+        self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
 
         self.state = np.zeros(6, dtype=np.float32)
         self.episode_seed = None  # reset()이 정한다. 이번 에피소드의 모든 난수 흐름이 여기서 나온다
@@ -210,7 +236,14 @@ class HopperAttitudeEnv(gym.Env):
         phi, theta, psi = self._rng("initial_attitude").uniform(-0.3, 0.3, size=3)
         self.state = np.array([phi, theta, psi, 0.0, 0.0, 0.0], dtype=np.float32)
         self.step_count = 0
-        return self.state.copy(), {}
+        self.throttle_applied = None
+        self.vane_alpha = np.zeros(4)
+        return self._obs(), {}
+
+    def _obs(self):
+        """관측 벡터(OBS_NAMES 순서, float32). 물리 상태 self.state 뒤에 직전 스텝의 제한 뒤 스로틀을 붙인다(#186)."""
+        throttle = RESET_THROTTLE_OBS if self.throttle_applied is None else self.throttle_applied
+        return np.append(self.state, np.float32(throttle)).astype(np.float32)
 
     def _rng(self, name):
         """이번 에피소드에서 name 값만 쓰는 난수 생성기(#98).
@@ -299,6 +332,8 @@ class HopperAttitudeEnv(gym.Env):
         action = np.clip(action, self.action_space.low, self.action_space.high)
         a1, a2, a3, a4, throttle_norm = action
         alpha = np.array([a1, a2, a3, a4]) * self.alpha_max
+        if self.servo_enabled:
+            alpha = self._advance_servo(alpha)   # 서보 동특성(#161). 끄면 명령각을 그대로 쓴다
         throttle = self._limit_throttle((throttle_norm + 1.0) / 2.0)  # -1~1 -> 0~1, 그다음 변화율 제한(#120)
 
         # 회전자 항을 켜면(#86) 회전수 Ω가 스로틀을 1차 지연으로 따라가고, 추력도 이 Ω에서 계산한다(#122).
@@ -364,7 +399,7 @@ class HopperAttitudeEnv(gym.Env):
         terminated = bool(crashed)
         truncated = self.step_count >= self.max_steps
 
-        return self.state.copy(), float(reward), terminated, truncated, {"throttle": float(throttle)}
+        return self._obs(), float(reward), terminated, truncated, {"throttle": float(throttle)}
 
     def _limit_throttle(self, throttle_cmd):
         """스로틀 변화율 제한(#120). 이번 스텝에 실제로 쓸 스로틀(0-1)을 돌려준다.
@@ -380,6 +415,25 @@ class HopperAttitudeEnv(gym.Env):
             throttle = min(max(throttle_cmd, self.throttle_applied - d), self.throttle_applied + d)
         self.throttle_applied = throttle
         return throttle
+
+    def _advance_servo(self, alpha_cmd):
+        """베인 서보 4개를 한 스텝(dt) 진행하고 스텝 끝 베인각(rad, 4벡터)을 돌려준다(#161). step()이 servo_enabled일 때만 부른다.
+
+        모델은 tvc-retro-propulsion simulation/isaac/tvc_env/dynamics/actuator_servo.py(MIT, 커밋 971e24d)와 같은 꼴이다.
+          1. 데드밴드: |α_cmd − α0| < deadband인 베인은 이 스텝에 움직이지 않는다. 데드밴드는 상태가 아니라 오차에 건다
+          2. 1차 지연: 명령이 스텝 동안 일정하다고 보고 해석해로 진행한다. α1 = α_cmd + (α0 − α_cmd)·e^(−dt/tau).
+             참고 구현은 전진 오일러(α0 + dt·e/tau)다. 해석해는 dt가 tau에 가까워도 명령각을 넘지 않는다(회전자와 같은 방법)
+          3. 속도 제한: |α1 − α0| ≤ rate_max·dt
+          4. 각도 제한: |α1| ≤ alpha_max. 명령각이 이미 이 안이라 지금은 걸리지 않는다
+        에피소드 첫 스텝의 α0는 reset()이 둔 중립(0)이다.
+        """
+        a0 = self.vane_alpha
+        target = np.where(np.abs(alpha_cmd - a0) < self.servo_deadband, a0, alpha_cmd)
+        decay = np.exp(-self.dt / self.servo_tau) if self.servo_tau > 0 else 0.0
+        d = self.servo_rate_max * self.dt
+        a1 = np.clip(target + (a0 - target) * decay, a0 - d, a0 + d)
+        self.vane_alpha = np.clip(a1, -self.alpha_max, self.alpha_max)
+        return self.vane_alpha
 
     def _advance_rotor(self, throttle):
         """회전자 회전수 Ω를 한 스텝(dt) 진행하고 (스텝 시작 Ω0, 스텝 끝 Ω1)을 rad/s로 돌려준다(#86, #122).

@@ -72,7 +72,7 @@
 | ID · 단계 · 형식 · 언어 | 자료와 볼 범위 | 보고 나서 할 일 · 적용 한계 |
 |---|---|---|
 | R01 · 입문 · 글·그림 · 영어 | [Gymnasium Basic Usage](https://gymnasium.farama.org/introduction/basic_usage/)<br>reset, step, observation, action, 종료 신호 | step 반환값 다섯 개의 뜻을 적는다.<br>공식 설치 명령 대신 저장소 uv.lock을 사용한다. |
-| R02 · 첫 실습 · 글·코드 · 영어 | [Gymnasium Create a Custom Environment](https://gymnasium.farama.org/introduction/create_custom_env/)<br>관측·행동 공간과 reset/step | 우리 환경의 관측 6개와 행동 5개를 코드에서 찾는다.<br>예제 GridWorld는 호퍼의 물리 모델이 아니다. |
+| R02 · 첫 실습 · 글·코드 · 영어 | [Gymnasium Create a Custom Environment](https://gymnasium.farama.org/introduction/create_custom_env/)<br>관측·행동 공간과 reset/step | 우리 환경의 관측 7개와 행동 5개를 코드에서 찾는다.<br>예제 GridWorld는 호퍼의 물리 모델이 아니다. |
 | R03 · 입문 · 글·코드 · 영어 | [SB3 Quickstart](https://stable-baselines3.readthedocs.io/en/master/guide/quickstart.html)<br>learn와 predict의 구분 | 학습과 평가에서 바뀌는 것이 무엇인지 적는다.<br>공식 첫 예제는 A2C다. 우리 코드의 PPO와 구분하고 의존성은 lock을 따른다. |
 | R04 · 첫 실습 · 글·코드 · 영어 | [SB3 PPO 문서](https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html)<br>PPO 생성자, learn, predict | 우리 학습 코드의 n_steps와 batch_size 위치를 찾는다.<br>최신 master 문서와 고정된 설치 버전은 다를 수 있다. |
 | R05 · 첫 실습 · 글 · 영어 | [SB3 RL Tips and Tricks](https://stable-baselines3.readthedocs.io/en/master/guide/rl_tips.html)<br>평가 환경, 여러 실행, 정규화 | 훈련 seed와 평가 seed를 구분한 평가 계획을 쓴다.<br> |

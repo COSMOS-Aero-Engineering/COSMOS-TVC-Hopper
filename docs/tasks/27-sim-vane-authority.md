@@ -35,7 +35,7 @@ cd sim/sim_stage1; python pd_gate.py --model hopper_attitude_ppo.zip
 ## 확인 못 한 것
 
 - CL, `A_fin`, `A_duct`, `vane_arm_l`은 전부 추정값이다. 실측은 아직 없다.
-- 서보 지연은 아직 모델에 없다. 서보 지연을 넣을지는 #161에서 정한다. 추력도 스로틀에서 지연 없이 계산한다. 추력의 모터 지연을 넣을지는 #122에서 정한다.
+- 서보 지연·데드밴드·속도 제한은 모델에 있지만 기본값은 끔이다(#161, `params.yaml`의 `servo.enabled`). 1차 지연 시상수 0.05 s는 추정값이고, 속도 상한과 데드밴드는 MG90S 판매 사양이다. 실측(TC-2, 실험 A) 뒤에 켤지 정한다. 결과는 `modelling-notes-ch3.md` §3 "베인 서보 동특성". 추력의 모터 지연은 회전자 항(`rotor.enabled`)을 켤 때만 들어간다(#122).
 - 회전자 자이로 효과는 모델에 있지만 기본값은 끔이다(2026-10-18 기준).
   - #86(PR #123)이 회전자 반작용 토크와 자이로 토크를 `sim/sim_stage1/hopper_aviary.py`에 넣었다. `sim/sim_stage1/params.yaml`의 `rotor.enabled`가 켜고 끈다. 켜면 회전자 회전수가 1차 지연(`rotor.tau`)으로 스로틀을 따라간다. 이 회전수는 두 토크 계산에만 쓴다.
   - 상수(`rotor.inertia`, `rotor.omega_max`, `rotor.tau`, `rotor.spin_dir`)는 공개 자료와 가정으로 잡은 추정값이다. 실측은 아직 없다.
