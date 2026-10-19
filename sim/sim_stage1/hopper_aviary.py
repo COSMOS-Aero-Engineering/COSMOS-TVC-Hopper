@@ -141,6 +141,25 @@ def vane_lift_gain(p: dict) -> float:
     return float(CL)
 
 
+G = 9.81   # m/s². 호버 스로틀 계산에만 쓴다. Stage 1 자세 동역학은 위치를 구속해서 중력을 쓰지 않는다
+
+
+def hover_throttle(mass: float, Kf: float, omega_t_per_throttle: float) -> float:
+    """추력이 무게와 같아지는 스로틀(0-1)을 계산한다(#204). 호버 스로틀의 정본은 이 함수 하나다.
+
+    환경의 추력 식 Ft = Kf·(u·omega_t_per_throttle)²에서 Ft = mass·G를 u로 푼다:
+      u = sqrt(mass·G / (Kf·omega_t_per_throttle²))
+    params.yaml 명목값(0.735 kg, Kf 1.1e-6, 3000)이면 최대 추력 9.9 N이고 u = 0.853이다.
+    u가 1을 넘으면 최대 추력이 무게보다 작아서 기체가 뜨지 못한다. 이때는 ValueError를 낸다.
+    """
+    u = float(np.sqrt(mass * G / (Kf * omega_t_per_throttle ** 2)))
+    if not 0.0 < u <= 1.0:
+        raise ValueError(f"호버 스로틀 {u:.3f}: 0보다 크고 1 이하여야 한다. 최대 추력 "
+                         f"{Kf * omega_t_per_throttle ** 2:.2f} N, 무게 {mass * G:.2f} N. "
+                         "params.yaml의 mass·Kf·omega_t_per_throttle을 확인할 것.")
+    return u
+
+
 class HopperAttitudeEnv(gym.Env):
     """Stage 1: 위치 구속(만능조인트) 상태에서 자세(roll/pitch/yaw)만 제어하는 환경."""
 

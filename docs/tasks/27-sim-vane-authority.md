@@ -39,5 +39,5 @@ cd sim/sim_stage1; python pd_gate.py --model hopper_attitude_ppo.zip
 - 회전자 자이로 효과는 모델에 있지만 기본값은 끔이다(2026-10-18 기준).
   - #86(PR #123)이 회전자 반작용 토크와 자이로 토크를 `sim/sim_stage1/hopper_aviary.py`에 넣었다. `sim/sim_stage1/params.yaml`의 `rotor.enabled`가 켜고 끈다. 켜면 회전자 회전수가 1차 지연(`rotor.tau`)으로 스로틀을 따라간다. 이 회전수는 두 토크 계산에만 쓴다.
   - 상수(`rotor.inertia`, `rotor.omega_max`, `rotor.tau`, `rotor.spin_dir`)는 공개 자료와 가정으로 잡은 추정값이다. 실측은 아직 없다.
-  - 켜면 `yaw_check.py` 시나리오 B(t = 1 s에 스로틀 1.0 → 0.75)에서 요 PD가 불합격한다. 켜기 전 대응 방법은 #120에서 정한다.
+  - 켜면 `yaw_check.py` 시나리오 B(t = 1 s에 스로틀 1.0 → 호버 스로틀 0.853, #204 전에는 0.75)에서 요 PD가 불합격한다. 켜기 전 대응 방법은 #120에서 정한다.
   - 식, 상수 근거, 결과는 [`modelling-notes-ch3.md`](../design/modelling-notes-ch3.md) §3의 "EDF 회전자 반작용·자이로 항"에 있다.
