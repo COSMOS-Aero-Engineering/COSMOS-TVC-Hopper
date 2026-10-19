@@ -62,8 +62,9 @@ KiCad 10.0.6으로 저장하면 `.kicad_pro`가 2줄 바뀐다. 아래 "KiCad 10
 4. 부품 20개가 격자로 나열돼 있음 — 예쁜 배치가 아니라 **넷 연결 확인용 1차 캡처**다. KiCad에서
    재배치한 결과는 커밋하지 않는다. 다시 생성하면 지워지기 때문이다(#140). 배치를 바꾸려면
    `_tools/gen_schematic.py`의 `COMPONENTS` 좌표를 고치고 다시 생성한다.
-5. 보기만 하고 저장했으면 `git diff`로 확인한다. 두 파일이 나오지 않아야 정상이다. Windows에서는 `git status`가
-   `.kicad_sch`에 `M`을 띄워도 `git diff`가 비면 정상이다(아래 "KiCad 10.0.7로 저장한다" 절). KiCad는 같은 폴더에
+5. 보기만 하고 저장했으면 `git diff`로 확인한다. `diff --git`으로 시작하는 변경 내용이 나오지 않아야 정상이다.
+   Windows에서는 `git diff`가 `.kicad_sch`에 `CRLF will be replaced by LF` 경고 한 줄을 띄우고, `git status`가
+   같은 파일에 `M`을 띄운다. 둘 다 정상이다(아래 "KiCad 10.0.7로 저장한다" 절). KiCad는 같은 폴더에
    `cosmos-avionics.kicad_prl`과 `.history/`도 만든다. 둘 다 `.gitignore`가 무시한다.
 6. PCB 편집기를 열어 저장했으면 아래 "PCB를 저장하면 바뀌는 `.kicad_pro`" 절을 따른다.
 
@@ -86,8 +87,10 @@ KiCad 10.0.7이 쓴 파일이다. KiCad 10.0.6은 같은 파일을 다르게 쓴
   KiCad는 `.kicad_pro`를 다시 쓰지 않았다(수정 시각이 그대로다). `.kicad_sch`는 CRLF로 저장됐고, LF로 바꾸면
   커밋된 파일과 바이트 단위로 같다.
 - Windows에서 저장한 `.kicad_sch`는 작업 폴더에서 CRLF다. `.gitattributes`(`eol=lf`)가 커밋할 때 LF로
-  바꾸므로 `git diff`에는 나오지 않는다. 그런데 `git status`는 이 파일에 `M`을 띄운다. 이 파일을
-  `git add`하면 스테이지에 들어가는 변경이 없고 `M`도 사라진다(#209). KiCad 10.0.6과 10.0.7 프로젝트
+  바꾸므로 `git diff`에 변경 내용은 나오지 않는다. 다만 `git diff`는 이 파일에 경고 한 줄을 띄운다:
+  `warning: in the working copy of '…', CRLF will be replaced by LF the next time Git touches it`.
+  이 경고는 `eol=lf` 때문에 나오고, `git diff --exit-code`의 종료 코드는 0이다. `git status`는 이 파일에
+  `M`을 띄운다. 이 파일을 `git add`하면 스테이지에 들어가는 변경이 없고 `M`도 사라진다(#209). KiCad 10.0.6과 10.0.7 프로젝트
   관리자의 파일 목록도 이 파일 옆에 빨간 원을 그렸다. KiCad의 git 상태 표시로 보인다. 판단은 `git diff`로 한다.
 
 KiCad 10.0.6 PC에서 저장했으면 커밋하기 전에 둘 중 하나를 한다.
