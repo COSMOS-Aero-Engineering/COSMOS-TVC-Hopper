@@ -880,7 +880,7 @@ def task_cp949():
 
 
 def task_kicadver():
-    """생성 회로도의 KiCad 형식 번호가 생성기와 같은지 본다(#139).
+    """생성 회로도의 KiCad 형식 번호가 생성기와 같고, KiCad가 저장한 형식인지 본다(#139, #140).
 
     KiCad가 없어도 돈다. KiCad로 실제로 여는 확인은 kicad/README.md의 kicad-cli 명령으로 한다.
     """
@@ -1108,7 +1108,7 @@ TASKS = {t.name: t for t in [
                  ".claude/skills/ste-ko/references/upstream/dictionary.md"]),
     Task("vcruntime", "Windows VC++ 런타임 확인의 단위 검사 - 가짜 응답으로 (#108)", task_vcruntime,
          inputs=["test_vcruntime.py"]),
-    Task("kicadver", "생성 회로도의 KiCad 형식 번호가 생성기와 같은지 확인 (#139)", task_kicadver,
+    Task("kicadver", "생성 회로도의 KiCad 형식 번호와 저장 형식 확인 (#139, #140)", task_kicadver,
          inputs=["kicad/_tools/*.py", "kicad/cosmos-avionics/*.kicad_sch",
                  "test_kicad_version.py"]),
     Task("agentsref", "다른 문서가 쓴 AGENTS.md 절 이름이 AGENTS.md 제목에 있는지 확인 (#183)",
