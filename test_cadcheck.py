@@ -171,6 +171,38 @@ class ExportedMeshRegression(unittest.TestCase):
 
 
 
+@unittest.skipUnless(OPENSCAD, "OpenSCAD가 없다")
+class RealExportRegression(unittest.TestCase):
+    """Run the actual exporter and OpenSCAD, including the output file checks."""
+
+    def export(self, body):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("real_cad_export", Path(__file__).parent / "cad/tools/export_print_parts.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            source = tmp / "fixture.scad"
+            source.write_text('echo("fixture"); top_plate_bot_z=0; module top_plate() {' + body + '}\n' + module.MARKER,
+                              encoding="utf-8")
+            with mock.patch.object(module, "find_openscad", return_value=OPENSCAD), \
+                    mock.patch.object(module, "SCAD", source), \
+                    mock.patch("sys.argv", ["export", "--out", str(tmp / "out"), "--only", "top_plate"]), \
+                    redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as result:
+                    module.main()
+            return result.exception.code
+
+    def test_real_valid_cube_passes(self):
+        self.assertEqual(self.export("cube(10);"), 0)
+
+    def test_real_empty_part_fails(self):
+        self.assertEqual(self.export("difference(){cube(10); cube(10);}"), 1)
+
+    def test_real_unknown_module_fails(self):
+        self.assertEqual(self.export("cube(10); no_such_module();"), 1)
+
+
 class OffsetRingMassRegression(unittest.TestCase):
     def test_ring_centroid_preserves_mount_position(self):
         import importlib.util

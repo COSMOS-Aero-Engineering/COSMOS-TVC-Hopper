@@ -773,7 +773,7 @@ def task_cad():
 
     검사기 자체의 단위 검사(test_cadcheck.py)를 먼저 돌린다.
     """
-    run([sys.executable, "-m", "unittest", "-q", "test_cadcheck"], cwd=ROOT)
+    run([sys.executable, "-m", "unittest", "-q", "test_cadcheck", "test_interference"], cwd=ROOT)
     exe = find_openscad()
     if not exe:
         if os.environ.get("CI"):
@@ -1112,7 +1112,7 @@ TASKS = {t.name: t for t in [
     Task("userpath", "kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 확인 (#96)", task_userpath,
          inputs=[*USER_PATH_SCAN, "test_userpath.py"]),
     Task("cad", "CAD 검증 echo와 발주 STL(열린 모서리·경고) 확인, OpenSCAD 없으면 건너뜀 (#61, #59)",
-         task_cad, inputs=["cad/hopper_params.scad", "cad/tools/*.py", "test_cadcheck.py"], tool=openscad_fingerprint),
+         task_cad, inputs=["cad/hopper_params.scad", "cad/tools/*.py", "test_cadcheck.py", "test_interference.py"], tool=openscad_fingerprint),
     Task("cp949", "print·raise 등 출력 문자열에 cp949에 없는 글자가 없는지 확인 (#171)."
          f" 범위: {', '.join(CP949_SCAN)}", task_cp949,
          inputs=[*CP949_SCAN, "test_cp949.py",

@@ -51,10 +51,10 @@ bail_od  = 3;   // D4 상단 베일 Ø3mm 스틸봉
 //   ②판 반길이(55.5) > 기둥 반경위치(33.9)라 기둥 4개를 관통 ③어디에도 고정되지 않는 떠 있는 판.
 //   상세 근거·치수 출처: docs/design/01-avionics-integration-final.md §7
 // ⚠️ 부품 공칭 치수는 실측 아님 — 실물 받으면 여기만 조정(규격품이라 거의 안 바뀜).
-// 2026-09-19 실측 최종 확정(2차 — 9/18 1차값 대체, cad/measurements.md 원본 기록):
+// 과거 2026-09-19 기록(cad/measurements.md):
 //   - Teensy 35×17mm — 공식 스펙(36×18mm)과 거의 일치. 1차 "세로 10mm"는 측정 오류였던 걸로 확인.
-//   - 배터리 63.5×32.5×15mm(가로×세로×두께) — 1차값(74×34, 높이 미측정)을 전부 교체.
-//     세 축 다 실측 완료, 더 이상 플레이스홀더 아님.
+//   - 배터리 63.5×32.5×15mm는 현재 4S 팩의 치수로 쓰지 않는다.
+//     현재 배터리는 아래 2026-10-17 실측값을 쓴다(#221).
 teensy_l = 35; teensy_w = 17;             // Teensy 4.0 실측(최종) — 미리보기 전용, 프린트 파츠엔 안 쓰임
 esc_l    = 36; esc_w    = 24; esc_t = 8;  // ESC 보드 (브래킷 크기 산정용) — 아직 미측정, 공칭치수
 batt_l = 73; batt_w = 34; batt_h = 31; // 실측 4S 1300 mAh(2026-10-17): 73+-3 x 33-34 x 31+-2 mm, 159.5 g
@@ -63,7 +63,7 @@ batt_strap_t = 2;  // 벨크로 스트랩 두께
 batt_l_max = 76;   // 실측 길이 73 +- 3 mm (2026-10-17)
 batt_shelf_y_half = 42;   // 배터리 선반 반폭. 턱 두께 3이라 턱 사이 = 2*42 - 6 = 78 mm
 // 옆 무게중심 트림용 무게추(#59). 배터리(+Y) 한쪽 배치라 CG가 +Y로 약 9 mm 치우친다(cad/cg 계산).
-// 아비오닉스 선반(−Y) 바깥 끝 아래에 M5 볼트 2개로 와셔·너트·납추를 매달아 0-70 g을 조절한다(01 문서 §8.3 트림).
+// 아비오닉스 선반(−Y) 아래 M5 구멍 2개에 트림 부품을 고정한다. 현재 72 g 강철 고리는 설계 후보이며 실측 전이다.
 ballast_x = 89;    // 선반 로컬 x(반경 방향)
 ballast_y = 10;    // 로컬 |y|
 ballast_hole_d = 5.5;
@@ -77,6 +77,15 @@ shelf_top_z   = 150;   // 선반 윗면 z (배기면 기준). 상판 하면(178)
 shelf_t       = 3;     // 선반 판 두께
 shelf_rib_h   = 5;     // 가장자리 리브 높이 (캔틸레버 처짐 방지)
 shelf_r_inner = 42;    // 선반 안쪽 경계 반경 — 흡기 스트림튜브(Ø78=r39) + 여유 3mm. 이보다 안쪽엔 재료 없음
+// 전자부 배치 후보(#222): 공칭 외형이며 실물 체결·배선 여유는 #219에서 확인한다.
+avi_board_r = shelf_r_inner + 25;
+avi_board_z = shelf_top_z + 12;
+avi_teensy_xy = [-10, -12];
+avi_imu_xy = [-10, 22];
+receiver_xy = [13, 0];
+receiver_size = [26.2, 47, 15]; // FS-iA6B 매뉴얼 공칭치수, 현재 구매품 일치 여부 확인 필요
+receiver_bottom_gap = 0.5; // 기판 위 설계 간격, 실물 스페이서/절연 고정 확인 필요
+ubec_r = shelf_r_inner + 28; // 바깥면 r78.5; 무게추 안쪽 r80와 1.5 mm 간격
 saddle_h      = 16;    // 기둥을 감싸는 새들 링 높이
 saddle_wall   = 2.9;   // 새들 링 두께
 tie_slot_w    = 3.2;   // 케이블타이 슬롯 폭 (2.5mm 타이 기준)
@@ -90,14 +99,13 @@ perf_hole_dy  = 38.10; // R2↔R17 = 15홀 × 2.54
 insert_d      = 4.2;   // M3 열융착 인서트 하부 구멍 (제품에 따라 4.0~4.6 — 실물 확인)
 insert_h      = 4;     // M3 열융착 인서트 길이 4 mm 기준(BOM E1). 보스 높이 5.5 → 바닥 1.5 mm
 
-// MG90S 서보 (베인 직결 구동) — 2026-09-19 실물 SG90(캘리퍼스 대용, MG90S와 케이스 규격 동일
-// "드롭인 호환" 관계라 마운트 치수 대용 측정 유효) 캘리퍼스 실측. 전 항목 실측 완료(2026-09-19,
-// 3차 — "몸통 폭 2.3"/"축은 0.3"을 다른 항목으로 잘못 재해석했던 걸 정정, cad/measurements.md 참고).
+// MG90S 서보 (베인 직결 구동).아래 일부 값은 2026-09-19 SG90 기록에서 온 설계 가정이다.
+// SG90 기록만으로 MG90S 장착 호환을 보증하지 않는다. 실제 귀 홀·축·혼 치수는 #219에서 확인한다.
 servo_body_l  = 22.8;  // 접선 방향 길이(몸통 긴변) — ⚠️ 아직 미측정, 조사자료 기반 플레이스홀더
-servo_body_w  = 23;    // 수직 방향 폭(두께) — 실측 확정(2.3cm)
-servo_body_h  = 28;    // 반경 방향 깊이(출력축 방향, 축 보스 제외 케이스만) — 실측 확정(2.8cm)
-servo_ear_pitch = 33;         // 이어 홀 간격 — 실측 확정(3.3cm). 조사자료(28.0) 대비 5mm 큼
-servo_ear_to_shaft = 3;       // 출력축 ↔ 가까운 쪽 이어 홀 거리 — 실측 확정(0.3cm). 조사자료(9.9)보다 훨씬 짧음
+servo_body_w  = 23;    // 수직 방향 폭(두께) — 과거 SG90 기록, MG90S 미확인
+servo_body_h  = 28;    // 반경 방향 깊이 — 과거 SG90 기록, MG90S 미확인
+servo_ear_pitch = 33;         // 과거 SG90 3.3cm 기록. 귀 끝-끝일 수 있어 홀 간격으로 쓰지 않음
+servo_ear_to_shaft = 3;       // 과거 SG90 0.3cm 기록. MG90S 홀 위치 미확인
                               // → 이어 홀이 비대칭 배치가 돼서 servo_boss_solid()의 boss_y 계산을
                               //   아래에서 "양쪪 홀을 다 덮는 최소폭" 방식으로 고쳤음(2026-09-19)
 servo_screw_d = 1.7;         // M2 셀프탭 하부 구멍 (커플러 혼 고정용)
@@ -117,8 +125,8 @@ servo_standoff = 16;         // 링 바깥면 ↔ 장착판 사이 캐비티 깊
 
 coupler_len        = 14;     // 스파 커플러 길이(반경 방향)
 coupler_d          = 14;     // 커플러 바깥 지름
-coupler_horn_t     = 2.2;    // ⚠️ 실측: 알루미늄 싱글암 혼 두께
-coupler_horn_w     = 9.0;    // ⚠️ 실측: 혼 암 폭
+coupler_horn_t     = 2.2;    // 혼 두께 설계 가정. 실측 전(#219)
+coupler_horn_w     = 9.0;    // 혼 암 폭 설계 가정. 실측 전(#219)
 coupler_horn_depth = 9;      // 혼이 커플러에 물리는 깊이
 
 vane_spar_d       = 3.0;     // C2 Ø3 CF 스파
@@ -596,10 +604,10 @@ module mock_battery() {
 }
 module mock_avionics() {
     rotate([0,0,270])
-        translate([shelf_r_inner + 25, 0, shelf_top_z + 12]) {
+        translate([avi_board_r, 0, avi_board_z]) {
             color("darkgreen") cube([50, 70, 1.6], center=true);   // 만능기판 5x7cm
-            translate([0, -8, 6]) color("darkslategray") cube([18, 36, 5], center=true); // Teensy
-            translate([10, 22, 5]) color("teal") cube([16, 18, 3], center=true);         // BNO085
+            translate([avi_teensy_xy[0], avi_teensy_xy[1], 4]) color("darkslategray") cube([18, 36, 5], center=true); // Teensy
+            translate([avi_imu_xy[0], avi_imu_xy[1], 3]) color("teal") cube([16, 18, 3], center=true);         // BNO085
         }
 }
 module mock_esc() {

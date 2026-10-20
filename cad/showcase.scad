@@ -52,8 +52,8 @@ module edf_unit() {
 }
 
 // ---------- 전자부품 (구매품 외형) ----------
-avi_r = shelf_r_inner + 25;          // mock_avionics 와 같은 위치
-avi_z = shelf_top_z + 12;
+avi_r = avi_board_r;          // mock_avionics 와 같은 위치
+avi_z = avi_board_z;
 
 module avionics_detail() {
     rotate([0, 0, 270]) translate([avi_r, 0, avi_z]) {
@@ -62,20 +62,20 @@ module avionics_detail() {
         for (x = [-22 : 2.54 : 22], y = [-32 : 2.54 : 32])
             color([0.75, 0.65, 0.35]) translate([x, y, 0.8]) cylinder(h = 0.2, r = 0.5, $fn = 6);
         // Teensy 4.0 (35x17 실측) + 핀헤더 + USB
-        translate([0, -8, 4]) {
+        translate([avi_teensy_xy[0], avi_teensy_xy[1], 4]) {
             color([0.10, 0.40, 0.18]) cube([17, 35, 1.6], center = true);
             color("black") for (s = [-1, 1]) translate([s * 7.6, 0, -2.2]) cube([2.4, 33, 2.6], center = true);
             color(C_LIP) translate([0, 18.5, 1.6]) cube([8, 6, 3], center = true);
             color([0.15, 0.15, 0.15]) translate([0, 2, 1.4]) cube([10, 10, 1.2], center = true);
         }
         // BNO085 모듈 (GY 보라색 기판)
-        translate([10, 22, 3]) {
+        translate([avi_imu_xy[0], avi_imu_xy[1], 3]) {
             color([0.45, 0.20, 0.60]) cube([16, 18, 1.6], center = true);
             color("black") translate([0, 0, 1.3]) cube([5, 5, 1], center = true);
         }
         // 수신기
-        translate([-14, 22, 6]) {
-            color([0.15, 0.15, 0.15]) cube([14, 22, 10], center = true);
+        translate([receiver_xy[0], receiver_xy[1], 0.8 + receiver_bottom_gap + receiver_size[2]/2]) {
+            color([0.15, 0.15, 0.15]) cube(receiver_size, center = true);
             wire([[0, 11, 3], [0, 30, 20], [-6, 45, 40]], 0.8, "black");
             wire([[2, 11, 3], [4, 32, 18], [12, 44, 36]], 0.8, "black");
         }
@@ -170,6 +170,14 @@ color([0.15, 0.15, 0.15]) foot_pads();
 servo_blocks();
 edf_unit();
 avionics_detail();
+// UBEC와 무게추도 간섭 검사와 같은 배치 후보로 표시한다(#222).
+color([0.2,0.2,0.2]) rotate([0,0,270])
+    translate([ubec_r,0,shelf_top_z-shelf_t-3.5-0.1]) cube([17,43,7],center=true);
+color([0.5,0.5,0.55]) rotate([0,0,270]) for(sy=[-ballast_y,ballast_y])
+    translate([ballast_x,sy,shelf_top_z-shelf_t-ballast_h-0.1]) difference() {
+        cylinder(h=ballast_h,d=ballast_od,$fn=48);
+        translate([0,0,-1]) cylinder(h=ballast_h+2,d=ballast_hole_d,$fn=32);
+    }
 battery_detail();
 esc_detail();
 servo_leads();

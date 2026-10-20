@@ -1,0 +1,30 @@
+part,mass_g,mass_source,shape,x,y,z,p1,p2,p3,position_source
+EDF unit share: housing+rotor+lip,56.8,team #70: Freewing E7207 whole unit 169 g; split 43:126 by listing ratio (estimate),ring,0,0,46,33.5,36,92,hopper_params.scad edf_housing_od 72 / edf_body_len 92
+EDF unit share: motor,112.2,"team #70: Freewing E7207 169 g (motor share, estimate)",box,0,0,40,28,28,36,motor at hub centre (estimate)
+ESC 60A single + cap,34.2,MEASURED 2026-10-17: 34.2 g incl. leads (total length 240 mm),box,0,-48,127,24,36,8,01-avionics 7.6 (270 deg bracket z 110-145)
+LiPo 4S 1300mAh (measured),159.5,"MEASURED 2026-10-17: 159.5 g, 73+-3 x 33-34 x 31+-2 mm",box,0,63.0,165.5,73,34,31,battery shelf +Y; radial centre = shelf_r_inner + w/2 + 4
+Teensy 4.0 with pins,3,team #70: PJRC board 2.8-3 g (with headers ~5 g),box,-12,-57,166,17,35,4,DESIGN CANDIDATE #222: shared avionics placement in hopper_params.scad; not measured
+BNO085 GY module,2.5,team #70: Adafruit 4754 2.5 g,box,22,-57,165,16,18,3,DESIGN CANDIDATE #222: shared avionics placement in hopper_params.scad; not measured
+RC receiver,14.9,NOMINAL FS-iA6B manual: 14.9 g (unmeasured; actual receiver model unconfirmed),box,0,-80,170.8,26.2,47,15,DESIGN CANDIDATE #222: shared avionics placement in hopper_params.scad; not measured
+UBEC 5V 3A,11,listing: Hobbywing 3A UBEC 43x17x7 mm 11 g,box,0,-70,143.4,17,43,7,DESIGN CANDIDATE #222: shared avionics placement in hopper_params.scad; not measured
+perfboard 5x7 + headers + level shifters,12,ESTIMATE (weigh),box,0,-67,162,70,50,4,mock_avionics position
+4x MG90S servo,53.6,official: TowerPro MG90S 13.4 g each,servo4,0,0,-36,82,0,0,servo body centre r = 64+4+14
+vane ring + leg root bosses (printed),153.57,REFERENCE SLICER #223: PrusaSlicer2.9.6 profile; NOT measured; vendor settings unconfirmed,ring,0,0,-37,38,66,37,STL bbox
+4 vanes (printed),13.54,REFERENCE SLICER #223: PrusaSlicer2.9.6 profile; NOT measured; vendor settings unconfirmed,ring,0,0,-36,4,41,25,hopper_params.scad vanes
+4 couplers (printed),9.28,REFERENCE SLICER #223: PrusaSlicer2.9.6 profile; NOT measured; vendor settings unconfirmed,servo4,0,0,-36,57,0,0,coupler in servo cavity
+4 CF spars 3 mm x 60 mm,2.54,"team #70: CF rod D3 x 60 mm x4, 1.5 g/cm3",servo4,0,0,-36,34,0,0,vane spar
+top plate (printed),31.39,REFERENCE SLICER #223: PrusaSlicer2.9.6 profile; NOT measured; vendor settings unconfirmed,ring,0,0,192,39,63,4,top_plate_bot_z 190 + t/2
+EDF clamp (printed),19.22,REFERENCE SLICER #223: PrusaSlicer2.9.6 profile; NOT measured; vendor settings unconfirmed,ring,0,0,76,37.5,54,12,edf_clamp_z 70 + h/2
+battery shelf (printed),21.64,REFERENCE SLICER #223: PrusaSlicer2.9.6 profile; NOT measured; vendor settings unconfirmed,box,0,62,150,80,70,6,shelf +Y
+avionics shelf (printed),22.28,REFERENCE SLICER #223: PrusaSlicer2.9.6 profile; NOT measured; vendor settings unconfirmed,box,0,-66,150,80,74,6,shelf -Y
+ESC bracket (printed),8.83,REFERENCE SLICER #223: PrusaSlicer2.9.6 profile; NOT measured; vendor settings unconfirmed,box,0,-46,125,44,16,44,esc_bracket
+"foot pads (EVA, BOM D5)",0.4,team #70: 5.7 cm3 x EVA 0.07 (printed PETG would be ~2.9 g),rods4,0,0,-144,180,180,-144,feet at r 180
+4 CF columns 6x4 x 212 mm,19.98,"team #70 method: CF tube OD6/ID4 x 212 mm x4, 1.5 g/cm3",rods4,0,0,-22,48,48,190,col_mount_r 48 z -22..190 (col_len 212)
+4 CF legs 6x4 x 153 mm,14.44,team #70 method: CF tube OD6/ID4 x 153.2 mm x4,rods4,0,0,-50,56,180,-140,leg_root_r 56 z-50 -> foot r180 z-140
+steel bail 3 mm,9.33,"steel rod D3, 180 deg arc r51 + 2 x 4 mm legs, 7.85 g/cm3",box,0,0,212,58,3,30,bail over top plate
+servo extensions + XT60 + main wires + ties,55,ESTIMATE (servo ext 4x5 g + XT60/14AWG 20 g + misc 15 g),ring,0,0,100,40,60,140,spread over frame
+kill switch,10,ESTIMATE (BOM B6 not chosen),box,0,59,196,22,14,10,showcase.scad kill switch on top plate
+fasteners M2/M3 + inserts,8,ESTIMATE,ring,0,0,40,30,60,120,spread
+4x servo horn (alu),4,team #70: est ~1 g each (unmeasured),servo4,0,0,-36,66,0,0,on servo output = vane_pivot_z
+trim steel annulus candidate -1,36,DESIGN CANDIDATE not measured: steel density 7.85; D18 ID5.5; pair target72g; actual trim pending slice/weigh,ring,-10,-89,136.96117390205376,2.75,9,19.8776521958925,same annular geometry as p_ballast; shelf bottom147 - 0.1 gap - half-height
+trim steel annulus candidate +1,36,DESIGN CANDIDATE not measured: steel density 7.85; D18 ID5.5; pair target72g; actual trim pending slice/weigh,ring,10,-89,136.96117390205376,2.75,9,19.8776521958925,same annular geometry as p_ballast; shelf bottom147 - 0.1 gap - half-height
