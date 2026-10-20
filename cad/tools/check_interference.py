@@ -38,12 +38,13 @@ module p_servos() { servo_blocks(); } // CAD의 현재 서보 외형 가정을 �
 module p_battery() {   // 실측 최대 치수(2026-10-17): 길이 76, 폭 34, 두께 33
     rotate([0, 0, 90]) translate([shelf_r_inner + 34 / 2 + 4, 0, shelf_top_z + 33 / 2]) cube([34, batt_l_max, 33], center = true); }
 module p_esc() { mock_esc(); }
-module p_perfboard() { rotate([0, 0, 270]) translate([avi_board_r, 0, avi_board_z]) cube([50, 70, 1.6], center = true); }
-module p_receiver() { rotate([0, 0, 270]) translate([avi_board_r + receiver_xy[0], receiver_xy[1], avi_board_z + 0.8 + receiver_bottom_gap + receiver_size[2]/2]) cube(receiver_size, center = true); }
-module p_teensy() { rotate([0, 0, 270]) translate([avi_board_r + avi_teensy_xy[0], avi_teensy_xy[1], avi_board_z + 4]) cube([18, 36, 5], center=true); }
-module p_imu() { rotate([0, 0, 270]) translate([avi_board_r + avi_imu_xy[0], avi_imu_xy[1], avi_board_z + 3]) cube([16, 18, 3], center=true); }
+module p_perfboard() { rotate([0, 0, 270]) translate([avi_board_r, 0, avi_board_z]) cube([50, 70, avi_stack_t], center = true); }
+module p_receiver() { rotate([0, 0, 270]) translate([avi_board_r + receiver_xy[0], receiver_xy[1], avi_board_z + avi_stack_t/2 + receiver_bottom_gap + receiver_size[2]/2]) cube(receiver_size, center = true); }
+module p_teensy() { rotate([0, 0, 270]) translate([avi_board_r + avi_teensy_xy[0], avi_teensy_xy[1], avi_board_z + avi_stack_t/2 + avi_module_gap + 2.5]) cube([18, 36, 5], center=true); }
+module p_imu() { rotate([0, 0, 270]) translate([avi_board_r + avi_imu_xy[0], avi_imu_xy[1], avi_board_z + avi_stack_t/2 + avi_module_gap + 1.5]) cube([16, 18, 3], center=true); }
 module p_ubec() { rotate([0, 0, 270]) translate([ubec_r, 0, shelf_top_z - shelf_t - 3.5 - 0.1]) cube([17, 43, 7], center = true); }
 module p_bail() { bail(); }
+module p_kill_switch() { translate(kill_switch_center) cube(kill_switch_size, center=true); }
 module p_ballast() {   // 질량표와 같은 강철 고리 2개. 재료 밀도·구멍을 포함해 높이를 계산한다.
     rotate([0, 0, 270]) for (sy = [-ballast_y, ballast_y])
         translate([ballast_x, sy, shelf_top_z - shelf_t - ballast_h - 0.1]) difference() {
@@ -67,12 +68,21 @@ PARTS = {
     # 구매품
     "edf": "p_edf();", "columns": "p_columns();", "legs": "p_legs();", "spars": "p_spars();",
     "servos": "p_servos();", "battery": "p_battery();", "esc": "p_esc();", "perfboard": "p_perfboard();",
-    "receiver": "p_receiver();", "teensy": "p_teensy();", "imu": "p_imu();", "ubec": "p_ubec();", "bail": "p_bail();", "ballast": "p_ballast();",
+    "receiver": "p_receiver();", "teensy": "p_teensy();", "imu": "p_imu();", "ubec": "p_ubec();", "bail": "p_bail();",
+    "kill_switch": "p_kill_switch();", "ballast": "p_ballast();",
 }
 # 베인 양끝 편향도 중립 베인을 제외한 모든 고정 부품과 비교한다.
 DEFLECTED = {"vanes_+stop": "vanes(vane_stop_deg);", "vanes_-stop": "vanes(-vane_stop_deg);"}
 DEFLECT_PAIRS = tuple(name for name in PARTS if name != "vanes_0")
 # 의도된 접촉(같은 축의 끼움): 여유를 두고 설계했으므로 겹침이 있으면 그대로 보고한다. 제외 쌍 없음.
+
+
+def planned_pairs(focus=()):
+    """Return the complete pair plan, or every pair touching one focused part."""
+    pairs = [(a, b) for a, b in itertools.combinations(PARTS, 2)]
+    pairs += [(v, o) for v in DEFLECTED for o in DEFLECT_PAIRS]
+    wanted = set(focus)
+    return [(a, b) for a, b in pairs if not wanted or a in wanted or b in wanted]
 
 
 def bbox(stl):
@@ -197,6 +207,8 @@ def classify_render(stl, result, intersection=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", help="Keep SCAD, STL and render logs for inspection (use a fresh directory)")
+    parser.add_argument("--focus", nargs="+", choices=sorted(PARTS),
+                        help="Check every pair touching these parts. Other pairs need a separate full-run proof.")
     args = parser.parse_args()
     exe = find_openscad()
     head = SCAD.read_text(encoding="utf-8").split(MARKER)[0] + PURCHASED
@@ -231,8 +243,7 @@ def main():
         for n, body in parts.items():
             stl, _, _ = render(n, body)
             boxes[n] = (stl, bbox(stl))
-        pairs = [(a, b) for a, b in itertools.combinations(PARTS, 2)]
-        pairs += [(v, o) for v in DEFLECTED for o in DEFLECT_PAIRS]
+        pairs = planned_pairs(args.focus or ())
         hits, checked, contacts = [], 0, 0
         for a, b in pairs:
             if not overlap(boxes[a][1], boxes[b][1]):

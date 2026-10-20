@@ -9,6 +9,7 @@ parts.csv의 부품마다 질량(g)과 모양·위치(mm, 배기면 z=0, +X=FWD,
   ring   x,y,z = 중심, p1 = 안 반경, p2 = 바깥 반경, p3 = 높이
   servo4 z = 높이, p1 = 반경. 0°/90°/180°/270° 네 곳에 질량을 1/4씩 둔다(서보, 커플러, 스파)
   rods4  z = 시작 높이, p1 = 시작 반경, p2 = 끝 반경, p3 = 끝 높이. 45° 계열 막대 4개(기둥, 다리)
+  bail   x,y = 아치 중심, z = 상판 윗면, p1 = 아치 반경, p2 = 봉 지름, p3 = 상판 안쪽 다리 길이
 
 출력: 총질량, CG, l = z_cg - vane_pivot_z, CG 기준 Jxx/Jyy/Jzz(kg m^2),
       질량 +-10 %·위치 +-5 mm 무작위 흔들기의 95 % 구간(z_cg, 옆 치우침).
@@ -51,6 +52,19 @@ def points(row):
                 f = (t + 0.5) / (N * 2)
                 r, zz = p1 + (p2 - p1) * f, z + (p3 - z) * f
                 pts.append((r * math.cos(math.radians(a)), r * math.sin(math.radians(a)), zz))
+    elif s == "bail":
+        # X-Z 평면의 반원 아치와 양끝 직선 다리를 전체 길이로 균등 분할한다.
+        # 봉 지름(p2)은 질량표 출처에 쓰며 중심선 기반 CG·관성 근사에서는 무시한다.
+        arc_len, total_len = math.pi * p1, math.pi * p1 + 2 * p3
+        for i in range(256):
+            d = total_len * (i + 0.5) / 256
+            if d < p3:
+                pts.append((x - p1, y, z - p3 + d))
+            elif d < p3 + arc_len:
+                angle = math.pi - (d - p3) / p1
+                pts.append((x + p1 * math.cos(angle), y, z + p1 * math.sin(angle)))
+            else:
+                pts.append((x + p1, y, z - (d - p3 - arc_len)))
     else:
         raise SystemExit(f"모르는 shape: {s} ({row['part']})")
     w = m / len(pts)

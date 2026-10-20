@@ -80,11 +80,13 @@ shelf_r_inner = 42;    // 선반 안쪽 경계 반경 — 흡기 스트림튜브
 // 전자부 배치 후보(#222): 공칭 외형이며 실물 체결·배선 여유는 #219에서 확인한다.
 avi_board_r = shelf_r_inner + 25;
 avi_board_z = shelf_top_z + 12;
+avi_stack_t = 4; // 만능기판+헤더+레벨시프터의 보수적 조립 높이. 실측 전 간섭 외피(#222).
+avi_module_gap = 0.5; // 위 조립 외피와 수신기·Teensy·IMU 사이 설계 간격
 avi_teensy_xy = [-10, -12];
 avi_imu_xy = [-10, 22];
 receiver_xy = [13, 0];
 receiver_size = [26.2, 47, 15]; // FS-iA6B 제조사 공칭치수(https://www.flysky-cn.com/ia6b-canshu), 현재 구매품 일치 여부 확인 필요
-receiver_bottom_gap = 0.5; // 기판 위 설계 간격, 실물 스페이서/절연 고정 확인 필요
+receiver_bottom_gap = avi_module_gap; // 기판 조립 외피 위 설계 간격, 실물 스페이서/절연 고정 확인 필요
 ubec_r = shelf_r_inner + 28; // 바깥면 r78.5; 무게추 안쪽 r80와 1.5 mm 간격
 saddle_h      = 16;    // 기둥을 감싸는 새들 링 높이
 saddle_wall   = 2.9;   // 새들 링 두께
@@ -144,6 +146,9 @@ vane_ring_top_z = -vane_gap_below_exit;                 // 베인링 상단
 vane_ring_bot_z = vane_ring_top_z - vane_ring_h;         // 베인링 하단
 top_plate_bot_z = vane_ring_top_z + col_len;             // 상판 하단 (기둥이 여기서 베인링까지)
 top_plate_top_z = top_plate_bot_z + top_plate_t;
+kill_switch_size = [22, 14, 10]; // BOM B6 미선정 외형 가정
+kill_switch_min = [0, 52, top_plate_top_z];
+kill_switch_center = kill_switch_min + kill_switch_size / 2;
 foot_z          = -foot_below_exit;                      // 발 바닥
 bail_top_z      = foot_z + H_total;                      // 검증용: 베일 팁
 
@@ -605,9 +610,11 @@ module mock_battery() {
 module mock_avionics() {
     rotate([0,0,270])
         translate([avi_board_r, 0, avi_board_z]) {
-            color("darkgreen") cube([50, 70, 1.6], center=true);   // 만능기판 5x7cm
-            translate([avi_teensy_xy[0], avi_teensy_xy[1], 4]) color("darkslategray") cube([18, 36, 5], center=true); // Teensy
-            translate([avi_imu_xy[0], avi_imu_xy[1], 3]) color("teal") cube([16, 18, 3], center=true);         // BNO085
+            color("darkgreen") cube([50, 70, avi_stack_t], center=true); // 만능기판+헤더+레벨시프터 간섭 외피
+            translate([avi_teensy_xy[0], avi_teensy_xy[1], avi_stack_t/2 + avi_module_gap + 2.5])
+                color("darkslategray") cube([18, 36, 5], center=true); // Teensy
+            translate([avi_imu_xy[0], avi_imu_xy[1], avi_stack_t/2 + avi_module_gap + 1.5])
+                color("teal") cube([16, 18, 3], center=true); // BNO085
         }
 }
 module mock_esc() {

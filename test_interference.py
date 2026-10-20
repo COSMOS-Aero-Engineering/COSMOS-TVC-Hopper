@@ -9,7 +9,7 @@ import tasks
 
 TOOLS = Path(__file__).parent / "cad/tools"
 sys.path.insert(0, str(TOOLS))
-from check_interference import classify_render, off_contact, overlap, planar_components
+from check_interference import PARTS, classify_render, off_contact, overlap, planar_components, planned_pairs
 
 
 def tetra(origin=(0, 0, 0), height=1):
@@ -88,6 +88,14 @@ class RenderClassification(unittest.TestCase):
 
     def test_broad_phase_does_not_skip_sub_001_mm_overlap(self):
         self.assertTrue(overlap(((0,0,0),(1,1,1)), ((.999,0,0),(2,1,1))))
+
+    def test_focus_keeps_every_pair_touching_changed_parts(self):
+        focus = {"perfboard", "receiver", "teensy", "imu", "kill_switch"}
+        complete, selected = planned_pairs(), planned_pairs(focus)
+        self.assertEqual(len(complete), 322)
+        self.assertEqual(len(selected), 115)
+        self.assertTrue(all(a in focus or b in focus for a, b in selected))
+        self.assertEqual(selected, [pair for pair in complete if pair[0] in focus or pair[1] in focus])
 
 
 class OffContactProof(unittest.TestCase):

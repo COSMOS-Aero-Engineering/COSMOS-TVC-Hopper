@@ -57,24 +57,24 @@ avi_z = avi_board_z;
 
 module avionics_detail() {
     rotate([0, 0, 270]) translate([avi_r, 0, avi_z]) {
-        // 만능기판 50x70
-        color([0.15, 0.45, 0.20]) cube([50, 70, 1.6], center = true);
+        // 만능기판+헤더+레벨시프터 간섭 외피 50x70x4. 실물 배치는 #219에서 확인한다.
+        color([0.15, 0.45, 0.20]) cube([50, 70, avi_stack_t], center = true);
         for (x = [-22 : 2.54 : 22], y = [-32 : 2.54 : 32])
-            color([0.75, 0.65, 0.35]) translate([x, y, 0.8]) cylinder(h = 0.2, r = 0.5, $fn = 6);
+            color([0.75, 0.65, 0.35]) translate([x, y, avi_stack_t/2]) cylinder(h = 0.2, r = 0.5, $fn = 6);
         // Teensy 4.0 (35x17 실측) + 핀헤더 + USB
-        translate([avi_teensy_xy[0], avi_teensy_xy[1], 4]) {
+        translate([avi_teensy_xy[0], avi_teensy_xy[1], avi_stack_t/2 + avi_module_gap + 2.5]) {
             color([0.10, 0.40, 0.18]) cube([17, 35, 1.6], center = true);
             color("black") for (s = [-1, 1]) translate([s * 7.6, 0, -2.2]) cube([2.4, 33, 2.6], center = true);
             color(C_LIP) translate([0, 18.5, 1.6]) cube([8, 6, 3], center = true);
             color([0.15, 0.15, 0.15]) translate([0, 2, 1.4]) cube([10, 10, 1.2], center = true);
         }
         // BNO085 모듈 (GY 보라색 기판)
-        translate([avi_imu_xy[0], avi_imu_xy[1], 3]) {
+        translate([avi_imu_xy[0], avi_imu_xy[1], avi_stack_t/2 + avi_module_gap + 1.5]) {
             color([0.45, 0.20, 0.60]) cube([16, 18, 1.6], center = true);
             color("black") translate([0, 0, 1.3]) cube([5, 5, 1], center = true);
         }
         // 수신기
-        translate([receiver_xy[0], receiver_xy[1], 0.8 + receiver_bottom_gap + receiver_size[2]/2]) {
+        translate([receiver_xy[0], receiver_xy[1], avi_stack_t/2 + receiver_bottom_gap + receiver_size[2]/2]) {
             color([0.15, 0.15, 0.15]) cube(receiver_size, center = true);
             wire([[0, 11, 3], [0, 30, 20], [-6, 45, 40]], 0.8, "black");
             wire([[2, 11, 3], [4, 32, 18], [12, 44, 36]], 0.8, "black");
@@ -105,9 +105,10 @@ module battery_detail() {
 
 // 킬스위치 (상판 위, 손이 닿는 곳)
 module kill_switch() {
-    translate([0, 52, top_plate_top_z]) {
-        color("red") cube([22, 14, 10], center = false);
-        color("black") translate([11, 7, 10]) rotate([20, 0, 0]) cylinder(h = 10, r = 2.5);
+    translate(kill_switch_min) {
+        color("red") cube(kill_switch_size, center = false);
+        color("black") translate([kill_switch_size[0]/2, kill_switch_size[1]/2, kill_switch_size[2]])
+            rotate([20, 0, 0]) cylinder(h = 10, r = 2.5);
     }
 }
 

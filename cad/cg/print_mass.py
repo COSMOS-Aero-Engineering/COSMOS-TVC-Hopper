@@ -30,7 +30,7 @@ OPENSCAD_VOL_CM3 = {
     "foot pads x4": 5.70809,
 }
 
-# hopper_params.scad 형상 변수 (2026-10-17)
+# hopper_params.scad 형상 변수 (2026-10-20)
 EDF_HOUSING_OD = 72
 RING_OD = EDF_HOUSING_OD + 24          # 96
 LEG_TOP_R = RING_OD / 2 + 8            # 56 = leg_root_r (#59: 기울인 소켓 보스)
@@ -49,6 +49,7 @@ SPAR_LEN = 60                         # vane_spar_len
 N_SPARS = 4
 BAIL_OD = 3.0
 BAIL_R = 51                            # #59: 흡기 구멍과 상판 바깥 사이 (hopper_params.scad bail_r)
+BAIL_LEG = 4                           # 상판 두께만큼 들어가는 양끝 직선부
 
 
 def tube_cm3(od, id_, length):
@@ -73,9 +74,9 @@ def main():
                  N_LEGS * tube_cm3(LEG_OD, CF_ID, leg_len) * CF_DENSITY))
     rows.append(("vane spar x4 (CF rod)", N_SPARS * rod_cm3(SPAR_D, SPAR_LEN),
                  N_SPARS * rod_cm3(SPAR_D, SPAR_LEN) * CF_DENSITY))
-    arc = math.pi * BAIL_R
-    rows.append(("bail (steel rod OD3)", rod_cm3(BAIL_OD, arc),
-                 rod_cm3(BAIL_OD, arc) * STEEL_DENSITY))
+    bail_len = math.pi * BAIL_R + 2 * BAIL_LEG
+    rows.append(("bail (steel rod OD3)", rod_cm3(BAIL_OD, bail_len),
+                 rod_cm3(BAIL_OD, bail_len) * STEEL_DENSITY))
 
     print("주의: 아래 mass g는 인필만 계산한 하한이다. 외벽·상하면 질량이 빠져 있다.")
     print("PETG 출력물 범위(g, 밀도 1.27 가정):")

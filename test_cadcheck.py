@@ -216,6 +216,21 @@ class OffsetRingMassRegression(unittest.TestCase):
         for actual, expected in zip(centre, (0.010, -0.089, 0.13696)):
             self.assertAlmostEqual(actual, expected)
 
+    def test_bail_centroid_follows_semicircle_and_both_legs(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("cg_estimate_bail", Path(__file__).parent / "cad/cg/cg_estimate.py")
+        cg = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cg)
+        row = dict(shape="bail", mass_g=9.33, x=0.0, y=0.0, z=194.0,
+                   p1=51.0, p2=3.0, p3=4.0)
+        mass, centre, _ = cg.props([row])
+        arc = 3.141592653589793 * 51.0
+        expected_z = (arc * (194.0 + 2 * 51.0 / 3.141592653589793) + 8 * 192.0) / (arc + 8)
+        self.assertAlmostEqual(mass, 0.00933)
+        self.assertAlmostEqual(centre[0], 0.0, places=6)
+        self.assertAlmostEqual(centre[1], 0.0, places=6)
+        self.assertAlmostEqual(centre[2] * 1000, expected_z, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()
