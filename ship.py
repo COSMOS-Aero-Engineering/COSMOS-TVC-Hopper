@@ -70,10 +70,10 @@ def exe_of(name):
     return path
 
 
-def call(cmd, check=True, capture=False, cwd=None, input=None):
+def call(cmd, check=True, capture=False, cwd=None, input=None, env=None):
     say(cmd)
     r = subprocess.run([exe_of(cmd[0]), *map(str, cmd[1:])], cwd=cwd, text=True, encoding="utf-8",
-                       errors="replace", capture_output=capture, input=input)
+                       errors="replace", capture_output=capture, input=input, env=env)
     if check and r.returncode != 0:
         if capture:
             sys.stderr.write(r.stdout + r.stderr)
@@ -480,9 +480,19 @@ def logged_in(cmd):
     return subprocess.run([shutil.which(cmd[0]), *cmd[1:]], capture_output=True).returncode == 0
 
 
-def opencode_model(author):
+def opencode_env():
+    """OpenCode 자식 프로세스만 저장소 전용 데이터 폴더를 쓴다(#56)."""
+    env = os.environ.copy()
+    data = ROOT / ".cosmos-opencode" / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    env["XDG_DATA_HOME"] = str(data.resolve())
+    env.pop("OPENCODE_DB", None)  # 절대경로 DB 재정의도 개인 DB로 돌아가지 않게 한다.
+    return env
+
+
+def opencode_model(author, env=None):
     ensure_opencode()
-    models = call(["opencode", "models"], capture=True).stdout.split()
+    models = call(["opencode", "models"], capture=True, env=env).stdout.split()
     for f in OPENCODE_REVIEWERS:
         if f == author:
             continue
@@ -675,15 +685,17 @@ def cmd_review(a):
     else:
         print(f"리뷰어에게 표준 입력으로 넘기는 기록: {summary}", flush=True)
     # 리뷰 요청에는 범위만 넣는다(AGENTS.md §작업 순서 6). 힌트나 체크리스트를 넣지 않는다.
+    env = None
     if author != "openai" and logged_in(["codex", "login", "status"]):
         reviewer, cmd = "codex", ["codex", "exec", "--sandbox", "read-only", prompt]
     elif author != "claude" and logged_in(["claude", "auth", "status"]):
         reviewer, cmd = "claude", ["claude", "-p", "--permission-mode", "plan", prompt]
     else:
-        model = opencode_model(author)
+        env = opencode_env()
+        model = opencode_model(author, env=env)
         reviewer, cmd = model, ["opencode", "run", "--agent", "plan", "-m", model, prompt]
     print(f"작성자 계열: {author} / 리뷰어: {reviewer}\n", flush=True)
-    r = call(cmd, check=False, input=records)
+    r = call(cmd, check=False, input=records, env=env)
     print(f"\nPR 템플릿 \"교차 리뷰\"에 적는다: `{reviewer}: 지적 N건, 고침 <커밋> / "
           "받아들이지 않음 <이유>`")
     sys.exit(r.returncode)
