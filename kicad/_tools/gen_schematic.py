@@ -372,7 +372,8 @@ def emit_lib_symbols(cache, sources):
 
 def pin_world_pos(comp_pos, pin_local):
     x, y, ang = pin_local
-    return (comp_pos[0] + x, comp_pos[1] + y, ang)
+    # Library Y points up; sheet Y points down. Instances have zero rotation.
+    return (comp_pos[0] + x, comp_pos[1] - y, ang)
 
 
 def emit_component_instance(ref, lib_id, value, pos, pins_by_num):
@@ -471,7 +472,8 @@ def main():
                 continue
             # stub extends AWAY from the symbol body: opposite of the pin's own angle
             dx = -math.cos(math.radians(wang))
-            dy = -math.sin(math.radians(wang))
+            # Reflect the outward vector too, otherwise capacitor stubs cross.
+            dy = math.sin(math.radians(wang))
             ex, ey = wx + dx * STUB_LEN, wy + dy * STUB_LEN
             wires.append(emit_wire((wx, wy), (ex, ey), f"wire/{ref}/{pin_num}"))
             labels.append(emit_label(net, (ex, ey), wang, f"label/{ref}/{pin_num}"))

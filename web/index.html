@@ -15,6 +15,8 @@
         <option value="samples/sim-pd-nodr-s0.csv">시뮬레이션 PD (랜덤화 끔, seed 0)</option>
         <option value="samples/axis-test.csv">축 변환 확인용</option>
       </select>
+      <button id="camera-default" type="button" aria-pressed="true">기본 시점</button>
+      <button id="camera-below" type="button" aria-pressed="false">베인 아래에서 보기</button>
       <span id="status">CSV를 열거나 예제를 고른다</span>
     </header>
     <main>
@@ -26,6 +28,14 @@
         <div>Pitch θ <b id="theta">-</b>°</div>
         <div>Yaw ψ <b id="psi">-</b>°</div>
         <div>throttle <b id="throttle">-</b></div>
+        <section aria-label="베인 번호와 정규화 서보값">
+          <h2>베인 · 서보값</h2>
+          <p class="hint">기체 기준 방향 · 정규화 값</p>
+          <div><span class="swatch" id="vane-color-1" aria-hidden="true"></span>1 FWD <b id="servo1">-</b></div>
+          <div><span class="swatch" id="vane-color-2" aria-hidden="true"></span>2 LEFT <b id="servo2">-</b></div>
+          <div><span class="swatch" id="vane-color-3" aria-hidden="true"></span>3 AFT <b id="servo3">-</b></div>
+          <div><span class="swatch" id="vane-color-4" aria-hidden="true"></span>4 RIGHT <b id="servo4">-</b></div>
+        </section>
       </aside>
     </main>
     <footer>

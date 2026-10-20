@@ -1,6 +1,8 @@
+> 2026-10-19 #66 수정본: KiCad 10.0.7 생성물의 전체 84핀·IMU 10행 일치, ERC 오류 0개를 확인했다. [검증 기록](reports/2026-10-19/README.md)을 본다. 아래 Y축 결함 설명은 수정 전 조사 기록이다. 실물 모듈 핀·배선 대조와 회로도 파일 검증은 별개다.
+
 # kicad/ — 회로도(스키매틱) 캡처
 
-## 현재 상태 (2026-10-17)
+## 수정 전 상태 (2026-10-17 조사 기록)
 
 **스키매틱은 사람이 그린 파일이 아니라 생성물이다** — `cosmos-avionics/cosmos-avionics.kicad_sch`.
 `01-avionics-integration-final.md` §2.2(Teensy 핀맵)·§3(전원계통)을 넷리스트로 옮긴 것. 부품 20개, 넷 30개, 배선 83개.
@@ -62,7 +64,9 @@ KiCad 10.0.6으로 저장하면 `.kicad_pro`가 2줄 바뀐다. 아래 "KiCad 10
 4. 부품 20개가 격자로 나열돼 있음 — 예쁜 배치가 아니라 **넷 연결 확인용 1차 캡처**다. KiCad에서
    재배치한 결과는 커밋하지 않는다. 다시 생성하면 지워지기 때문이다(#140). 배치를 바꾸려면
    `_tools/gen_schematic.py`의 `COMPONENTS` 좌표를 고치고 다시 생성한다.
-5. 보기만 하고 저장했으면 `git status`로 확인한다. 두 파일이 바뀌지 않아야 정상이다. KiCad는 같은 폴더에
+5. 보기만 하고 저장했으면 `git diff`로 확인한다. `diff --git`으로 시작하는 변경 내용이 나오지 않아야 정상이다.
+   Windows에서는 `git diff`가 `.kicad_sch`에 `CRLF will be replaced by LF` 경고 한 줄을 띄우고, `git status`가
+   같은 파일에 `M`을 띄운다. 둘 다 정상이다(아래 "KiCad 10.0.7로 저장한다" 절). KiCad는 같은 폴더에
    `cosmos-avionics.kicad_prl`과 `.history/`도 만든다. 둘 다 `.gitignore`가 무시한다.
 6. PCB 편집기를 열어 저장했으면 아래 "PCB를 저장하면 바뀌는 `.kicad_pro`" 절을 따른다.
 
@@ -80,9 +84,16 @@ KiCad 10.0.7이 쓴 파일이다. KiCad 10.0.6은 같은 파일을 다르게 쓴
   그래서 두 버전을 섞어 쓰면 저장할 때마다 이 2줄이 오간다.
 - PCB를 저장할 때도 다르다. KiCad 10.0.6은 `teardrop_parameters`에 `td_enabled`를 쓰지 않는다(17098 B,
   10.0.7은 17187 B).
+- KiCad 10.0.7 회로도 편집기에서 편집 없이 저장하면 `git diff`가 빈다. Linux(서버 GUI, PR #192)와
+  Windows(서버 VM `~/vms/win11-ko`의 KiCad 10.0.7 GUI, 2026-10-19, #209)에서 확인했다. Windows에서
+  KiCad는 `.kicad_pro`를 다시 쓰지 않았다(수정 시각이 그대로다). `.kicad_sch`는 CRLF로 저장됐고, LF로 바꾸면
+  커밋된 파일과 바이트 단위로 같다.
 - Windows에서 저장한 `.kicad_sch`는 작업 폴더에서 CRLF다. `.gitattributes`(`eol=lf`)가 커밋할 때 LF로
-  바꾸므로 `git diff`에는 나오지 않는다. 그런데 KiCad 10.0.6 프로젝트 관리자의 파일 목록은 이 파일 옆에
-  빨간 원을 그렸다. KiCad의 git 상태 표시로 보인다. 판단은 `git status`와 `git diff`로 한다.
+  바꾸므로 `git diff`에 변경 내용은 나오지 않는다. 다만 `git diff`는 이 파일에 경고 한 줄을 띄운다:
+  `warning: in the working copy of '…', CRLF will be replaced by LF the next time Git touches it`.
+  이 경고는 `eol=lf` 때문에 나오고, `git diff --exit-code`의 종료 코드는 0이다. `git status`는 이 파일에
+  `M`을 띄운다. 이 파일을 `git add`하면 스테이지에 들어가는 변경이 없고 `M`도 사라진다(#209). KiCad 10.0.6과 10.0.7 프로젝트
+  관리자의 파일 목록도 이 파일 옆에 빨간 원을 그렸다. KiCad의 git 상태 표시로 보인다. 판단은 `git diff`로 한다.
 
 KiCad 10.0.6 PC에서 저장했으면 커밋하기 전에 둘 중 하나를 한다.
 
@@ -93,7 +104,7 @@ KiCad 10.0.6 PC에서 저장했으면 커밋하기 전에 둘 중 하나를 한�
 
 `python tasks.py check`의 `kicadver` 작업은 커밋된 `.kicad_pro`에서 두 값이 `null`이면 실패한다.
 KiCad 10.0.8 이후 버전이 이 파일을 어떻게 쓰는지는 아직 확인하지 못했다(#211).
-Windows KiCad 10.0.7 GUI 저장도 아직 확인하지 못했다(#209). 부원 PC의 KiCad 버전은 #210에서 확인한다.
+부원 PC의 KiCad 버전은 #210에서 확인한다.
 
 ## PCB를 저장하면 바뀌는 `.kicad_pro` (#197)
 
@@ -312,7 +323,7 @@ KiCad 9 라이브러리 폴더를 `--kicad-symbols`로 주면 생성기가 멈�
 `python tasks.py check`가 실패한다. `userpath` 작업이 `파일:줄:칸`을 출력하므로 그 줄을 위 방식
 (스크립트 위치 기준 경로, 인자, 환경변수)으로 바꾼다(#96).
 
-**#66을 고치기 전에 다시 생성하면 같은 결함이 있는 파일이 나온다.** 지금 재생성은 "고치는 일"이 아니다.
+수정본은 Y 좌표와 수직 핀 배선 방향을 함께 변환한다. 재생성 뒤 `check_netlist.py <XML 넷리스트>`로 모든 핀을 대조한다.
 이 스크립트의 검사는 문법 수준이다 — 괄호 균형, `lib_id` 선언, UUID 중복. **넷 검사는 레이블 글자 수를 세는
 것이라 실제 연결을 보지 않는다.** 연결을 확인하려면 `kicad-cli sch export netlist`와 ERC를 돌린다.
 
@@ -324,10 +335,10 @@ KiCad 9 라이브러리 폴더를 `--kicad-symbols`로 주면 생성기가 멈�
 
 ## 다음 단계
 
-1. **생성기 Y축 결함을 고치고 회로도를 다시 만든 뒤 ERC를 다시 돌린다** — 이슈 #66.
+1. 생성기 좌표 수정·재생성·ERC 재실행은 #66 수정본에서 확인했다. 변경 뒤에는 전체 넷리스트도 다시 검사한다.
 2. ~~`_tools` 스크립트의 절대경로를 없앤다~~ — 이슈 #67에서 했다(10/17). 이제 어느 PC에서든 저장소 루트에서 돈다.
 3. 김민찬 PC에서도 ERC를 돌려 같은 결과인지 확인한다 — 위 "알려진 문제" 참고.
 4. 보기 좋게 재배치(선택 — 넷 정보엔 영향 없음). Eeschema에서 옮기지 않고 생성기의 `COMPONENTS` 좌표를 고친다(#140).
 5. 실물 조립(전자 탑재, `semester-roadmap.md` Week 4-5) 때 실제 배선과 대조한다. **#66을 고친 뒤에만 한다.**
-   지금 회로도는 배터리·UBEC·Teensy 전원·ESC의 극성이 반대라, 그대로 배선하면 기판이 탄다.
+   수정 전 회로도는 전원 핀 배치가 반대였다. 수정본도 실물 핀맵을 대조하기 전에는 배선 승인으로 쓰지 않는다.
 6. 커밋 태그: `[kicad]`(회로도 단독 변경). 전자 회로도를 기구와 함께 다룰 때는 `[cad]`.
