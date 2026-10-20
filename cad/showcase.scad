@@ -4,7 +4,7 @@
 // 배선을 외형만 더한다. 구매품 치수 중 실측이 아닌 것은 공칭값이다(아래 주석).
 //
 // 렌더 예:
-//   openscad -o cad/renders/showcase.png --imgsize=1600,1200 --camera=600,-720,420,0,0,30 --projection=p cad/showcase.scad
+//   openscad -o cad/renders/showcase.png --imgsize=1600,1200 --camera=600,-720,420,0,0,30 --projection=p --viewall --autocenter cad/showcase.scad
 include <hopper_params.scad>
 render_mode = "showcase";   // hopper_params.scad 의 preview/print 분기를 끈다
 

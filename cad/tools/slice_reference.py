@@ -26,8 +26,11 @@ PART_ROWS = {
 }
 
 
-def sha256(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def sha256(path, text=False):
+    data = path.read_bytes()
+    if text:
+        data = data.replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def main():
@@ -77,8 +80,9 @@ def main():
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
-    report = dict(slicer=version_text, profile_sha256=sha256(PROFILE),
-                  source_mass_table_sha256=sha256(ROOT / "cad/cg/parts.csv"),
+    report = dict(slicer=version_text, profile_sha256=sha256(PROFILE, text=True),
+                  text_hash_newlines="LF",
+                  source_mass_table_sha256=sha256(ROOT / "cad/cg/parts.csv", text=True),
                   scope="Reference only. Input orientation retained; no support. G-code must not be printed.",
                   parts=result)
     (args.out / "slice-reference.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

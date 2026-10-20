@@ -61,7 +61,7 @@ export 완료됨, `print_parts/README.md` 참고).
 `cad/showcase.scad`는 프린트 부품에 구매품(EDF 본체, 배터리, Teensy·IMU 기판, ESC, 서보, 킬스위치)과 배선을 외형만 더한 발표용 장면이다. 프린트 대상이 아니다.
 
 ```bash
-openscad -o cad/renders/showcase.png --imgsize=1600,1200 --camera=600,-720,420,0,0,30 --projection=p cad/showcase.scad
+openscad -o cad/renders/showcase.png --imgsize=1600,1200 --camera=600,-720,420,0,0,30 --projection=p --viewall --autocenter cad/showcase.scad
 ```
 
 이 렌더에서 확인한 배선 지침:
