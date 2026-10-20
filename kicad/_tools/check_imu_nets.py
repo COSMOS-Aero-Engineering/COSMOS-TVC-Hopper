@@ -37,7 +37,8 @@ J6_PIN_NAME = {"1": "CS", "2": "SCK", "3": "MOSI", "4": "MISO", "5": "INT", "6":
 
 def load_components():
     """gen_schematic.py를 실행하지 않고(KiCad 경로가 필요하므로) COMPONENTS 리터럴만 읽는다."""
-    src = open(os.path.join(HERE, "gen_schematic.py"), encoding="utf-8").read()
+    with open(os.path.join(HERE, "gen_schematic.py"), encoding="utf-8") as source:
+        src = source.read()
     tree = ast.parse(src)
     consts = {}
     for node in tree.body:

@@ -23,3 +23,11 @@ npm run dev
 - `public/samples/`: 예제 CSV. `axis-test.csv`는 `python tools/make_axis_test_csv.py`로 다시 만든다. 시뮬레이션 CSV는 `sim/sim_stage1/export_episode.py`로 만든다.
 
 버전은 `package.json`에 정확히 고정하고 `package-lock.json`을 커밋한다. 버전을 바꾸려면 `npm install 패키지@버전 --save-exact`.
+
+## 베인 확인 시점 (#93)
+
+예제를 고른 뒤 `베인 아래에서 보기`를 누르면 재생 위치와 자세를 유지한 채 카메라만 옮긴다.
+네 색과 번호·기체 방향(FWD/LEFT/AFT/RIGHT)은 오른쪽 범례와 같다. 서보값은 원본의 정규화 값이다.
+`기본 시점`으로 돌아갈 수 있다. µs 변환은 #94의 실물 보정 전이라 추가하지 않았다.
+
+두 버튼은 고정된 월드 좌표의 카메라 프리셋이다. bodyToThreeVec는 축 표기만 바꾸며 재생 중 기체 자세를 적용하지 않는다. 아래 시점은 베인 피벗 z=-36 mm를 바라보는 배치다. 기체가 기울어져도 카메라가 따라 회전하지 않으므로 원하는 로그 행에서 정지하고 비교한다. 기본 시점은 처음 화면과 같은 위치·주시점으로 돌아간다.
