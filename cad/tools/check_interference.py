@@ -27,7 +27,7 @@ from export_print_parts import MARKER, SCAD, check_stl, find_openscad, load_stl 
 ALLOW_CM3 = 0.001
 
 # 구매품 외형 모형. 출처: MG90S 공식(TowerPro) 22.8 x 12.2 x 28.5 mm, 4S 1300 mAh 2026-10-17 실측,
-# FS-iA6B 매뉴얼 47 x 26.2 x 15 mm, Hobbywing 3A UBEC 43 x 17 x 7 mm, EDF 하우징 실측 외경 72 / 길이 92 mm.
+# FS-iA6B 제조사 47 x 26.2 x 15 mm, Hobbywing 3A UBEC 43 x 17 x 7 mm, EDF 하우징 실측 외경 72 / 길이 92 mm.
 PURCHASED = """
 module p_edf() { cylinder(h = edf_body_len, r = edf_housing_od / 2, $fn = 96); }
 module p_columns() { columns(); }

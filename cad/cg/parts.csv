@@ -5,7 +5,7 @@ ESC 60A single + cap,34.2,MEASURED 2026-10-17: 34.2 g incl. leads (total length 
 LiPo 4S 1300mAh (measured),159.5,"MEASURED 2026-10-17: 159.5 g, 73+-3 x 33-34 x 31+-2 mm",box,0,63.0,165.5,73,34,31,battery shelf +Y; radial centre = shelf_r_inner + w/2 + 4
 Teensy 4.0 with pins,3,team #70: PJRC board 2.8-3 g (with headers ~5 g),box,-12,-57,166,17,35,4,DESIGN CANDIDATE #222: shared avionics placement in hopper_params.scad; not measured
 BNO085 GY module,2.5,team #70: Adafruit 4754 2.5 g,box,22,-57,165,16,18,3,DESIGN CANDIDATE #222: shared avionics placement in hopper_params.scad; not measured
-RC receiver,14.9,NOMINAL FS-iA6B manual: 14.9 g (unmeasured; actual receiver model unconfirmed),box,0,-80,170.8,26.2,47,15,DESIGN CANDIDATE #222: shared avionics placement in hopper_params.scad; not measured
+RC receiver,10,NOMINAL manufacturer page: 10 g; https://www.flysky-cn.com/ia6b-canshu ; unmeasured; actual receiver unconfirmed,box,0,-80,170.8,26.2,47,15,DESIGN CANDIDATE #222: shared avionics placement in hopper_params.scad; not measured
 UBEC 5V 3A,11,listing: Hobbywing 3A UBEC 43x17x7 mm 11 g,box,0,-70,143.4,17,43,7,DESIGN CANDIDATE #222: shared avionics placement in hopper_params.scad; not measured
 perfboard 5x7 + headers + level shifters,12,ESTIMATE (weigh),box,0,-67,162,70,50,4,mock_avionics position
 4x MG90S servo,53.6,official: TowerPro MG90S 13.4 g each,servo4,0,0,-36,82,0,0,servo body centre r = 64+4+14

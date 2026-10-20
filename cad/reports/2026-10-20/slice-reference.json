@@ -1,7 +1,7 @@
 {
   "slicer": "PrusaSlicer-2.9.6 based on Slic3r (with GUI support)",
   "profile_sha256": "7595df9848ad734904cee44563c025421bfcc44a5193256e904ae111413c48e2",
-  "source_mass_table_sha256": "9c884a110734c5953db801f15ca616321a1c37d7bdc243cc74a9ff3b21538935",
+  "source_mass_table_sha256": "b569ce28e214720c5e63cb5dff70d27d64474ea189434a4c1c723d50c60f7d9b",
   "scope": "Reference only. Input orientation retained; no support. G-code must not be printed.",
   "parts": [
     {
