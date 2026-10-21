@@ -10,6 +10,7 @@
 """
 import io
 import os
+import struct
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -17,6 +18,7 @@ from pathlib import Path
 from unittest import mock
 
 import tasks
+import subprocess
 
 OPENSCAD = tasks.find_openscad()
 
@@ -134,6 +136,163 @@ class RealOpenscad(unittest.TestCase):
 
     def test_no_echo_fails(self):
         self.assertTrue(any("0줄" in f for f in self.check('render_mode = "preview";\ncube(1);\n')))
+
+    def test_shelf_sleeves_are_complete_and_inner_slots_filled(self):
+        """The vendor's four weak corners must contain complete sleeves and roots."""
+        from cad.tools.export_print_parts import MARKER, SCAD
+        source = SCAD.read_text(encoding="utf-8").split(MARKER)[0]
+        for module in ("equip_shelf_battery", "equip_shelf_avionics"):
+            with self.subTest(module=module), tempfile.TemporaryDirectory() as tmp:
+                scad = Path(tmp) / "missing.scad"
+                stl = Path(tmp) / "missing.stl"
+                probe = '''
+                difference() {
+                    union() {
+                        // Inset 0.05 mm avoids coincident-surface CGAL residues.
+                        for (s=[-1,1]) translate([col_mount_r*cos(45),s*col_mount_r*sin(45),shelf_top_z-shelf_t+0.05])
+                            difference() {
+                                cylinder(h=saddle_h-0.1,r=col_od/2+tube_clearance+saddle_wall-0.05,$fn=36);
+                                translate([0,0,-1]) cylinder(h=saddle_h+2,r=col_od/2+tube_clearance+0.05,$fn=36);
+                            }
+                        for (s=[-1,1]) translate([29.5,s*34.25-0.25,shelf_top_z-2]) cube([0.5,0.5,1]);
+                    }
+                    MODULE();
+                }
+                '''.replace("MODULE", module)
+                scad.write_text(source + probe, encoding="utf-8")
+                result = subprocess.run([OPENSCAD,"-o",str(stl),str(scad)],capture_output=True,
+                                        text=True,encoding="utf-8",errors="replace",timeout=120)
+                self.assertIn("Current top level object is empty", result.stderr)
+                self.assertNotIn("WARNING:", result.stderr)
+                self.assertNotIn("ERROR:", result.stderr)
+
+
+
+class ExportedMeshRegression(unittest.TestCase):
+    """An empty or open STL must fail the same exporter used by tasks.py cad."""
+
+    def export(self, content):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("cad_export", Path(__file__).parent / "cad/tools/export_print_parts.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            source = tmp / "fixture.scad"
+            source.write_text(module.MARKER, encoding="utf-8")
+            def fake_run(args, **kwargs):
+                output = Path(args[args.index("-o") + 1])
+                output.write_text(content, encoding="utf-8")
+                return mock.Mock(returncode=0, stderr='ECHO: "fixture"\n')
+            with mock.patch.object(module, "find_openscad", return_value="fixture"), \
+                    mock.patch.object(module, "SCAD", source), \
+                    mock.patch.object(module.subprocess, "run", side_effect=fake_run), \
+                    mock.patch("sys.argv", ["export", "--out", str(tmp), "--only", "top_plate"]), \
+                    redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as result:
+                    module.main()
+                return result.exception.code
+
+    def test_empty_stl_fails_export(self):
+        self.assertEqual(self.export("solid fixture\nendsolid fixture\n"), 1)
+
+    def test_open_triangle_fails_export(self):
+        content = "solid fixture\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid fixture\n"
+        self.assertEqual(self.export(content), 1)
+
+
+class PackageRegression(unittest.TestCase):
+    def test_cyclic_vertex_rotation_is_canonical(self):
+        from cad.tools.package_print_order import canonical_triangle
+        triangle = ((0, 0, 0), (1, 0, 0), (0, 1, 0))
+        self.assertEqual(canonical_triangle(triangle),
+                         canonical_triangle((triangle[1], triangle[2], triangle[0])))
+
+    def test_signed_zero_is_canonical(self):
+        from cad.tools.package_print_order import mesh_sha256
+        positive = [((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))]
+        negative = [((-0.0, 0.0, 0.0), (1.0, -0.0, 0.0), (0.0, 1.0, -0.0))]
+        self.assertEqual(mesh_sha256(positive), mesh_sha256(negative))
+
+    def test_sub_micron_float_noise_is_canonical(self):
+        from cad.tools.package_print_order import mesh_sha256
+        original = [((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))]
+        noisy = [((0.000001, 0.0, 0.0), (1.000001, 0.0, 0.0), (0.0, 0.999999, 0.0))]
+        self.assertEqual(mesh_sha256(original), mesh_sha256(noisy))
+
+    def test_binary_stl_has_unit_facet_normal(self):
+        from cad.tools.package_print_order import write_stl
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "triangle.stl"
+            write_stl(output, [((0, 0, 0), (1, 0, 0), (0, 1, 0))])
+            normal = struct.unpack_from("<3f", output.read_bytes(), 84)
+        self.assertEqual(normal, (0.0, 0.0, 1.0))
+
+    def test_degenerate_triangle_fails(self):
+        from cad.tools.package_print_order import write_stl
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(SystemExit):
+                write_stl(Path(tmp) / "line.stl", [((0, 0, 0), (1, 0, 0), (2, 0, 0))])
+
+@unittest.skipUnless(OPENSCAD, "OpenSCAD가 없다")
+class RealExportRegression(unittest.TestCase):
+    """Run the actual exporter and OpenSCAD, including the output file checks."""
+
+    def export(self, body):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("real_cad_export", Path(__file__).parent / "cad/tools/export_print_parts.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            source = tmp / "fixture.scad"
+            source.write_text('echo("fixture"); top_plate_bot_z=0; module top_plate() {' + body + '}\n' + module.MARKER,
+                              encoding="utf-8")
+            with mock.patch.object(module, "find_openscad", return_value=OPENSCAD), \
+                    mock.patch.object(module, "SCAD", source), \
+                    mock.patch("sys.argv", ["export", "--out", str(tmp / "out"), "--only", "top_plate"]), \
+                    redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as result:
+                    module.main()
+            return result.exception.code
+
+    def test_real_valid_cube_passes(self):
+        self.assertEqual(self.export("cube(10);"), 0)
+
+    def test_real_empty_part_fails(self):
+        self.assertEqual(self.export("difference(){cube(10); cube(10);}"), 1)
+
+    def test_real_unknown_module_fails(self):
+        self.assertEqual(self.export("cube(10); no_such_module();"), 1)
+
+
+class OffsetRingMassRegression(unittest.TestCase):
+    def test_ring_centroid_preserves_mount_position(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("cg_estimate", Path(__file__).parent / "cad/cg/cg_estimate.py")
+        cg = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cg)
+        row = dict(shape="ring", mass_g=36.0, x=10.0, y=-89.0, z=136.96,
+                   p1=2.75, p2=9.0, p3=19.88)
+        mass, centre, _ = cg.props([row])
+        self.assertAlmostEqual(mass, 0.036)
+        for actual, expected in zip(centre, (0.010, -0.089, 0.13696)):
+            self.assertAlmostEqual(actual, expected)
+
+    def test_bail_centroid_follows_semicircle_and_both_legs(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("cg_estimate_bail", Path(__file__).parent / "cad/cg/cg_estimate.py")
+        cg = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cg)
+        row = dict(shape="bail", mass_g=9.33, x=0.0, y=0.0, z=194.0,
+                   p1=51.0, p2=3.0, p3=4.0)
+        mass, centre, _ = cg.props([row])
+        arc = 3.141592653589793 * 51.0
+        expected_z = (arc * (194.0 + 2 * 51.0 / 3.141592653589793) + 8 * 192.0) / (arc + 8)
+        self.assertAlmostEqual(mass, 0.00933)
+        self.assertAlmostEqual(centre[0], 0.0, places=6)
+        self.assertAlmostEqual(centre[1], 0.0, places=6)
+        self.assertAlmostEqual(centre[2] * 1000, expected_z, places=2)
 
 
 if __name__ == "__main__":

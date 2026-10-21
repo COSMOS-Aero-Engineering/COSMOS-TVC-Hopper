@@ -1,0 +1,441 @@
+{
+  "source_scad_sha256": "9be4388b8e4c61d188ef1a7319431fec4c5f282f49acfffdad6db656402594f7",
+  "total_physical_parts": 31,
+  "quantity_per_file": 1,
+  "files": [
+    {
+      "file": "01_vane_ring_1_1.stl",
+      "quantity": 1,
+      "master": "vane_ring",
+      "source_mesh_sha256": "cdacb5e016bb29a90d071efc74b58274ed70ab0fb73a66f1e6ec8810444b0b37",
+      "sha256": "5aea543698c8dd1887dff3a9fc6118fa691f9b42c55e034a2e537b4ae6ec47ac",
+      "size_mm": [
+        136.0,
+        136.0,
+        37.64590072631836
+      ],
+      "volume_cm3": 140.8947730586938,
+      "open_edges": 0
+    },
+    {
+      "file": "02_top_plate_1_1.stl",
+      "quantity": 1,
+      "master": "top_plate",
+      "source_mesh_sha256": "0fcaa98b7e5097c0317d2dfb4594a5e4fdf023feebac96a86e593438c4577900",
+      "sha256": "3d920ff09b39058f23401ce28a00e3c2b6822185424a56ff20e532486dea97a2",
+      "size_mm": [
+        126.0,
+        126.0,
+        4.0
+      ],
+      "volume_cm3": 30.0621726966103,
+      "open_edges": 0
+    },
+    {
+      "file": "03_edf_clamp_1_1.stl",
+      "quantity": 1,
+      "master": "edf_clamp",
+      "source_mesh_sha256": "c40b3da8b62e6cc4e05e4beb35c468192b0706a68cc352b45423ea72eb65a351",
+      "sha256": "d0a93f85be3de00828bb9002b0f738008f3fcf5e076459565a324b5ef5a6b557",
+      "size_mm": [
+        98.0,
+        44.113399505615234,
+        12.0
+      ],
+      "volume_cm3": 7.536199235363305,
+      "open_edges": 0
+    },
+    {
+      "file": "04_edf_clamp_1_2.stl",
+      "quantity": 1,
+      "master": "edf_clamp",
+      "source_mesh_sha256": "c40b3da8b62e6cc4e05e4beb35c468192b0706a68cc352b45423ea72eb65a351",
+      "sha256": "e18206dd2f6930535e93ff656c58833e1ceb1dc5b3e116461ae6c2e5005987e4",
+      "size_mm": [
+        98.0,
+        44.113399505615234,
+        12.0
+      ],
+      "volume_cm3": 7.536199235363305,
+      "open_edges": 0
+    },
+    {
+      "file": "05_battery_shelf_1_1.stl",
+      "quantity": 1,
+      "master": "battery_shelf",
+      "source_mesh_sha256": "cd86740fc1054f45f115b4f59757868a0e23cf85dc072e120e54044c7eb0d313",
+      "sha256": "4e09b24d16fad63db8fe3a68ae9c0dbc4415bb5a22d3eac9d5e7fa4912545b86",
+      "size_mm": [
+        84.0,
+        70.0,
+        16.0
+      ],
+      "volume_cm3": 17.52560218591022,
+      "open_edges": 0
+    },
+    {
+      "file": "06_avionics_shelf_1_1.stl",
+      "quantity": 1,
+      "master": "avionics_shelf",
+      "source_mesh_sha256": "1918abb144d31f9ae4ba2c1a2cede48e30aeec82c719fe79d242f749e7541981",
+      "sha256": "4ea749b7a0fc8b7fb6e9cd52d9ee228150ef1cdc44be1b6336b33e208182d96f",
+      "size_mm": [
+        80.0,
+        74.0,
+        16.0
+      ],
+      "volume_cm3": 17.892086565154784,
+      "open_edges": 0
+    },
+    {
+      "file": "07_esc_bracket_1_1.stl",
+      "quantity": 1,
+      "master": "esc_bracket",
+      "source_mesh_sha256": "fe5f62afe5a4986d73c53021e148a60e77388ac8c62c23be1a65e974326c0391",
+      "sha256": "757aff7667b868942682a59eeec7c07520a7795dc5b5575544559acbc00e812c",
+      "size_mm": [
+        44.0,
+        16.0,
+        44.0
+      ],
+      "volume_cm3": 7.063199890136718,
+      "open_edges": 0
+    },
+    {
+      "file": "08_vanes_1_1.stl",
+      "quantity": 1,
+      "master": "vanes_x4",
+      "source_mesh_sha256": "f5a769adadf5910fa2cf18db9bbc653930325581068b9b01a03112361d2c6d77",
+      "sha256": "09268d97083e15572604fe0a0ef4764eb4c947e6bbb9290fbb51c43fc09256e2",
+      "size_mm": [
+        37.0,
+        6.599999904632568,
+        25.0
+      ],
+      "volume_cm3": 2.6810245401888726,
+      "open_edges": 0
+    },
+    {
+      "file": "09_vanes_1_2.stl",
+      "quantity": 1,
+      "master": "vanes_x4",
+      "source_mesh_sha256": "f5a769adadf5910fa2cf18db9bbc653930325581068b9b01a03112361d2c6d77",
+      "sha256": "b7f9dc8fb6b9897a4d5b719a2050abafe35cab080239759e01fec456cffe29b2",
+      "size_mm": [
+        6.599999904632568,
+        37.0,
+        25.0
+      ],
+      "volume_cm3": 2.6810245401888704,
+      "open_edges": 0
+    },
+    {
+      "file": "10_vanes_1_3.stl",
+      "quantity": 1,
+      "master": "vanes_x4",
+      "source_mesh_sha256": "f5a769adadf5910fa2cf18db9bbc653930325581068b9b01a03112361d2c6d77",
+      "sha256": "b7f9dc8fb6b9897a4d5b719a2050abafe35cab080239759e01fec456cffe29b2",
+      "size_mm": [
+        6.599999904632568,
+        37.0,
+        25.0
+      ],
+      "volume_cm3": 2.6810245401888704,
+      "open_edges": 0
+    },
+    {
+      "file": "11_vanes_1_4.stl",
+      "quantity": 1,
+      "master": "vanes_x4",
+      "source_mesh_sha256": "f5a769adadf5910fa2cf18db9bbc653930325581068b9b01a03112361d2c6d77",
+      "sha256": "09268d97083e15572604fe0a0ef4764eb4c947e6bbb9290fbb51c43fc09256e2",
+      "size_mm": [
+        37.0,
+        6.599999904632568,
+        25.0
+      ],
+      "volume_cm3": 2.6810245401888726,
+      "open_edges": 0
+    },
+    {
+      "file": "12_vanes_2_1.stl",
+      "quantity": 1,
+      "master": "vanes_x4",
+      "source_mesh_sha256": "f5a769adadf5910fa2cf18db9bbc653930325581068b9b01a03112361d2c6d77",
+      "sha256": "09268d97083e15572604fe0a0ef4764eb4c947e6bbb9290fbb51c43fc09256e2",
+      "size_mm": [
+        37.0,
+        6.599999904632568,
+        25.0
+      ],
+      "volume_cm3": 2.6810245401888726,
+      "open_edges": 0
+    },
+    {
+      "file": "13_vanes_2_2.stl",
+      "quantity": 1,
+      "master": "vanes_x4",
+      "source_mesh_sha256": "f5a769adadf5910fa2cf18db9bbc653930325581068b9b01a03112361d2c6d77",
+      "sha256": "b7f9dc8fb6b9897a4d5b719a2050abafe35cab080239759e01fec456cffe29b2",
+      "size_mm": [
+        6.599999904632568,
+        37.0,
+        25.0
+      ],
+      "volume_cm3": 2.6810245401888704,
+      "open_edges": 0
+    },
+    {
+      "file": "14_vanes_2_3.stl",
+      "quantity": 1,
+      "master": "vanes_x4",
+      "source_mesh_sha256": "f5a769adadf5910fa2cf18db9bbc653930325581068b9b01a03112361d2c6d77",
+      "sha256": "b7f9dc8fb6b9897a4d5b719a2050abafe35cab080239759e01fec456cffe29b2",
+      "size_mm": [
+        6.599999904632568,
+        37.0,
+        25.0
+      ],
+      "volume_cm3": 2.6810245401888704,
+      "open_edges": 0
+    },
+    {
+      "file": "15_vanes_2_4.stl",
+      "quantity": 1,
+      "master": "vanes_x4",
+      "source_mesh_sha256": "f5a769adadf5910fa2cf18db9bbc653930325581068b9b01a03112361d2c6d77",
+      "sha256": "09268d97083e15572604fe0a0ef4764eb4c947e6bbb9290fbb51c43fc09256e2",
+      "size_mm": [
+        37.0,
+        6.599999904632568,
+        25.0
+      ],
+      "volume_cm3": 2.6810245401888726,
+      "open_edges": 0
+    },
+    {
+      "file": "16_vane_couplers_1_1.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4",
+      "source_mesh_sha256": "dc7088b035d01ed9315c5206c0ef5f01b44e56d3153e985b16bd4edd4d0e4f7a",
+      "sha256": "f232a005581ce8ca28fb49d65c186b157c9c7fe00c9aaa5e23c9d6c191471cc5",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7784391330824765,
+      "open_edges": 0
+    },
+    {
+      "file": "17_vane_couplers_1_2.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4",
+      "source_mesh_sha256": "dc7088b035d01ed9315c5206c0ef5f01b44e56d3153e985b16bd4edd4d0e4f7a",
+      "sha256": "06ec24babbfe3184ce7f9b19c18e9a6062c01e247589ea3e1b7df0f92989388e",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7784391300635984,
+      "open_edges": 0
+    },
+    {
+      "file": "18_vane_couplers_1_3.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4",
+      "source_mesh_sha256": "dc7088b035d01ed9315c5206c0ef5f01b44e56d3153e985b16bd4edd4d0e4f7a",
+      "sha256": "25f5244e6e3b50a23d0a8ca268f7737bb6657d8c59d588b9c40b7027ff551bf5",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7784391300635984,
+      "open_edges": 0
+    },
+    {
+      "file": "19_vane_couplers_1_4.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4",
+      "source_mesh_sha256": "dc7088b035d01ed9315c5206c0ef5f01b44e56d3153e985b16bd4edd4d0e4f7a",
+      "sha256": "b3fd9f9cb77249df37db24087ba9c7e2656aaa6546a74f51ce137dbb8e4be756",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7784391330824763,
+      "open_edges": 0
+    },
+    {
+      "file": "20_vane_couplers_2_1.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4",
+      "source_mesh_sha256": "dc7088b035d01ed9315c5206c0ef5f01b44e56d3153e985b16bd4edd4d0e4f7a",
+      "sha256": "f232a005581ce8ca28fb49d65c186b157c9c7fe00c9aaa5e23c9d6c191471cc5",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7784391330824765,
+      "open_edges": 0
+    },
+    {
+      "file": "21_vane_couplers_2_2.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4",
+      "source_mesh_sha256": "dc7088b035d01ed9315c5206c0ef5f01b44e56d3153e985b16bd4edd4d0e4f7a",
+      "sha256": "06ec24babbfe3184ce7f9b19c18e9a6062c01e247589ea3e1b7df0f92989388e",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7784391300635984,
+      "open_edges": 0
+    },
+    {
+      "file": "22_vane_couplers_2_3.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4",
+      "source_mesh_sha256": "dc7088b035d01ed9315c5206c0ef5f01b44e56d3153e985b16bd4edd4d0e4f7a",
+      "sha256": "25f5244e6e3b50a23d0a8ca268f7737bb6657d8c59d588b9c40b7027ff551bf5",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7784391300635984,
+      "open_edges": 0
+    },
+    {
+      "file": "23_vane_couplers_2_4.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4",
+      "source_mesh_sha256": "dc7088b035d01ed9315c5206c0ef5f01b44e56d3153e985b16bd4edd4d0e4f7a",
+      "sha256": "b3fd9f9cb77249df37db24087ba9c7e2656aaa6546a74f51ce137dbb8e4be756",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7784391330824763,
+      "open_edges": 0
+    },
+    {
+      "file": "24_vane_couplers_slack0.4_1_1.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4_slack0.4",
+      "source_mesh_sha256": "a1cba2c58183c6fc3f31424cba014b35ee8c77240d70b688a5153023a66953da",
+      "sha256": "72b78097d0254fd18a0c56cd7bfb8d6168078f3461a332ea59a15484297e216a",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7442161958734927,
+      "open_edges": 0
+    },
+    {
+      "file": "25_vane_couplers_slack0.4_1_2.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4_slack0.4",
+      "source_mesh_sha256": "a1cba2c58183c6fc3f31424cba014b35ee8c77240d70b688a5153023a66953da",
+      "sha256": "092357f40f0a36210356dcc437e2a525a0e530625d0e7c90584ae4e8d089d4a5",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7442162039825726,
+      "open_edges": 0
+    },
+    {
+      "file": "26_vane_couplers_slack0.4_1_3.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4_slack0.4",
+      "source_mesh_sha256": "a1cba2c58183c6fc3f31424cba014b35ee8c77240d70b688a5153023a66953da",
+      "sha256": "61eda6a18d032636a4d2a8be4c30bad6db349f06d4eaaa7b4e423784ac6cbf9e",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7442162040642193,
+      "open_edges": 0
+    },
+    {
+      "file": "27_vane_couplers_slack0.4_1_4.stl",
+      "quantity": 1,
+      "master": "vane_couplers_x4_slack0.4",
+      "source_mesh_sha256": "a1cba2c58183c6fc3f31424cba014b35ee8c77240d70b688a5153023a66953da",
+      "sha256": "35aecebc810450105acbb4d97c7a47d65be76069d544c594888a26c230d4008f",
+      "size_mm": [
+        14.0,
+        14.0,
+        14.0
+      ],
+      "volume_cm3": 1.7442161958734927,
+      "open_edges": 0
+    },
+    {
+      "file": "28_foot_pads_1_1.stl",
+      "quantity": 1,
+      "master": "foot_pads_x4",
+      "source_mesh_sha256": "af24cbb5c5297c1810eb1503a4690539b22c403bc49e3f52acbb62ebdb8a1ffe",
+      "sha256": "427e470d4d252b078d69e16c99b44192a6781837f7bba61b816c32a731bf9da3",
+      "size_mm": [
+        16.0,
+        16.0,
+        8.0
+      ],
+      "volume_cm3": 1.4270234285527041,
+      "open_edges": 0
+    },
+    {
+      "file": "29_foot_pads_1_2.stl",
+      "quantity": 1,
+      "master": "foot_pads_x4",
+      "source_mesh_sha256": "af24cbb5c5297c1810eb1503a4690539b22c403bc49e3f52acbb62ebdb8a1ffe",
+      "sha256": "4754c68c48f30cf21381c46b17215584eb3037f530a97f94a5bcd28d2bdadf3c",
+      "size_mm": [
+        16.0,
+        16.0,
+        8.0
+      ],
+      "volume_cm3": 1.427023428552704,
+      "open_edges": 0
+    },
+    {
+      "file": "30_foot_pads_1_3.stl",
+      "quantity": 1,
+      "master": "foot_pads_x4",
+      "source_mesh_sha256": "af24cbb5c5297c1810eb1503a4690539b22c403bc49e3f52acbb62ebdb8a1ffe",
+      "sha256": "dc8bf869914e570788e3141c5bed9da99a00921cf47e06c67e6d686c01e37454",
+      "size_mm": [
+        16.0,
+        16.0,
+        8.0
+      ],
+      "volume_cm3": 1.4270234285527041,
+      "open_edges": 0
+    },
+    {
+      "file": "31_foot_pads_1_4.stl",
+      "quantity": 1,
+      "master": "foot_pads_x4",
+      "source_mesh_sha256": "af24cbb5c5297c1810eb1503a4690539b22c403bc49e3f52acbb62ebdb8a1ffe",
+      "sha256": "78615c4e4fe986abf64766f0906b90c2edc5d99826f0cb1d27e39db7b264d532",
+      "size_mm": [
+        16.0,
+        16.0,
+        8.0
+      ],
+      "volume_cm3": 1.4270234285527046,
+      "open_edges": 0
+    }
+  ]
+}

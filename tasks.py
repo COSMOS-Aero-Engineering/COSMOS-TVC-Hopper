@@ -773,7 +773,7 @@ def task_cad():
 
     검사기 자체의 단위 검사(test_cadcheck.py)를 먼저 돌린다.
     """
-    run([sys.executable, "-m", "unittest", "-q", "test_cadcheck"], cwd=ROOT)
+    run([sys.executable, "-m", "unittest", "-q", "test_cadcheck", "test_interference"], cwd=ROOT)
     exe = find_openscad()
     if not exe:
         if os.environ.get("CI"):
@@ -790,6 +790,35 @@ def task_cad():
         die("CAD 검증 실패:\n     " + "\n     ".join(failures) +
             f"\n     {CAD_SCAD.relative_to(ROOT)}를 고친 뒤 다시 실행할 것.")
     print("CAD 검증 echo 통과 - '!!' 경고와 OpenSCAD 경고 없음")
+    # 발주 STL 검사(#59, PR #60): 부품별 STL을 임시 폴더에 뽑고 열린 모서리·빈 STL·OpenSCAD 경고를 본다.
+    with tempfile.TemporaryDirectory() as tmp:
+        masters = Path(tmp) / "masters"
+        order = Path(tmp) / "order"
+        r = subprocess.run([sys.executable, str(ROOT / "cad" / "tools" / "export_print_parts.py"), "--out", masters],
+                           cwd=ROOT, env=dict(os.environ, OPENSCAD=exe, PYTHONIOENCODING="utf-8"),
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if r.returncode != 0:
+            die("발주 STL 검사 실패(cad/tools/export_print_parts.py):\n" + (r.stdout + r.stderr)[-3000:])
+        print(r.stdout.strip())
+        r = subprocess.run([sys.executable, str(ROOT / "cad" / "tools" / "package_print_order.py"),
+                            "--masters", masters, "--out", order], cwd=ROOT,
+                           env=dict(os.environ, PYTHONIOENCODING="utf-8"), capture_output=True,
+                           text=True, encoding="utf-8", errors="replace")
+        if r.returncode != 0:
+            die("31개 발주 패키지 검사 실패(cad/tools/package_print_order.py):\n" +
+                (r.stdout + r.stderr)[-3000:])
+        print(r.stdout.strip())
+        tracked_zip = ROOT / "cad" / "print-orders" / "20261021-R2" / "COSMOS_ORDER_R2_31pcs.zip"
+        tracked_manifest = ROOT / "cad" / "reports" / "2026-10-21" / "order-manifest.json"
+        report = ROOT / "cad" / "reports" / "2026-10-21" / "README.md"
+        if not tracked_zip.is_file() or tracked_zip.read_bytes() != order.with_suffix(".zip").read_bytes():
+            die("보존한 R2 ZIP이 현재 CAD에서 재생성한 ZIP과 다르다. 보고서의 재생성 명령을 실행할 것.")
+        if not tracked_manifest.is_file() or tracked_manifest.read_bytes() != (order / "manifest.json").read_bytes():
+            die("보존한 R2 manifest가 현재 CAD에서 재생성한 manifest와 다르다.")
+        archive_hash = hashlib.sha256(tracked_zip.read_bytes()).hexdigest()
+        if not report.is_file() or archive_hash not in report.read_text(encoding="utf-8").lower():
+            die(f"R2 보고서에 현재 ZIP SHA256 {archive_hash}이 없다.")
+    print("발주 STL·31개 패키지 검사 통과")
 
 
 # 한국어 Windows에서 출력을 파일이나 파이프로 돌리면 파이썬은 cp949로 쓴다. 출력 문자열에
@@ -1103,8 +1132,10 @@ TASKS = {t.name: t for t in [
          inputs=["ship.py", "test_ship.py"]),
     Task("userpath", "kicad/_tools/*.py에 사용자 홈 폴더 경로가 없는지 확인 (#96)", task_userpath,
          inputs=[*USER_PATH_SCAN, "test_userpath.py"]),
-    Task("cad", "CAD 검증 echo에 '!!' 경고·OpenSCAD 경고가 없는지 확인, OpenSCAD 없으면 건너뜀 (#61)",
-         task_cad, inputs=["cad/hopper_params.scad", "test_cadcheck.py"], tool=openscad_fingerprint),
+    Task("cad", "CAD 검증 echo와 발주 STL(열린 모서리·경고) 확인, OpenSCAD 없으면 건너뜀 (#61, #59)",
+         task_cad, inputs=["cad/hopper_params.scad", "cad/tools/*.py", "cad/print-orders/20261021-R2/*.zip",
+                           "cad/reports/2026-10-21/*", "test_cadcheck.py", "test_interference.py"],
+         tool=openscad_fingerprint),
     Task("cp949", "print·raise 등 출력 문자열에 cp949에 없는 글자가 없는지 확인 (#171)."
          f" 범위: {', '.join(CP949_SCAN)}", task_cp949,
          inputs=[*CP949_SCAN, "test_cp949.py",

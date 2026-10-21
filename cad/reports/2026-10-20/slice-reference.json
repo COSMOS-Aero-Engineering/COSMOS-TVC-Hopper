@@ -1,0 +1,92 @@
+{
+  "slicer": "PrusaSlicer-2.9.6 based on Slic3r (with GUI support)",
+  "profile_sha256": "7595df9848ad734904cee44563c025421bfcc44a5193256e904ae111413c48e2",
+  "source_mass_table_sha256": "efe3444b805098cf4f5ab2d1a8c1e2ce51cf4b2581a73660868c58d9ace16f99",
+  "scope": "Reference only. Input orientation retained; no support. G-code must not be printed.",
+  "parts": [
+    {
+      "part": "top_plate",
+      "mass_g": 31.39,
+      "stl_sha256": "e4504ea64411c0235a53a7476a2451c9160c63b67ad7a0e7cb919ced6fb1677f",
+      "warnings": [
+        "65 => Searching support spots",
+        "69 => Alert if supports needed"
+      ]
+    },
+    {
+      "part": "vane_ring",
+      "mass_g": 153.57,
+      "stl_sha256": "c25524d4af4a33e387461e0fa2c90f6157c29d87d2310787903bfefa0cf3b9a4",
+      "warnings": [
+        "65 => Searching support spots",
+        "69 => Alert if supports needed",
+        "print warning: Detected print stability issues:",
+        "Floating object part, Floating bridge anchors, Low bed adhesion, Loose extrusions, Long bridging extrusions",
+        "Consider enabling supports."
+      ]
+    },
+    {
+      "part": "vanes_x4",
+      "mass_g": 13.54,
+      "stl_sha256": "24c561088b1c70e1b0f0a43a53e40ece1c0baf462db0ecdd2762b5e3f20e38b5",
+      "warnings": [
+        "65 => Searching support spots",
+        "69 => Alert if supports needed",
+        "print warning: Detected print stability issues:",
+        "Consider enabling supports."
+      ]
+    },
+    {
+      "part": "edf_clamp",
+      "mass_g": 19.22,
+      "stl_sha256": "660edf3383313e8d42002bf994d9321b2f5a5e38d59b0c3f6117865438e32358",
+      "warnings": [
+        "65 => Searching support spots",
+        "69 => Alert if supports needed"
+      ]
+    },
+    {
+      "part": "battery_shelf",
+      "mass_g": 21.64,
+      "stl_sha256": "eb80344a50377844ee2c85b5785cd6bde77d3e688fdfb2626650002323c068e0",
+      "warnings": [
+        "65 => Searching support spots",
+        "69 => Alert if supports needed"
+      ]
+    },
+    {
+      "part": "avionics_shelf",
+      "mass_g": 22.28,
+      "stl_sha256": "aa646c2c92d04b13eed64375a6760af34ce9be31aa253a3be6f4c049656ff025",
+      "warnings": [
+        "65 => Searching support spots",
+        "69 => Alert if supports needed"
+      ]
+    },
+    {
+      "part": "esc_bracket",
+      "mass_g": 8.83,
+      "stl_sha256": "1e7ac63e8f23d4d478b94923f1fd16b4334cca709aed0947875cc0fc8b1140d1",
+      "warnings": [
+        "65 => Searching support spots",
+        "69 => Alert if supports needed",
+        "print warning: Detected print stability issues:",
+        "Floating bridge anchors, Low bed adhesion, Loose extrusions",
+        "Consider enabling supports."
+      ]
+    },
+    {
+      "part": "vane_couplers_x4",
+      "mass_g": 9.28,
+      "stl_sha256": "a831e122caee062afd17d2e6a6c9d33aa4571c5a9d13fcba1ab812e858a21c44",
+      "warnings": [
+        "65 => Searching support spots",
+        "69 => Alert if supports needed",
+        "print warning: Detected print stability issues:",
+        "Floating bridge anchors, Loose extrusions",
+        "Consider enabling supports."
+      ]
+    }
+  ],
+  "text_hash_newlines": "LF"
+}
