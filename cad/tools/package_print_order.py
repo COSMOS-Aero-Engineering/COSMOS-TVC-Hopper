@@ -28,7 +28,8 @@ ORDER = {
 
 def canonical_triangle(triangle):
     """Choose a stable first vertex without changing the facet winding."""
-    points = tuple(tuple(0.0 if value == 0 else value for value in point) for point in triangle)
+    points = tuple(tuple(0.0 if round(value, 5) == 0 else round(value, 5) for value in point)
+                   for point in triangle)
     rotations = [points[index:] + points[:index] for index in range(3)]
     return min(rotations)
 

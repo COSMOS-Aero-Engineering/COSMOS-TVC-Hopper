@@ -214,6 +214,12 @@ class PackageRegression(unittest.TestCase):
         negative = [((-0.0, 0.0, 0.0), (1.0, -0.0, 0.0), (0.0, 1.0, -0.0))]
         self.assertEqual(mesh_sha256(positive), mesh_sha256(negative))
 
+    def test_sub_micron_float_noise_is_canonical(self):
+        from cad.tools.package_print_order import mesh_sha256
+        original = [((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))]
+        noisy = [((0.000001, 0.0, 0.0), (1.000001, 0.0, 0.0), (0.0, 0.999999, 0.0))]
+        self.assertEqual(mesh_sha256(original), mesh_sha256(noisy))
+
     def test_binary_stl_has_unit_facet_normal(self):
         from cad.tools.package_print_order import write_stl
         with tempfile.TemporaryDirectory() as tmp:
