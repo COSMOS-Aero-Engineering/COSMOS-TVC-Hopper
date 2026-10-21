@@ -10,6 +10,7 @@
 """
 import io
 import os
+import struct
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -198,6 +199,28 @@ class ExportedMeshRegression(unittest.TestCase):
     def test_open_triangle_fails_export(self):
         content = "solid fixture\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid fixture\n"
         self.assertEqual(self.export(content), 1)
+
+
+class PackageRegression(unittest.TestCase):
+    def test_cyclic_vertex_rotation_is_canonical(self):
+        from cad.tools.package_print_order import canonical_triangle
+        triangle = ((0, 0, 0), (1, 0, 0), (0, 1, 0))
+        self.assertEqual(canonical_triangle(triangle),
+                         canonical_triangle((triangle[1], triangle[2], triangle[0])))
+
+    def test_binary_stl_has_unit_facet_normal(self):
+        from cad.tools.package_print_order import write_stl
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "triangle.stl"
+            write_stl(output, [((0, 0, 0), (1, 0, 0), (0, 1, 0))])
+            normal = struct.unpack_from("<3f", output.read_bytes(), 84)
+        self.assertEqual(normal, (0.0, 0.0, 1.0))
+
+    def test_degenerate_triangle_fails(self):
+        from cad.tools.package_print_order import write_stl
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(SystemExit):
+                write_stl(Path(tmp) / "line.stl", [((0, 0, 0), (1, 0, 0), (2, 0, 0))])
 
 
 

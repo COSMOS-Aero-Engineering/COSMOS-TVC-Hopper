@@ -137,7 +137,7 @@ vane_spar_bore    = 3.2;     // 스파 관통 보어
 vane_inner_r      = 4;       // 베인 안쪽 끝 반경 (모터 허브 후류 회피)
 vane_stop_deg     = 15;      // ±기계 하드스톱 각도 (링 벽 슬롯이 스톱 역할)
 
-foot_pad_d = 16; foot_pad_h = 8;             // D5 EVA/EPP 발 범퍼
+foot_pad_d = 16; foot_pad_h = 8;             // D5 PETG 발 범퍼(R2 발주품, 실측 필요)
 
 $fn = 48; // 렌더 품질 (렌더 느리면 24로 낮추기)
 

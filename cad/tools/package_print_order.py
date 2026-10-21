@@ -7,6 +7,7 @@ import argparse
 import collections
 import hashlib
 import json
+import math
 import struct
 import zipfile
 from pathlib import Path
@@ -23,6 +24,26 @@ ORDER = {
     "vanes_x4": (4, 2), "vane_couplers_x4": (4, 2),
     "vane_couplers_x4_slack0.4": (4, 1), "foot_pads_x4": (4, 1),
 }
+
+
+def canonical_triangle(triangle):
+    """Choose a stable first vertex without changing the facet winding."""
+    points = tuple(tuple(point) for point in triangle)
+    rotations = [points[index:] + points[:index] for index in range(3)]
+    return min(rotations)
+
+
+def canonical_triangles(triangles):
+    """Return stable vertices and facet order without changing winding."""
+    return sorted(canonical_triangle(triangle) for triangle in triangles)
+
+
+def mesh_sha256(triangles):
+    """Hash mesh coordinates, independent of STL headers and facet order."""
+    digest = hashlib.sha256()
+    for triangle in canonical_triangles(triangles):
+        digest.update(struct.pack("<9f", *(value for point in triangle for value in point)))
+    return digest.hexdigest()
 
 
 def components(triangles):
@@ -50,7 +71,9 @@ def components(triangles):
             remaining.difference_update(new)
             pending.extend(sorted(new))
         result.append(group)
-    return result
+    result = [canonical_triangles(group) for group in result]
+    return sorted(result, key=lambda group: tuple(min(point[i] for triangle in group for point in triangle)
+                                                   for i in range(3)))
 
 
 def write_stl(path, triangles):
@@ -61,9 +84,19 @@ def write_stl(path, triangles):
     offset = [(lo[0] + hi[0])/2, (lo[1] + hi[1])/2, lo[2]]
     data = bytearray(b"COSMOS individual part; mm; print once".ljust(80, b" "))
     data.extend(struct.pack("<I", len(triangles)))
-    for triangle in triangles:
+    for triangle in canonical_triangles(triangles):
+        a, b, c = triangle
+        ab = [b[i] - a[i] for i in range(3)]
+        ac = [c[i] - a[i] for i in range(3)]
+        normal = [ab[1]*ac[2] - ab[2]*ac[1],
+                  ab[2]*ac[0] - ab[0]*ac[2],
+                  ab[0]*ac[1] - ab[1]*ac[0]]
+        length = math.sqrt(sum(value * value for value in normal))
+        if length == 0:
+            raise SystemExit(f"Degenerate triangle in {path.name}")
+        normal = [value / length for value in normal]
         xyz = [p[i] - offset[i] for p in triangle for i in range(3)]
-        data.extend(struct.pack("<12fH", 0, 0, 0, *xyz, 0))
+        data.extend(struct.pack("<12fH", *normal, *xyz, 0))
     path.write_bytes(data)
 
 
@@ -71,6 +104,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--masters", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path, help="Fresh order directory")
+    parser.add_argument("--archive", type=Path, help="ZIP path (default: <out>.zip)")
+    parser.add_argument("--manifest-copy", type=Path, help="Optional external manifest copy")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
     output = args.out / "PRINT_ONCE_31_FILES"
@@ -81,7 +116,8 @@ def main():
         size, volume, edges = check_stl(source)
         if size is None or volume <= 0 or edges:
             raise SystemExit(f"Invalid source {master}: {size}, {volume}, {edges}")
-        groups = components(load_stl(source))
+        source_triangles = load_stl(source)
+        groups = components(source_triangles)
         if len(groups) != expected:
             raise SystemExit(f"{master}: expected {expected} physical pieces, got {len(groups)}")
         for repetition in range(repetitions):
@@ -94,13 +130,17 @@ def main():
                 if open_edges or part_volume <= 0 or len(components(load_stl(path))) != 1:
                     raise SystemExit(f"Invalid individual output: {path.name}")
                 records.append(dict(file=path.name, quantity=1, master=master,
-                                    source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+                                    source_mesh_sha256=mesh_sha256(source_triangles),
                                     sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
                                     size_mm=dims, volume_cm3=part_volume, open_edges=open_edges))
-    assert len(records) == 31 and set(ORDER) == set(PARTS)
+    if len(records) != 31 or set(ORDER) != set(PARTS):
+        raise SystemExit(f"Order invariant failed: {len(records)} files, masters={sorted(ORDER)}")
     manifest = dict(source_scad_sha256=hashlib.sha256(SCAD.read_bytes()).hexdigest(),
                     total_physical_parts=31, quantity_per_file=1, files=records)
-    (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    manifest_text = json.dumps(manifest, indent=2) + "\n"
+    (args.out / "manifest.json").write_text(manifest_text, encoding="utf-8", newline="\n")
+    if args.manifest_copy:
+        args.manifest_copy.write_text(manifest_text, encoding="utf-8", newline="\n")
     text = """COSMOS 3D打印订单 / 발주서 — 2026-10-21 R2
 
 请停止使用旧ZIP和旧排版。本ZIP完整替换旧版，不要叠加打印。
@@ -128,11 +168,15 @@ PRINT_ONCE_31_FILES 안의 STL 31개를 각각 1개씩 출력한다.
 서포트와 방향은 업체가 장비에 맞춰 정한다. 동봉 G-code는 없으며 STL로 슬라이싱한다.
 """
     (args.out / "ORDER_KO_ZH.txt").write_text(text, encoding="utf-8-sig")
-    archive = args.out.with_suffix(".zip")
-    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
-        for path in sorted(args.out.rglob("*")):
-            if path.is_file():
-                z.write(path, path.relative_to(args.out))
+    archive = args.archive or args.out.with_suffix(".zip")
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_STORED) as z:
+        files = sorted((path.relative_to(args.out).as_posix(), path)
+                       for path in args.out.rglob("*") if path.is_file())
+        for name, path in files:
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_STORED
+            info.create_system = 0
+            z.writestr(info, path.read_bytes())
     print(f"Validated {len(records)} individual closed parts; each quantity=1")
     print(archive)
 

@@ -5,7 +5,7 @@
 STL 에서 구했다 (`cad/print_parts/README.md` 의 개별 export 방법과 동일 — 라인 1~(조립 앞) +
 파츠 호출 1줄). 인필만 계산한 하한과 형상을 100 % 채운 값의 범위를 출력한다. 실제 슬라이서 질량이 아니다.
 
-밀도 (g/cm3): PETG 1.27, CF 튜브/로드 1.5, 스틸 7.85, EVA 폼 0.07.
+밀도 (g/cm3): PETG 1.27, CF 튜브/로드 1.5, 스틸 7.85.
 
 실행: python cad/cg/print_mass.py
 """
@@ -15,7 +15,6 @@ PETG_DENSITY = 1.27
 INFILL = 0.40          # master-design §10-4, 01 문서 §7.1
 CF_DENSITY = 1.5       # CF/에폭시 튜브·로드
 STEEL_DENSITY = 7.85
-EVA_DENSITY = 0.07
 
 # STL 부피 (cm3). 선반은 2026-10-21 #224, 나머지는 #59 형상.
 OPENSCAD_VOL_CM3 = {
@@ -61,12 +60,9 @@ def rod_cm3(d, length):
 
 
 def main():
-    petg = lambda v: v * PETG_DENSITY * INFILL
     rows = []
     for name, v in OPENSCAD_VOL_CM3.items():
-        dens = EVA_DENSITY if "foot pads" in name else PETG_DENSITY * INFILL
-        rows.append((name + (" (EVA)" if "foot pads" in name else " (PETG)"),
-                     v, v * dens))
+        rows.append((name + " (PETG)", v, v * PETG_DENSITY * INFILL))
     rows.append(("column x4 (CF tube)", N_COLS * tube_cm3(COL_OD, CF_ID, COL_LEN),
                  N_COLS * tube_cm3(COL_OD, CF_ID, COL_LEN) * CF_DENSITY))
     leg_len = math.hypot(LEG_BOT_R - LEG_TOP_R, FOOT_Z - VANE_RING_BOT_Z)
@@ -81,8 +77,7 @@ def main():
     print("주의: 아래 mass g는 인필만 계산한 하한이다. 외벽·상하면 질량이 빠져 있다.")
     print("PETG 출력물 범위(g, 밀도 1.27 가정):")
     for name, volume in OPENSCAD_VOL_CM3.items():
-        if "foot pads" not in name:
-            print(f"  {name}: {volume * PETG_DENSITY * INFILL:.2f}-{volume * PETG_DENSITY:.2f}")
+        print(f"  {name}: {volume * PETG_DENSITY * INFILL:.2f}-{volume * PETG_DENSITY:.2f}")
     print("슬라이서 프로파일과 출력 후 실측으로 확정하기 전에는 아래 합계를 비행 질량으로 쓰지 않는다.")
     total = 0.0
     print(f"{'part':28s} {'vol cm3':>9s} {'mass g':>8s}")

@@ -15,10 +15,10 @@ vane ring + leg root bosses (printed),71.5745,"LOWER_BOUND ESTIMATE: STL 140.894
 4 CF spars 3 mm x 60 mm,2.54,"team #70: CF rod D3 x 60 mm x4, 1.5 g/cm3",servo4,0,0,-36,34,0,0,vane spar
 top plate (printed),15.2716,"LOWER_BOUND ESTIMATE: STL 30.06217 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",ring,0,0,192,39,63,4,top_plate_bot_z 190 + t/2
 EDF clamp (printed),7.6568,"LOWER_BOUND ESTIMATE: STL 15.07240 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",ring,0,0,76,37.5,54,12,edf_clamp_z 70 + h/2
-battery shelf (printed),9.0678,"LOWER_BOUND ESTIMATE: STL 17.85008 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",box,0,62,150,80,70,6,shelf +Y
-avionics shelf (printed),9.2547,"LOWER_BOUND ESTIMATE: STL 18.21783 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",box,0,-66,150,80,74,6,shelf -Y
+battery shelf (printed),8.9030,"LOWER_BOUND ESTIMATE: R2 STL 17.52560 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",box,0,62,150,80,70,6,shelf +Y
+avionics shelf (printed),9.0892,"LOWER_BOUND ESTIMATE: R2 STL 17.89209 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",box,0,-66,150,80,74,6,shelf -Y
 ESC bracket (printed),3.5881,"LOWER_BOUND ESTIMATE: STL 7.06320 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",box,0,-46,125,44,16,44,esc_bracket
-"foot pads (EVA, BOM D5)",0.4,team #70: 5.7 cm3 x EVA 0.07 (printed PETG would be ~2.9 g),rods4,0,0,-144,180,180,-144,feet at r 180
+foot pads (PETG R2),2.8997,"LOWER_BOUND ESTIMATE: STL 5.70809 cm3 x 1.27 x 0.40; infill-only, walls/skins omitted; NOT flight mass",rods4,0,0,-144,180,180,-144,feet at r 180
 4 CF columns 6x4 x 212 mm,19.98,"team #70 method: CF tube OD6/ID4 x 212 mm x4, 1.5 g/cm3",rods4,0,0,-22,48,48,190,col_mount_r 48 z -22..190 (col_len 212)
 4 CF legs 6x4 x 153 mm,14.44,team #70 method: CF tube OD6/ID4 x 153.2 mm x4,rods4,0,0,-50,56,180,-140,leg_root_r 56 z-50 -> foot r180 z-140
 steel bail 3 mm,9.33,"steel rod D3, 180 deg arc r51 + 2 x 4 mm legs, 7.85 g/cm3",bail,0,0,194,51,3,4,hopper_params.scad bail centreline: top_plate_top_z 194
