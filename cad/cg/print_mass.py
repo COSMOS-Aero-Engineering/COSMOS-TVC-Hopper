@@ -17,14 +17,14 @@ CF_DENSITY = 1.5       # CF/에폭시 튜브·로드
 STEEL_DENSITY = 7.85
 EVA_DENSITY = 0.07
 
-# STL 부피 (cm3). 2026-10-19 #59 형상(export_print_parts.py, OpenSCAD 2021.01)으로 갱신
+# STL 부피 (cm3). 선반은 2026-10-21 #224, 나머지는 #59 형상.
 OPENSCAD_VOL_CM3 = {
     "top plate": 30.06217,
     "vane ring": 140.89477,
     "vanes x4": 10.72410,
     "EDF clamp": 15.07240,
-    "battery shelf": 17.85008,
-    "avionics shelf": 18.21783,
+    "battery shelf": 17.52560,
+    "avionics shelf": 17.89209,
     "ESC bracket": 7.06320,
     "vane couplers x4": 7.11376,
     "foot pads x4": 5.70809,

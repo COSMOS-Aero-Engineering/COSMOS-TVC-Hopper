@@ -17,6 +17,7 @@ from pathlib import Path
 from unittest import mock
 
 import tasks
+import subprocess
 
 OPENSCAD = tasks.find_openscad()
 
@@ -134,6 +135,35 @@ class RealOpenscad(unittest.TestCase):
 
     def test_no_echo_fails(self):
         self.assertTrue(any("0줄" in f for f in self.check('render_mode = "preview";\ncube(1);\n')))
+
+    def test_shelf_sleeves_are_complete_and_inner_slots_filled(self):
+        """The vendor's four weak corners must contain complete sleeves and roots."""
+        from cad.tools.export_print_parts import MARKER, SCAD
+        source = SCAD.read_text(encoding="utf-8").split(MARKER)[0]
+        for module in ("equip_shelf_battery", "equip_shelf_avionics"):
+            with self.subTest(module=module), tempfile.TemporaryDirectory() as tmp:
+                scad = Path(tmp) / "missing.scad"
+                stl = Path(tmp) / "missing.stl"
+                probe = '''
+                difference() {
+                    union() {
+                        // Inset 0.05 mm avoids coincident-surface CGAL residues.
+                        for (s=[-1,1]) translate([col_mount_r*cos(45),s*col_mount_r*sin(45),shelf_top_z-shelf_t+0.05])
+                            difference() {
+                                cylinder(h=saddle_h-0.1,r=col_od/2+tube_clearance+saddle_wall-0.05,$fn=36);
+                                translate([0,0,-1]) cylinder(h=saddle_h+2,r=col_od/2+tube_clearance+0.05,$fn=36);
+                            }
+                        for (s=[-1,1]) translate([29.5,s*34.25-0.25,shelf_top_z-2]) cube([0.5,0.5,1]);
+                    }
+                    MODULE();
+                }
+                '''.replace("MODULE", module)
+                scad.write_text(source + probe, encoding="utf-8")
+                result = subprocess.run([OPENSCAD,"-o",str(stl),str(scad)],capture_output=True,
+                                        text=True,encoding="utf-8",errors="replace",timeout=120)
+                self.assertIn("Current top level object is empty", result.stderr)
+                self.assertNotIn("WARNING:", result.stderr)
+                self.assertNotIn("ERROR:", result.stderr)
 
 
 

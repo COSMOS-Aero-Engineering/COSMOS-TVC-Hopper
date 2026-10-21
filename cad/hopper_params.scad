@@ -89,7 +89,8 @@ receiver_size = [26.2, 47, 15]; // FS-iA6B 제조사 공칭치수(https://www.fl
 receiver_bottom_gap = avi_module_gap; // 기판 조립 외피 위 설계 간격, 실물 스페이서/절연 고정 확인 필요
 ubec_r = shelf_r_inner + 28; // 바깥면 r78.5; 무게추 안쪽 r80와 1.5 mm 간격
 saddle_h      = 16;    // 기둥을 감싸는 새들 링 높이
-saddle_wall   = 2.9;   // 새들 링 두께
+saddle_wall   = 2.4;   // #224: 완전한 원주를 유지하며 흡기 파임과 0.3 mm 떨어지는 벽
+saddle_tie_offset = 12; // #224: 기둥 중심에서 바깥쪽 타이 슬롯 중심까지 거리
 tie_slot_w    = 3.2;   // 케이블타이 슬롯 폭 (2.5mm 타이 기준)
 tie_slot_l    = 8;     // 케이블타이 슬롯 길이
 wire_slot_x0 = 62; wire_slot_x1 = 74;      // 아비오닉스 선반 배선 통로(로컬 x, 반경 방향). ESC 플랜지(x ≤ 60) 바깥
@@ -505,10 +506,10 @@ module shelf_blank(x_out, y_half) {
         for (s = [-1, 1])
             translate([cx, s*cy, shelf_top_z - shelf_t - 2])
                 cylinder(h = saddle_h + 6, r = col_od/2 + tube_clearance, $fn=36);
-        // 새들 옆 타이 슬롯 (기둥에 타이로 조이거나 스토퍼 타이를 걸 때 사용)
+        // #224: 안쪽 슬롯은 흡기 원호 옆에 얇은 조각을 남겨 제거했다.
+        // 바깥 슬롯 1개/기둥. 타이는 슬롯과 선반 바깥 가장자리를 통해 고정부를 감싼다.
         for (s = [-1, 1]) {
-            tie_slot(cx - 7, s*cy, shelf_top_z - shelf_t);
-            tie_slot(cx + 7, s*cy, shelf_top_z - shelf_t);
+            tie_slot(cx + saddle_tie_offset, s*cy, shelf_top_z - shelf_t);
         }
     }
 }
@@ -728,7 +729,7 @@ wire_slot_gaps = [
     min([for (hx = [wire_slot_px0, wire_slot_px0 + perf_hole_dy])
          circ_gap(wire_slot_x0, wire_slot_x1, wire_slot_y0, wire_slot_y1, hx, perf_hole_dx/2, insert_d/2 + 2.2)]),
     rect_gap(wire_slot_x0, wire_slot_x1, wire_slot_y0, wire_slot_y1,
-             col_mount_r*cos(45) + 7 - tie_slot_l/2, col_mount_r*cos(45) + 7 + tie_slot_l/2,
+             col_mount_r*cos(45) + saddle_tie_offset - tie_slot_l/2, col_mount_r*cos(45) + saddle_tie_offset + tie_slot_l/2,
              col_mount_r*sin(45) - tie_slot_w/2, col_mount_r*sin(45) + tie_slot_w/2),
     rect_gap(wire_slot_x0, wire_slot_x1, wire_slot_y0, wire_slot_y1,
              shelf_r_inner + 6, shelf_r_inner + 6 + tie_slot_l,
@@ -736,6 +737,15 @@ wire_slot_gaps = [
 echo(str("배선 슬롯 간격(mm): ESC 플랜지 ", wire_slot_gaps[0], ", 인서트 보스 ", wire_slot_gaps[1],
          ", 새들 타이 슬롯 ", wire_slot_gaps[2], ", ESC 타이 슬롯 ", wire_slot_gaps[3], " → ",
          min(wire_slot_gaps) >= 1 ? "정상(모두 1 mm 이상 떨어짐)" : "!! 겹치거나 1 mm 미만 !!"));
+
+// #224: 새들 링을 흡기 원호가 자르거나 타이 슬롯이 얇은 끝을 만들면 발주를 막는다.
+saddle_outer_r = col_od/2 + tube_clearance + saddle_wall;
+saddle_intake_gap = col_mount_r - saddle_outer_r - shelf_r_inner;
+saddle_tie_gap = saddle_tie_offset - tie_slot_l/2 - saddle_outer_r;
+echo(str("선반 새들: 벽 ", saddle_wall, " mm, 흡기 여유 ", saddle_intake_gap,
+         " mm, 타이 슬롯 여유 ", saddle_tie_gap, " mm → ",
+         saddle_wall >= 2.4 && saddle_intake_gap >= 0.25 && saddle_tie_gap >= 2
+         ? "정상" : "!! 새들 벽 또는 여유 부족 !!"));
 echo(str("서보 귀 슬롯: 가까운 쪽 ", servo_slot_near, "mm, 먼 쪽 ", servo_slot_far,
          "mm → 구멍 간격 ", servo_slot_near[0] + servo_slot_far[0], "-", servo_slot_near[1] + servo_slot_far[1],
          "mm 범위를 받음 (MG90S 실물 미측정, #59)"));
