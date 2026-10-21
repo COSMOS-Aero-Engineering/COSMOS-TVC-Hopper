@@ -28,7 +28,7 @@ ORDER = {
 
 def canonical_triangle(triangle):
     """Choose a stable first vertex without changing the facet winding."""
-    points = tuple(tuple(point) for point in triangle)
+    points = tuple(tuple(0.0 if value == 0 else value for value in point) for point in triangle)
     rotations = [points[index:] + points[:index] for index in range(3)]
     return min(rotations)
 
@@ -47,7 +47,7 @@ def mesh_sha256(triangles):
 
 
 def components(triangles):
-    """Connected components by shared vertex, preserving all input triangles."""
+    """Find connected components, then order their unchanged facets stably."""
     owners, neighbors = {}, collections.defaultdict(set)
     for index, triangle in enumerate(triangles):
         for point in triangle:
@@ -140,6 +140,7 @@ def main():
     manifest_text = json.dumps(manifest, indent=2) + "\n"
     (args.out / "manifest.json").write_text(manifest_text, encoding="utf-8", newline="\n")
     if args.manifest_copy:
+        args.manifest_copy.parent.mkdir(parents=True, exist_ok=True)
         args.manifest_copy.write_text(manifest_text, encoding="utf-8", newline="\n")
     text = """COSMOS 3D打印订单 / 발주서 — 2026-10-21 R2
 
@@ -169,6 +170,7 @@ PRINT_ONCE_31_FILES 안의 STL 31개를 각각 1개씩 출력한다.
 """
     (args.out / "ORDER_KO_ZH.txt").write_text(text, encoding="utf-8-sig")
     archive = args.archive or args.out.with_suffix(".zip")
+    archive.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_STORED) as z:
         files = sorted((path.relative_to(args.out).as_posix(), path)
                        for path in args.out.rglob("*") if path.is_file())

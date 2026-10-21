@@ -208,6 +208,12 @@ class PackageRegression(unittest.TestCase):
         self.assertEqual(canonical_triangle(triangle),
                          canonical_triangle((triangle[1], triangle[2], triangle[0])))
 
+    def test_signed_zero_is_canonical(self):
+        from cad.tools.package_print_order import mesh_sha256
+        positive = [((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))]
+        negative = [((-0.0, 0.0, 0.0), (1.0, -0.0, 0.0), (0.0, 1.0, -0.0))]
+        self.assertEqual(mesh_sha256(positive), mesh_sha256(negative))
+
     def test_binary_stl_has_unit_facet_normal(self):
         from cad.tools.package_print_order import write_stl
         with tempfile.TemporaryDirectory() as tmp:
@@ -221,8 +227,6 @@ class PackageRegression(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(SystemExit):
                 write_stl(Path(tmp) / "line.stl", [((0, 0, 0), (1, 0, 0), (2, 0, 0))])
-
-
 
 @unittest.skipUnless(OPENSCAD, "OpenSCAD가 없다")
 class RealExportRegression(unittest.TestCase):

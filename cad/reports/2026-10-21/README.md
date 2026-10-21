@@ -40,7 +40,7 @@
 - 패키지의 STL 31개 모두 연결 조각 1개, 열린 모서리 0개다. 전체 삼각형 25,020개의 단위 법선도 0이 아니다. 파일별 해시·부피·크기는 [order-manifest.json](order-manifest.json)에 있다.
 - 두 선반만 형상이 바뀌었다. 나머지 8종은 `bac73f3`에서 생성한 STL과 삼각형 좌표를 정렬해 비교했고 동일했다. 베인링에는 이전 체결면 수정이 포함돼 있다.
 - 두 선반의 완전한 새들 둘레와 이전 안쪽 슬롯 자리의 재료를 OpenSCAD 차집합으로 검사했다. 수치적 공면 잔여물을 피하기 위해 검사 부피만 0.05 mm 안쪽으로 줄였다. 허용 응력이나 피로 강도를 검사한 것은 아니다.
-- `python -m unittest -q test_cadcheck test_interference`: 48개 통과.
+- `python -m unittest -q test_cadcheck test_interference`: 49개 통과.
 - 두 선반을 포함하는 49쌍 중 경계 상자가 겹친 4쌍을 정밀 검사했다. 기둥·만능기판 쌍 3건은 교집합이 비었고 배터리 바닥 1건은 두께 없는 면 접촉이었다. 허용값 0.001 cm3를 넘는 부피 간섭은 없었다. 검사한 26개 부품·상태의 삼각형 좌표를 10/20 검사본과 대조했으며 두 선반만 달랐다. 나머지 쌍에는 이전 검증을 적용한다.
 - PrusaSlicer 2.9.6의 기존 참고 프로파일에서 배터리 선반 21.25 g, 전자부 선반 21.89 g을 계산했다. 업체의 방향·국부 인필·서포트가 달라지므로 실제 질량은 다를 수 있다.
 - 10/20 전체 기체 CG 보고는 이전 선반과 EVA 발 범퍼를 가정했다. 이번 발주는 PETG 발 범퍼이므로 그 CG를 발주본의 확정값으로 쓰지 않는다. 실제 질량·체결·조립 CG는 #219에서 확인한다.
@@ -54,8 +54,9 @@
 ```powershell
 python cad/tools/export_print_parts.py --out <masters>
 python cad/tools/package_print_order.py --masters <masters> --out <새 패키지 폴더> `
-  --archive cad/print-orders/20261021-R2/COSMOS_ORDER_R2_31pcs.zip `
-  --manifest-copy cad/reports/2026-10-21/order-manifest.json
+  --archive <새 ZIP> --manifest-copy <새 manifest>
 ```
+
+새 ZIP과 manifest를 기준 파일과 대조한 뒤 기준 파일을 교체한다. 재생성 명령으로 기준 파일을 바로 덮어쓰지 않는다. ZIP은 재현 가능한 해시를 위해 압축하지 않고 고정 메타데이터로 저장한다.
 
 ZIP에는 `PRINT_ONCE_31_FILES/`, 중국어·한국어 발주서, 해시 목록만 넣는다. 원본 묶음 STL과 G-code는 넣지 않는다. 업체는 구버전 배치를 지우고 R2 31개를 각각 한 번씩 배치한다. 배율 100%, 단위 mm, PETG, 노즐 0.4 mm, 레이어 0.2 mm, 외벽 4줄, 상하면 각 6층, gyroid 인필 40%가 기본 요청이다. 출력 방향과 서포트는 업체가 장비에 맞춰 결정한다.
