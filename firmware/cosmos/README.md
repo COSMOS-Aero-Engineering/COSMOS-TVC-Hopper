@@ -4,8 +4,9 @@
 그대로 복사해 쓰는 단위 테스트 스케치들 + (나중에) 전체 통합 펌웨어.
 
 **2026-09-19: Arduino IDE → PlatformIO(VSCode) 전환 완료.** SW팀 개발환경이 오늘부로 PlatformIO
-기준으로 바뀌었다. 현재 세 `platformio.ini`는 Teensy 개발 플랫폼을 6.0.0으로 고정한다. `pio run`으로 CI에 연결하고,
-`sim/`(Python)과 같은 VSCode에서 작업 가능해서. 각 폴더가 이제 **독립된 PlatformIO 프로젝트**다
+기준으로 바뀌었다. 현재 세 `platformio.ini`는 Teensy 개발 플랫폼을 6.0.0으로 고정한다. 외부 라이브러리를
+선언하는 `lib_deps`와는 다른 설정이다. `pio run`으로 CI에 연결하며 `sim/`(Python)과 같은 VSCode에서 작업할 수
+있다. 각 폴더가 이제 **독립된 PlatformIO 프로젝트**다
 (`platformio.ini` + `src/`) — Arduino IDE의 "스케치 폴더 안 .h/.cpp만 같이 컴파일" 제약이 없어져서
 드라이버 파일을 여러 폴더에 복사해둘 필요가 원래는 없지만, 지금은 vendor-copy 추적성 유지 목적으로
 그대로 두고 있다(나중에 `lib/`로 통합 검토 가능).
