@@ -169,7 +169,7 @@ PRINT_ONCE_31_FILES 안의 STL 31개를 각각 1개씩 출력한다.
 발 범퍼도 이번 주문에서는 PETG다. 기존 질량표의 EVA 가정과 다르므로 입고 후 실측한다.
 서포트와 방향은 업체가 장비에 맞춰 정한다. 동봉 G-code는 없으며 STL로 슬라이싱한다.
 """
-    (args.out / "ORDER_KO_ZH.txt").write_text(text, encoding="utf-8-sig")
+    (args.out / "ORDER_KO_ZH.txt").write_text(text, encoding="utf-8-sig", newline="\n")
     archive = args.archive or args.out.with_suffix(".zip")
     archive.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_STORED) as z:

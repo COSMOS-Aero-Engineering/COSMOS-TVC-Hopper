@@ -2,7 +2,7 @@
 
 업체가 표시한 배터리·전자부 선반의 기둥 고정부를 수정했다. 기존 주문은 R2 전체로 교체한다. 두 버전을 합산하지 않는다. 이 문서는 첫 시제품 발주 자료이며 실물 강도 시험 결과가 아니다.
 
-[발주 ZIP 다운로드](../../print-orders/20261021-R2/COSMOS_ORDER_R2_31pcs.zip). SHA256: `ce1d1c73faf809501960d8079be3c8af09b66ec4a5e1626ae8d66ba521deecee`.
+[발주 ZIP 다운로드](../../print-orders/20261021-R2/COSMOS_ORDER_R2_31pcs.zip). SHA256: `03a4d064094bde7f30bb290c1ef36aaacaed5ebbb1b34cb64b9f8fc0ee1617bd`.
 
 ## 수정
 
