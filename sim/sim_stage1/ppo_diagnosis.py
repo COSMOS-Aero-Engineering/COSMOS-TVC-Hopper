@@ -115,10 +115,13 @@ def main():
         fixed_model.learn(total_timesteps=args.timesteps)
         fixed_model.save(args.train_fixed_throttle)
         rewards = np.asarray(env.get_episode_rewards())
+        lengths = np.asarray(env.get_episode_lengths())
         window = min(20, len(rewards))
         print(f"fixed-throttle episodes: {len(rewards)}")
         print(f"fixed-throttle first {window} mean return: {rewards[:window].mean():.2f}")
         print(f"fixed-throttle last {window} mean return: {rewards[-window:].mean():.2f}")
+        print(f"fixed-throttle first {window} mean length: {lengths[:window].mean():.1f}")
+        print(f"fixed-throttle last {window} mean length: {lengths[-window:].mean():.1f}")
         print(row("PPO fixed-throttle train",
                   evaluate(fixed_throttle_model_policy(fixed_model), seeds=seeds)))
 
