@@ -6,6 +6,7 @@
 #   - sim: `python tasks.py check`, 그리고 학습 자료 목록·내부 링크 검사.
 #     check가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다. 여기에 옮겨 적지 않는다.
 #     check의 cad 작업을 위해 OpenSCAD를 먼저 설치한다(#61).
+#   - web: lockfile대로 의존성을 설치하고 축·CSV 검사와 Vite 생산 빌드를 실행한다(#40).
 #   - firmware: PlatformIO 빌드. 빌드할 프로젝트 목록은 아래 matrix.project가 정본이다.
 #   - firmware-all: firmware matrix의 결과를 체크 하나("firmware — 전체")로 모은다(#103).
 # sim job 이름("환경 로딩 + PPO 스모크")은 실제 검사 범위보다 좁다. 이 이름은 required
@@ -15,8 +16,8 @@
 # sim 검사 내용은 tasks.py가 갖고 있고, CI는 `python tasks.py check`를 호출만 한다. 예전엔 PPO
 # 스모크 코드가 tasks.py와 이 파일 양쪽에 복사돼 있어서 "한쪽만 고치지 말 것"이라는 주석으로
 # 버텼는데, 그건 언젠가 어긋난다. 이제 sim 검사의 정본은 tasks.py 하나다.
-# 학습 자료 검사와 펌웨어 빌드는 tasks.py에 없고 이 파일이 직접 돌린다. 로컬에서
-# `python tasks.py check`를 통과해도 이 둘은 따로 확인해야 한다. 명령은 아래 각 단계에 있다.
+# 학습 자료 검사, 웹 검사·빌드, 펌웨어 빌드는 tasks.py에 없고 이 파일이 직접 돌린다. 로컬에서
+# `python tasks.py check`를 통과해도 이 셋은 따로 확인해야 한다. 명령은 아래 각 단계에 있다.
 name: CI
 
 on:
@@ -79,6 +80,31 @@ jobs:
         run: |
           python3 docs/learning/render_catalog.py --check
           python3 docs/learning/check_library.py
+
+  web:
+    name: web — 축 검사 + Vite 빌드
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js 24 설치 + npm 캐시
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: package-lock.json 고정 의존성 설치
+        run: npm ci
+
+      - name: 축·CSV·베인 부호 검사
+        run: npm run check
+
+      - name: Vite 생산 빌드
+        run: npm run build
 
   firmware:
     # 2026-09-19: Arduino IDE -> PlatformIO 전환하면서 추가. 예전엔 펌웨어가 실제로
