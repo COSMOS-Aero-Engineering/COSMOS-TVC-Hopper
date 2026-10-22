@@ -145,4 +145,3 @@ renderer.setAnimationLoop(() => {
   controls.update();
   renderer.render(scene, camera);
 });
-const = webCiSyntaxFailure;
