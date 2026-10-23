@@ -1146,7 +1146,9 @@ TASKS = {t.name: t for t in [
          " 확인 (#139, #140, #196, #197)", task_kicadver,
          inputs=["kicad/_tools/*.py", "kicad/cosmos-avionics/*.kicad_sch",
                  "kicad/cosmos-avionics/*.kicad_pro", "kicad/cosmos-avionics/*.kicad_pcb",
-                 "test_kicad_version.py", "test_netlist.py", "kicad/reports/2026-10-19/netlist.xml"]),
+                  "test_kicad_version.py", "test_netlist.py",
+                  "kicad/reports/2026-10-19/netlist.xml",
+                  "kicad/reports/2026-10-19/erc.json"]),
     Task("agentsref", "다른 문서가 쓴 AGENTS.md 절 이름이 AGENTS.md 제목에 있는지 확인 (#183)",
          task_agentsref, inputs=AGENTS_REF_SCAN),
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
