@@ -533,6 +533,16 @@ def task_yaw():
     uv_run(["python", "yaw_check.py"], cwd=STAGE1)
 
 
+def task_ledger():
+    """params-ledger.md의 대장 표가 params.yaml의 잎 키를 모두 담는지 본다(#267).
+
+    PyYAML이 줄 번호를 알려 줘서 sim 쪽 스크립트로 두고 .venv에서 돌린다. 이 파이썬에는 PyYAML이 없다.
+    userpath 작업과 같은 이유로 검사기의 단위 검사(test_ledger_check.py)를 먼저 돌린다.
+    """
+    uv_run(["python", "-m", "unittest", "-q", "test_ledger_check"], cwd=STAGE1)
+    uv_run(["python", "ledger_check.py"], cwd=STAGE1)
+
+
 def task_smoke():
     uv_run(["python", "-c", SMOKE], cwd=STAGE1)
 
@@ -1117,6 +1127,10 @@ TASKS = {t.name: t for t in [
     Task("yaw", "요 축 검사 - 토크·회전자 항·스로틀 변화율·서보 손계산 + 요 PD 200 seed × 6조건(스로틀 고정·계단, 회전자 항 끔·켬) (#65, #86, #120, #161)",
          task_yaw,
          inputs=SIM_IN, uses_env=True),
+    Task("ledger", "params-ledger.md 대장 표가 params.yaml의 잎 키를 모두 담는지 확인 (#267)", task_ledger,
+         inputs=["sim/sim_stage1/params.yaml", "sim/sim_stage1/params-ledger.md",
+                 "sim/sim_stage1/ledger_check.py", "sim/sim_stage1/test_ledger_check.py", *DEPS_IN],
+         uses_env=True),
     Task("smoke", "SB3-환경 연결 확인 (256스텝, 학습 아님)", task_smoke, inputs=SIM_IN,
          uses_env=True, needs_torch=True),
     Task("connectome", "커넥톰 그래프 생성 (합성 + 셔플 대조군)", task_connectome,
@@ -1152,7 +1166,7 @@ TASKS = {t.name: t for t in [
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
          " 단계 목록은 graph)", task_check,
          deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "agentsref", "cad",
-               "vcruntime", "compile", "sanity", "gate", "yaw", "smoke", "conncheck"]),
+               "vcruntime", "compile", "ledger", "sanity", "gate", "yaw", "smoke", "conncheck"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True, needs_torch=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
