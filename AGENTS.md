@@ -51,7 +51,7 @@ Claude Code, Codex, OpenCode 등 어떤 도구를 쓰든 이 규칙을 먼저 �
 
 **남의 브랜치**: 권한자가 요청하면 다른 사람의 브랜치나 PR에도 커밋을 더할 수 있다. 새 커밋만 더하고, 푸시 전에 원격 브랜치의 최신 커밋을 확인해서 남이 먼저 푸시한 커밋을 덮지 않는다.
 
-**CI**(`.github/workflows/ci.yml`): sim 검사(`python tasks.py check`, OpenSCAD를 설치해서 CAD 검증 echo도 본다, #61)·학습 자료 링크 검사, 웹 축·CSV 검사와 Vite 빌드, 펌웨어 4종(`imu_test`, `imu_test_i2c`, `throttle_serial`, `servo_bench`) PlatformIO 빌드. `firmware — 전체` job이 펌웨어 빌드 결과를 체크 하나로 모은다. main 룰셋의 required status check로 쓰는 이름은 `sim — 환경 로딩 + PPO 스모크`와 `firmware — 전체`다. 이 이름을 바꾸는 순서는 ci.yml의 sim job 주석에 있다(#103).
+**CI**(`.github/workflows/ci.yml`): sim 검사(`python tasks.py check`, OpenSCAD를 설치해서 CAD 검증 echo도 본다, #61)·학습 자료 링크 검사, 웹 축·CSV 검사와 Vite 빌드, 펌웨어 5종(`imu_test`, `imu_test_i2c`, `throttle_serial`, `servo_bench`, `rc_bench`) PlatformIO 빌드. `firmware — 전체` job이 펌웨어 빌드 결과를 체크 하나로 모은다. main 룰셋의 required status check로 쓰는 이름은 `sim — 환경 로딩 + PPO 스모크`와 `firmware — 전체`다. 이 이름을 바꾸는 순서는 ci.yml의 sim job 주석에 있다(#103).
 
 PR을 거치는 이유는 [`docs/decisions.md`](docs/decisions.md#왜-pr을-거치나-2026-09-18)에 있다.
 

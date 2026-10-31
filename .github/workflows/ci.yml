@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [imu_test, imu_test_i2c, throttle_serial, servo_bench]
+        project: [imu_test, imu_test_i2c, throttle_serial, servo_bench, rc_bench]
     steps:
       - uses: actions/checkout@v4
 
