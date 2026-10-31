@@ -20,6 +20,8 @@ npm run dev
 - `src/csv.js`: CSV 계약(02 문서 §4)을 헤더 이름으로 읽는다.
 - `src/hopper.js`: `cad/hopper_params.scad` 치수로 만든 프리미티브 호퍼.
 - `src/main.js`: 장면과 재생.
+- `thrust.html`, `src/thrust.js`, `src/thrust_csv.js`: 실험 A 추력 곡선 화면(#254). 헤더의 `추력 곡선 (실험 A)` 링크나 `/thrust.html`로 연다. CSV를 열면 스로틀(%) 대 추력(gf), 스로틀(%) 대 전류(A)를 Chart.js로 그린다. 컬럼이 없으면 이유를 보이고, 읽지 못한 줄은 줄 번호와 함께 경고로 보인다. `vite.config.js`가 두 화면을 같이 빌드한다.
+- `examples/`: 추력 곡선 예제 CSV. 값은 합성이고 실측이 아니다. `npm run check`가 `tools/check_thrust.mjs`로 읽기와 경고 줄 번호를 검사한다.
 - `public/samples/`: 예제 CSV. `axis-test.csv`는 `python tools/make_axis_test_csv.py`로 다시 만든다. 시뮬레이션 CSV는 `sim/sim_stage1/export_episode.py`로 만든다.
 
 버전은 `package.json`에 정확히 고정하고 `package-lock.json`을 커밋한다. 버전을 바꾸려면 `npm install 패키지@버전 --save-exact`.

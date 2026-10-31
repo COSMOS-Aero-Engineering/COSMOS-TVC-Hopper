@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COSMOS 추력 곡선</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/thrust.css" />
+  </head>
+  <body>
+    <header>
+      <strong>COSMOS 추력 곡선 (실험 A)</strong>
+      <a href="/">3D 뷰어</a>
+      <label class="file">CSV 열기 <input id="file" type="file" accept=".csv" /></label>
+      <select id="sample" aria-label="예제 CSV">
+        <option value="">예제 선택</option>
+      </select>
+      <span id="status" role="status">CSV를 열거나 예제를 고른다</span>
+    </header>
+    <section id="warnings" hidden aria-labelledby="warnings-title">
+      <h2 id="warnings-title"></h2>
+      <ul id="warning-list"></ul>
+    </section>
+    <section id="charts" class="charts">
+      <figure>
+        <figcaption>스로틀 대 추력</figcaption>
+        <div class="chart-box"><canvas id="chart-thrust" role="img" aria-label="스로틀(%) 대 추력(gf) 그래프"></canvas></div>
+      </figure>
+      <figure>
+        <figcaption>스로틀 대 전류</figcaption>
+        <div class="chart-box"><canvas id="chart-current" role="img" aria-label="스로틀(%) 대 전류(A) 그래프"></canvas></div>
+      </figure>
+    </section>
+    <script type="module" src="/src/thrust.js"></script>
+  </body>
+</html>

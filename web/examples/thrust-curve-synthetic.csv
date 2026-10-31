@@ -1,0 +1,13 @@
+# 합성 예제(synthetic): 형식 확인용 가짜 값이다. 실측이 아니다. 해석에 쓰지 않는다.
+timestamp,throttle_pct,thrust_g,current_A,voltage_V,notes
+0,0,0,0.9,22.14,synthetic
+5,10,14,1.26,22.11,synthetic
+10,20,42,1.47,22.1,synthetic
+15,30,103,2.27,22.04,synthetic
+20,40,173,3.61,21.95,synthetic
+25,50,277,6.0,21.78,synthetic
+30,60,392,9.37,21.54,synthetic
+35,70,542,14.26,21.2,synthetic
+40,80,702,20.61,20.76,synthetic
+45,90,892,28.92,20.18,synthetic
+50,100,1097,39.17,19.46,synthetic

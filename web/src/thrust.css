@@ -1,0 +1,19 @@
+/* 추력 곡선 화면. 색 변수는 style.css 것을 쓴다. */
+body { overflow: auto; }
+header a { color: inherit; }
+#warnings {
+  margin: 12px 16px 0;
+  padding: 8px 16px;
+  background: var(--panel);
+  border: 2px solid #b45309;
+  border-radius: 4px;
+}
+#warnings[hidden] { display: none; }
+#warnings h2 { font-size: 14px; margin: 4px 0; }
+#warnings ul { margin: 4px 0 8px; padding-left: 20px; max-height: 180px; overflow: auto; }
+#warnings .line { font-variant-numeric: tabular-nums; font-weight: 600; }
+.charts { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; min-height: 0; }
+.charts figure { margin: 0; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; display: flex; flex-direction: column; min-width: 0; }
+.charts figcaption { font-weight: 600; margin-bottom: 8px; }
+.chart-box { position: relative; flex: 1; min-height: 320px; }
+@media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
