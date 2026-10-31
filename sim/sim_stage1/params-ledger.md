@@ -99,4 +99,4 @@
 
 실측 이슈가 닫히거나 결과 댓글이 오면 그 이슈 번호(예: `#244`)로 이 문서를 검색해서 "실측 이슈" 열에 그 번호가 있는 행을 모두 찾는다. 행마다 첫 열의 키를 `params.yaml`에서 열고 값과 같은 블록의 주석을 고친다. 주석의 PLACEHOLDER 표시와 "실측 필요" 문구도 지운다. 같이 바뀌는 키를 확인한다: `vane_geometry`를 바꾸면 `CLalpha`를 `params.yaml:43`의 식으로 다시 계산하고, `Kf`를 바꾸면 `omega_t_per_throttle`도 함께 본다. `rotor.inertia`, `rotor.omega_max`, `rotor.tau`를 바꾸면 `domain_rand`의 같은 이름 `_range`가 새 값을 품는지 본다. 그다음 이 표의 값, 상태(`실측`), 근거(`data/` 파일 경로)를 고친다. PLACEHOLDER 목록이 있는 `sim/README.md`의 `params.yaml` 행과 `hopper_aviary.py` 첫 docstring도 맞춘다. 마지막으로 `python tasks.py check`를 돌려 통과를 확인한다.
 
-`params.yaml`에 키를 더하거나 지우면 이 표에도 행을 더하거나 지운다. 이 일을 검사로 막는 작업은 #267이다.
+`params.yaml`에 키를 더하거나 지우면 이 표에도 행을 더하거나 지운다. 표를 고치지 않으면 `python tasks.py check`의 `ledger` 작업이 빠진 키와 표에만 있는 키를 `파일:줄`로 출력하고 실패한다(#267). 이 작업은 `## 대장` 절 표의 첫 열 키만 본다. 값, 출처 상태, 이슈 번호는 보지 않는다.
