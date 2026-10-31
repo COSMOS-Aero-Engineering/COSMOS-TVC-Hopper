@@ -57,7 +57,7 @@
 | `servo.enabled` | false | - | 설정 | `params.yaml:68` | 해당 없음: 스위치. 켤지는 #203에서 정한다 |
 | `servo.tau` | 0.05 | s | 추정 | `params.yaml:69-70`. tvc-retro-propulsion 추정값. 03 문서 §5의 20-60 ms 안 | #202 |
 | `servo.rate_max_dps` | 600.0 | deg/s | 데이터시트 | `params.yaml:71-73`. TowerPro MG90S 0.10 s/60°(4.8 V, 무부하) | #202(부하 속도) |
-| `servo.deadband_deg` | 0.45 | deg | 데이터시트 | `params.yaml:74-75`. Waveshare MG90S 5 µs × 가정 0.09°/µs | #202(데드밴드), #243(°/µs, SG90 기준) |
+| `servo.deadband_deg` | 0.45 | deg | 추정 | `params.yaml:74-75`. Waveshare MG90S 판매 사양 5 µs(데이터시트)에 가정 0.09°/µs를 곱한 값 | #202(데드밴드), #243(°/µs, SG90 기준) |
 
 ### 추력과 스로틀
 
@@ -69,7 +69,7 @@
 
 ### 도메인 랜덤화 (`domain_rand`)
 
-`params.yaml:107-110`대로 이 블록은 실측 뒤에도 그대로 둔다. 범위는 명목값을 품어야 한다(`hopper_aviary.py`가 회전자 범위를 검사한다).
+`params.yaml:107-110`대로 이 블록은 실측 뒤에도 끄지 않는다. 비율(±) 폭은 명목값을 따라 움직여서 실측 뒤에도 그대로 쓸 수 있다. 회전자 범위 3개(`rotor_*_range`)는 [아래, 위] 절댓값이다. 명목값이 범위 밖으로 나가면 `hopper_aviary.py:295-298`이 `ValueError`를 낸다. 그래서 `rotor.*` 명목값을 실측으로 바꿀 때 이 범위도 같이 고친다.
 
 | 키 | 값 | 단위 | 상태 | 근거 | 실측 이슈 |
 |---|---|---|---|---|---|
@@ -81,9 +81,9 @@
 | `domain_rand.vane_arm_r_range` | 0.25 | 비율(±) | 설정 | `params.yaml:117`. 허브 차폐로 압력중심이 바깥으로 갈 가능성을 덮는다(#34) | 해당 없음: 랜덤화 폭. #118 결과를 보고 폭을 다시 볼 수 있다 |
 | `domain_rand.Kf_range` | 0.2 | 비율(±) | 설정 | `params.yaml:118`. 모터 개체차·배터리 전압 편차 근사 | 해당 없음: 랜덤화 폭 |
 | `domain_rand.cg_offset_mm` | 3.0 | mm(축당) | 설정 | `params.yaml:119-121`. 01 문서 §8.2 횡 CG 목표 ≤ 3 mm | 해당 없음: 랜덤화 폭. 실제 횡 CG 편차는 #261이 잰다 |
-| `domain_rand.rotor_inertia_range` | [5.0e-6, 3.5e-5] | kg·m² | 설정 | `params.yaml:126`. `modelling-notes-ch3.md` §3의 추정 범위 | 해당 없음: 랜덤화 폭. 명목값은 #119 |
-| `domain_rand.rotor_omega_max_range` | [3100.0, 4000.0] | rad/s | 설정 | `params.yaml:127` | 해당 없음: 랜덤화 폭. 명목값은 #119 |
-| `domain_rand.rotor_tau_range` | [0.03, 0.15] | s | 설정 | `params.yaml:128` | 해당 없음: 랜덤화 폭. 명목값은 #264 |
+| `domain_rand.rotor_inertia_range` | [5.0e-6, 3.5e-5] | kg·m² | 설정 | `params.yaml:126`. `modelling-notes-ch3.md` §3의 추정 범위 | 해당 없음: 랜덤화 폭. #119로 `rotor.inertia`를 바꿀 때 범위도 같이 고친다 |
+| `domain_rand.rotor_omega_max_range` | [3100.0, 4000.0] | rad/s | 설정 | `params.yaml:127` | 해당 없음: 랜덤화 폭. #119로 `rotor.omega_max`를 바꿀 때 범위도 같이 고친다 |
+| `domain_rand.rotor_tau_range` | [0.03, 0.15] | s | 설정 | `params.yaml:128` | 해당 없음: 랜덤화 폭. #264로 `rotor.tau`를 바꿀 때 범위도 같이 고친다 |
 
 ### EDF 회전자 (`rotor`)
 
@@ -97,6 +97,6 @@
 
 ## 실측 결과가 들어오면
 
-실측 이슈가 닫히거나 결과 댓글이 오면 그 이슈 번호(예: `#244`)로 이 문서를 검색해서 "실측 이슈" 열에 그 번호가 있는 행을 모두 찾는다. 행마다 첫 열의 키를 `params.yaml`에서 열고 값과 같은 블록의 주석을 고친다. 주석의 PLACEHOLDER 표시와 "실측 필요" 문구도 지운다. 같이 바뀌는 키를 확인한다: `vane_geometry`를 바꾸면 `CLalpha`를 `params.yaml:43`의 식으로 다시 계산하고, `Kf`를 바꾸면 `omega_t_per_throttle`도 함께 본다. 그다음 이 표의 값, 상태(`실측`), 근거(`data/` 파일 경로)를 고친다. PLACEHOLDER 목록이 있는 `sim/README.md`의 `params.yaml` 행과 `hopper_aviary.py` 첫 docstring도 맞춘다. 마지막으로 `python tasks.py check`를 돌려 통과를 확인한다.
+실측 이슈가 닫히거나 결과 댓글이 오면 그 이슈 번호(예: `#244`)로 이 문서를 검색해서 "실측 이슈" 열에 그 번호가 있는 행을 모두 찾는다. 행마다 첫 열의 키를 `params.yaml`에서 열고 값과 같은 블록의 주석을 고친다. 주석의 PLACEHOLDER 표시와 "실측 필요" 문구도 지운다. 같이 바뀌는 키를 확인한다: `vane_geometry`를 바꾸면 `CLalpha`를 `params.yaml:43`의 식으로 다시 계산하고, `Kf`를 바꾸면 `omega_t_per_throttle`도 함께 본다. `rotor.inertia`, `rotor.omega_max`, `rotor.tau`를 바꾸면 `domain_rand`의 같은 이름 `_range`가 새 값을 품는지 본다. 그다음 이 표의 값, 상태(`실측`), 근거(`data/` 파일 경로)를 고친다. PLACEHOLDER 목록이 있는 `sim/README.md`의 `params.yaml` 행과 `hopper_aviary.py` 첫 docstring도 맞춘다. 마지막으로 `python tasks.py check`를 돌려 통과를 확인한다.
 
 `params.yaml`에 키를 더하거나 지우면 이 표에도 행을 더하거나 지운다. 이 일을 검사로 막는 작업은 #267이다.
