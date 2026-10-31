@@ -30,6 +30,7 @@
 | `firmware/cosmos/imu_test_i2c/` | BNO085 4선 I2C 브링업 | 10/15 실물 확인 |
 | `firmware/cosmos/imu_test/` | BNO085 SPI(최종 핀맵) | 빌드만 확인 |
 | `firmware/cosmos/throttle_serial/` | DShot 벤치 펌웨어 | ESC 없이 확인 |
+| `firmware/cosmos/rc_bench/` | RC 수신기 PWM 5채널 읽기와 킬 채널 스로틀 0 보고(브링업 P3). 모터 출력 없음 | 빌드만 확인 |
 | `firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 원본(MIT). 통합 펌웨어의 출발점 | 손대지 않음 |
 | `firmware/singlecopter.param.md` | ArduPilot SingleCopter 대안 경로 | 보존 |
 | `sim/sim_stage1/` | Stage 1 환경(`hopper_aviary.py`, 관측 7·행동 5), `params.yaml`, `train.py`, `export_episode.py` | #21 베인 제어력 정정(CL 기하 인자·`vane_arm_l`, PR #35). 값은 아직 추정값 |

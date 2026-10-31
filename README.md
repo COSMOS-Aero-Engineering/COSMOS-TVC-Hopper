@@ -148,7 +148,7 @@ PR #10에서 10 N 정적추력을 기준으로 역산한 **잠정값 `1.1e-6`**�
 4. **로컬 검사와 CI가 모두 통과해야 승인 대상이다.** PR 전에 `python tasks.py check`를 실행하고,
    웹 변경은 `web/`에서 `npm ci`, `npm run check`, `npm run build`도 실행한다. GitHub의 sim 검사,
    `web — 축 검사 + Vite 빌드`, `firmware — 전체` 검사가 초록불인지 확인한다. `firmware — 전체`는
-   PlatformIO 펌웨어 빌드 3개(`imu_test`, `imu_test_i2c`, `throttle_serial`)가 모두 성공해야 초록불이 된다.
+   PlatformIO 펌웨어 빌드 4개(`imu_test`, `imu_test_i2c`, `throttle_serial`, `rc_bench`)가 모두 성공해야 초록불이 된다.
    펌웨어 빌드 목록의 정본은 `.github/workflows/ci.yml`의 `matrix.project`다.
 5. **리뷰와 머지 권한은 김민찬·김준원 두 사람에게만 있다.** 두 사람은 CI가 초록불인 것을 확인하고
    변경사항을 직접 검토한 뒤 본인이 올린 PR도 스스로 머지할 수 있다. 그 외 부원은 두 사람 중 한 명의
@@ -242,7 +242,7 @@ gh pr create --base main --reviewer junwonkim07
 | `data/` | 실험 로그 (CSV) |
 | `tasks.py` | 작업 실행기 — 작업 순서와 입력 해시 캐시. 인자 없이 실행하면 목록 |
 | `pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 고정본 (`sim/pyproject.toml`이 sim 의존성 정본) |
-| `.github/workflows/` | CI — PR마다 sim 검사 + PlatformIO 펌웨어 3종 빌드 |
+| `.github/workflows/` | CI — PR마다 sim 검사 + PlatformIO 펌웨어 4종 빌드 |
 
 ## 라이선스 / 출처
 
