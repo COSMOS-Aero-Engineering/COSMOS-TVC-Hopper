@@ -1,6 +1,6 @@
 # PRJ-01 TVC 호퍼 — 시뮬레이션 물리 파라미터
 # ⚠️ "PLACEHOLDER" 표시된 값은 전부 임시값. 실측/실험 데이터 나오면 이 파일만 교체하면
-#    sim/hopper_aviary.py 코드는 손대지 않아도 됨 (일부러 그렇게 분리해둠).
+#    sim/hopper_aviary.py 코드는 손대지 않아도 됨 (일부러 그렇게 분리해둠). 키별 출처·실측 이슈는 params-ledger.md(#255).
 
 # --- 질량 특성 ---
 mass: 0.735          # kg, PLACEHOLDER — 01-avionics-integration-final.md §8.1 AUW 추정(마스터 §5.1의 660 g은 합계 오류). 조립 후 저울 실측 필요. Stage 1 자세 동역학은 이 값을 안 쓴다. hopper_aviary.hover_throttle()이 호버 스로틀(명목 0.853)을 계산할 때만 쓴다(#204)
