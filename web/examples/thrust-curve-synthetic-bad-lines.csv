@@ -1,0 +1,14 @@
+# 합성 예제(synthetic): 경고 표시 확인용. 일부러 잘못된 줄을 넣었다. 실측이 아니다.
+timestamp,throttle_pct,thrust_g,current_A,voltage_V,notes
+0,0,0,0.9,22.2,synthetic
+5,10,11,1.6,22.1,synthetic
+10,20,44,2.9,22.1,synthetic
+15,30,abc,4.1,22.0,synthetic: thrust_g가 숫자가 아님
+20,40,176,6.8,21.9,synthetic
+
+30,60,396,13.1,21.4,synthetic
+35,70,539,19.5,21.0,synthetic
+40,80,704 # 칸이 모자란 줄(synthetic)
+45,90,891,34.0,20.0,synthetic
+50,100,1100,,19.7,synthetic: current_A가 빈 칸
+55,130,1500,45.0,19.0,synthetic: throttle_pct가 100 초과
