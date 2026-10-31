@@ -2,7 +2,8 @@
 // 컬럼은 순서가 아니라 헤더 이름으로 찾는다. 화면에 쓰는 것은 throttle_pct, thrust_g, current_A 셋이다.
 // 줄 번호는 파일의 실제 줄(1부터)이다. `#`로 시작하는 줄과 빈 줄은 읽지 않지만 줄 번호에는 센다.
 // 쓰지 못한 줄은 조용히 버리지 않고 warnings에 줄 번호와 이유를 남긴다.
-// 칸 안에 줄바꿈이 있는 따옴표 칸(notes)은 지원하지 않는다. 그런 줄은 칸 수 경고로 드러난다.
+// 칸 안에 줄바꿈이 있는 따옴표 칸(notes)은 지원하지 않는다. 따옴표가 열린 채 이어지는 줄은 모두 경고로 드러내고
+// 그리지 않는다. 줄 하나만 읽으면 칸 속 글자가 별개의 측정 줄로 보일 수 있기 때문이다.
 import Papa from 'papaparse';
 
 export const REQUIRED = ['throttle_pct', 'thrust_g', 'current_A'];
@@ -21,17 +22,24 @@ function num(v) {
 //   dataLines: 읽으려고 시도한 데이터 줄 수(경고 줄 포함)
 export function parseThrust(text) {
   const lines = text.replace(/^﻿/, '').split(/\r\n|\n|\r/);
+  if (lines[lines.length - 1] === '') lines.pop(); // 끝 줄바꿈 뒤의 빈 조각은 줄이 아니다
   const warnings = [];
   let header = null;
   let headerLine = 0;
   const points = [];
   let dataLines = 0;
+  let quoteOpen = false; // 앞 줄에서 연 따옴표가 아직 닫히지 않았다
 
   for (let i = 0; i < lines.length; i += 1) {
     const lineNo = i + 1;
     const raw = lines[i];
-    if (raw.trim() === '' || raw.trimStart().startsWith('#')) continue;
-    const cells = Papa.parse(raw, { header: false }).data[0] ?? [];
+    const continued = quoteOpen;
+    if (!continued && (raw.trim() === '' || raw.trimStart().startsWith('#'))) continue;
+    // 따옴표는 짝으로 닫히고 칸 안의 따옴표는 두 개로 쓰므로, 줄 안 따옴표 개수가 홀수면 열림 상태가 바뀐다.
+    const odd = (raw.match(/"/g) ?? []).length % 2 === 1;
+    if (odd) quoteOpen = !quoteOpen;
+    const parsed = Papa.parse(raw, { header: false });
+    const cells = parsed.data[0] ?? [];
 
     if (header === null) {
       header = cells.map((h) => h.trim());
@@ -42,6 +50,14 @@ export function parseThrust(text) {
     }
 
     dataLines += 1;
+    if (continued || odd) {
+      warnings.push({ line: lineNo, message: '따옴표 칸이 줄을 넘어간다(칸 안 줄바꿈은 지원하지 않는다). 이 줄은 그리지 않았다.' });
+      continue;
+    }
+    if (parsed.errors.length) {
+      warnings.push({ line: lineNo, message: `CSV 문법 오류: ${parsed.errors[0].message}. 이 줄은 그리지 않았다.` });
+      continue;
+    }
     if (cells.length !== header.length) {
       warnings.push({ line: lineNo, message: `칸이 ${cells.length}개다(헤더 ${headerLine}줄은 ${header.length}개). 이 줄은 그리지 않았다.` });
       continue;

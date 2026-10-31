@@ -38,5 +38,17 @@ check(parseThrust('').missing.length === 3, '빈 파일: 필수 컬럼 3개 없�
 const crlf = parseThrust('﻿throttle_pct,thrust_g,current_A\r\n10,5,1\r\n');
 check(crlf.points.length === 1 && crlf.warnings.length === 0, 'BOM + CRLF 처리');
 
+// 칸 안 줄바꿈: 줄 하나만 읽으면 notes 속 글자가 측정 줄로 보인다. 그리지 않고 줄마다 경고해야 한다.
+const head = 'throttle_pct,thrust_g,current_A,notes\n';
+const multi = parseThrust(`${head}50,500,20,"첫 줄\n60,600,25,이어진 줄"\n70,700,30,ok\n`);
+check(multi.points.length === 1 && multi.points[0].line === 4, `칸 안 줄바꿈: 가짜 점 없이 4줄만 그림 (${multi.points.map((p) => p.line)})`);
+check(multi.warnings.map((w) => w.line).join() === '2,3', `칸 안 줄바꿈: 2,3줄 경고 (${multi.warnings.map((w) => w.line)})`);
+const multi3 = parseThrust(`${head}50,500,20,"a\n60,600,25,b\nc"\n70,700,30,ok\n`);
+check(multi3.points.length === 1 && multi3.warnings.length === 3, `3줄짜리 따옴표 칸: 가운데 줄도 경고 (점 ${multi3.points.length}, 경고 ${multi3.warnings.length})`);
+const quoted = parseThrust(`${head}50,500,20,"a,""b"""\n`);
+check(quoted.points.length === 1 && quoted.warnings.length === 0, '한 줄 안에서 닫힌 따옴표 칸(쉼표와 겹따옴표 포함)은 정상');
+const unclosed = parseThrust(`${head}50,500,20,"닫히지 않음\n`);
+check(unclosed.points.length === 0 && unclosed.warnings.length === 1, '닫히지 않은 따옴표: 경고');
+
 if (failed) { console.log(`\n${failed}개 실패`); process.exit(1); }
 console.log('\n전부 통과');
