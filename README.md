@@ -242,7 +242,7 @@ gh pr create --base main --reviewer junwonkim07
 | `data/` | 실험 로그 (CSV) |
 | `tasks.py` | 작업 실행기 — 작업 순서와 입력 해시 캐시. 인자 없이 실행하면 목록 |
 | `pyproject.toml` · `uv.lock` | 파이썬 워크스페이스 경계와 의존성 고정본 (`sim/pyproject.toml`이 sim 의존성 정본) |
-| `.github/workflows/` | CI — PR마다 sim 검사 + PlatformIO 펌웨어 3종 빌드 |
+| `.github/workflows/` | CI — PR마다 sim 검사 + PlatformIO 펌웨어 4종 빌드 |
 
 ## 라이선스 / 출처
 
