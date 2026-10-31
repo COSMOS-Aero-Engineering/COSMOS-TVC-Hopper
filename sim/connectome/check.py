@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT / "sim" / "sim_stage1"))
 
 from authority import authority  # noqa: E402
 from build_subgraph import build_synthetic  # noqa: E402
-from evaluate import run_episodes  # noqa: E402
+from evaluate import episode_metrics, run_episodes  # noqa: E402
 from graph import ConnectomeGraph  # noqa: E402
 from hopper_aviary import HopperAttitudeEnv  # noqa: E402
 from policy import ConnectomeExtractor, make_policy_kwargs  # noqa: E402
@@ -122,6 +122,20 @@ def main() -> int:
     check("평가 지표가 전부 유한",
           all(np.isfinite(v) for v in m.values() if isinstance(v, (int, float))),
           f"보상 {m['mean_reward']:.1f} · 복원 {m['settle_s']:.2f}s · 추락 {m['crash_rate']:.0%}")
+
+    # 손계산 기록(#266): 롤 10°에서 시작해 -3°까지 넘어갔다가 0.5°로 끝난다. dt 0.1 s, 기록 11점.
+    deg = np.deg2rad
+    roll = [10, 6, 2, -1, -3, -2, -1, 0.5, 0.5, 0.5, 0.5]
+    em = episode_metrics(np.column_stack([deg(roll), np.zeros(len(roll))]), dt=0.1)
+    # 0 넘음 3/10 = 0.3, 초기값 초과 0(10°를 넘은 적 없음), 2° 초과의 마지막 점은 4번(-3°)이라 복원 0.5 s,
+    # 마지막 20 %는 int(11*0.8)=8번부터 3점, 평균 0.5°.
+    check("평가 지표 손계산 (0 넘음 0.3, 초기값 초과 0, 복원 0.5 s, 정상오차 0.5°)",
+          np.isclose(em["overshoot_cross"], 0.3) and np.isclose(em["overshoot"], 0.0)
+          and np.isclose(em["settle_s"], 0.5) and np.isclose(em["steady_err_deg"], 0.5)
+          and not em["censored"], f"{em}")
+    # 롤·피치 대각선(같은 방향)으로 시작해도 투영이 같은 값을 내야 한다.
+    diag = np.column_stack([deg(roll), deg(roll)]) / np.sqrt(2)
+    check("0 넘음은 기울기 방향에 상관없다", np.isclose(episode_metrics(diag, 0.1)["overshoot_cross"], 0.3))
 
     print("\n7) 제어권한 진단 (과제가 풀 수 있는 것인가)")
     auth = authority()
