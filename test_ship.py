@@ -535,6 +535,7 @@ class CmdReviewTest(unittest.TestCase):
                 mock.patch.object(ship, "review_records", return_value=records), \
                 mock.patch.object(ship, "logged_in", side_effect=logged), \
                 mock.patch.object(ship, "opencode_model", return_value="opencode/mimo-free"), \
+                mock.patch.object(ship, "opencode_flags", return_value=[]), \
                 mock.patch.object(ship, "codex_conflicting_config", return_value=conflict), \
                 mock.patch.object(ship, "venv_problem", self.venv_check), \
                 redirect_stdout(out), self.assertRaises(SystemExit):
@@ -796,11 +797,47 @@ class OpenCodeIsolationTest(unittest.TestCase):
                 mock.patch.object(ship, "review_records", return_value=(None, "no PR")), \
                 mock.patch.object(ship, "opencode_env", return_value=env), \
                 mock.patch.object(ship, "opencode_model", return_value="opencode/mimo-free") as model, \
+                mock.patch.object(ship, "opencode_flags", return_value=[]) as flags, \
                 redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as stop:
             ship.cmd_review(argparse.Namespace(author="claude", base="origin/main"))
         self.assertEqual(stop.exception.code, 0)
+        self.assertIs(flags.call_args.args[0], env)
         self.assertIs(model.call_args.kwargs["env"], env)
         self.assertIs(review.call_args.args[2], env)
+
+    def flags_for(self, version_output):
+        with mock.patch.object(ship, "ensure_opencode"), \
+                mock.patch.object(ship, "call",
+                                  return_value=subprocess.CompletedProcess([], 0, version_output, "")) as call:
+            flags = ship.opencode_flags({"XDG_DATA_HOME": "isolated"})
+        self.assertEqual(call.call_args.args[0], ["opencode", "--version"])
+        return flags
+
+    def test_v2_runs_without_background_service(self):
+        # #341: 2.x는 개인 백그라운드 서비스를 쓰거나 새로 띄워 남긴다. --standalone이 막는다.
+        # 출력 형식: 1.19.1은 `1.19.1`, 2.2.6은 `opencode v2.2.6`(2026-11-09 서버에서 확인).
+        self.assertEqual(self.flags_for("opencode v2.2.6\n"), ["--standalone"])
+        self.assertEqual(self.flags_for("10.0.0\n"), ["--standalone"])
+        self.assertEqual(self.flags_for("1.19.1\n"), [])
+
+    def test_unreadable_version_stops(self):
+        with redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+            self.flags_for("")
+
+    def test_v2_flags_reach_models_and_run(self):
+        env = {"XDG_DATA_HOME": "isolated"}
+        models = subprocess.CompletedProcess([], 0, "opencode/mimo-free", "")
+        with mock.patch.object(ship, "call", return_value=models) as call, \
+                mock.patch.object(ship, "ensure_opencode"), \
+                mock.patch.object(ship, "run_opencode_review", return_value=0) as review, \
+                mock.patch.object(ship, "logged_in", return_value=False), \
+                mock.patch.object(ship, "review_records", return_value=(None, "no PR")), \
+                mock.patch.object(ship, "opencode_env", return_value=env), \
+                mock.patch.object(ship, "opencode_flags", return_value=["--standalone"]), \
+                redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+            ship.cmd_review(argparse.Namespace(author="claude", base="origin/main"))
+        self.assertIn(mock.call(["opencode", "models", "--standalone"], capture=True, env=env), call.mock_calls)
+        self.assertEqual(review.call_args.args[0][:3], ["opencode", "run", "--standalone"])
 
 
 # opencode 1.19.1 로그의 모델 오류 줄(2026-11-08 서버 로그에서 줄였다, #327).

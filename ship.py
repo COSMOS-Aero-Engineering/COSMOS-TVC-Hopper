@@ -508,9 +508,27 @@ def opencode_env():
     return env
 
 
-def opencode_model(author, env=None):
+def opencode_flags(env=None):
+    """opencode 2.x이면 백그라운드 서비스를 쓰지 않게 하는 인자를 돌려준다(#341).
+
+    2.x `models`는 백그라운드 서비스(`opencode serve --service`)를 띄우고 끝난 뒤에도 남긴다. `run`은
+    떠 있는 서비스가 있으면 그것을 쓴다. 서비스는 XDG_STATE_HOME/opencode/service.json으로 찾는다.
+    opencode_env()는 XDG_DATA_HOME만 바꾸므로, 개인 서비스가 떠 있으면 리뷰가 개인 데이터 폴더에 쌓인다
+    (2026-11-09 2.2.6으로 확인). `--standalone`은 명령마다 자기 서버를 자식으로 띄우고, 명령이 끝나면
+    그 서버도 끝난다. 1.x에는 백그라운드 서비스가 없으므로 인자를 붙이지 않는다.
+    """
     ensure_opencode()
-    models = call(["opencode", "models"], capture=True, env=env).stdout.split()
+    out = call(["opencode", "--version"], capture=True, env=env).stdout
+    m = re.search(r"(\d+)\.\d+", out)  # 1.x는 `1.19.1`, 2.x는 `opencode v2.2.6`을 출력한다.
+    if not m:
+        die(f"opencode 버전을 읽지 못했다: {out.strip()!r}\n"
+            "     `opencode --version`이 버전을 출력하는지 확인한다.")
+    return ["--standalone"] if int(m.group(1)) >= 2 else []
+
+
+def opencode_model(author, env=None, flags=()):
+    ensure_opencode()
+    models = call(["opencode", "models", *flags], capture=True, env=env).stdout.split()
     for f in OPENCODE_REVIEWERS:
         if f == author:
             continue
@@ -993,8 +1011,9 @@ def cmd_review(a):
         reviewer, cmd = "claude", ["claude", "-p", "--permission-mode", "plan", prompt]
     else:
         env = opencode_env()
-        model = opencode_model(author, env=env)
-        reviewer, cmd = model, ["opencode", "run", "--agent", "plan", "-m", model, prompt]
+        flags = opencode_flags(env)  # 2.x는 백그라운드 서비스를 쓰지 않게 한다(#341).
+        model = opencode_model(author, env=env, flags=flags)
+        reviewer, cmd = model, ["opencode", "run", *flags, "--agent", "plan", "-m", model, prompt]
         opencode = True
         print(f"OpenCode 리뷰어가 사용 한도 오류를 받거나 {OPENCODE_REVIEW_LIMIT // 60}분 안에 끝나지 않으면"
               " 멈춘다(#327).", flush=True)

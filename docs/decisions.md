@@ -18,7 +18,7 @@
 
 - 2.x는 사용 한도 오류를 받으면 `run`이 약 2초 만에 exit 1로 끝나고 원인을 출력한다. 1.x에서는 PR #336의 로그 감시가 약 7초 만에 리뷰어를 멈춘다. 올려서 얻는 것은 몇 초뿐이다.
 - 2.x는 npm 패키지가 `@opencode/cli`로 바뀌었다. `opencode-ai`와 명령 이름 `opencode`가 같다. 올리려면 부원 PC의 1.x를 지우고 바꿔야 한다. 2.0은 서버 API와 플러그인도 바꿨다.
-- 2.x `opencode models`는 백그라운드 서비스를 띄우고 끝난 뒤에도 남긴다. 서비스 위치는 `XDG_STATE_HOME/opencode/service.json`이다. `run`은 떠 있는 서비스가 있으면 그것을 쓴다. `ship.py`는 `XDG_DATA_HOME`만 분리하므로(#56) 개인 서비스와 섞일 수 있다. 막으려면 `--standalone`이 필요하다(#341).
+- 2.x `opencode models`는 백그라운드 서비스를 띄우고 끝난 뒤에도 남긴다. 서비스 위치는 `XDG_STATE_HOME/opencode/service.json`이다. `run`은 떠 있는 서비스가 있으면 그것을 쓴다. `ship.py`는 `XDG_DATA_HOME`만 분리하므로(#56) 개인 서비스와 섞일 수 있다. 그래서 `ship.py`는 2.x이면 `models`와 `run`에 `--standalone`을 붙인다(#341).
 - 2.x로 리뷰가 끝까지 도는지는 사용 한도 때문에 확인하지 못했다. Windows 설치도 확인하지 못했다.
 
 다시 볼 때: npm `opencode-ai`가 더 나오지 않을 때, 또는 opencode 1.x 로그 형식이 바뀌어 사용 한도 오류를 찾지 못할 때.
