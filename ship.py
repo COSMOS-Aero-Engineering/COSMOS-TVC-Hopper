@@ -49,6 +49,8 @@ OPENCODE_REVIEWERS = ("mimo", "muse-spark", "deepseek", "nemotron")
 OPENCODE_REVIEW_LIMIT = 30 * 60
 # 바로 멈출 모델 오류. 무료 모델은 `Free usage limit reached`, OpenCode Go는 `Monthly usage limit reached` 등.
 OPENCODE_QUOTA = re.compile(r"usage limit reached", re.IGNORECASE)
+# 리뷰어를 멈출 때 SIGTERM 뒤에 기다리는 시간(초). 지나면 SIGKILL을 보낸다(stop_tree).
+STOP_GRACE = 10
 # 스킬 정본과 Codex용 복사본. Claude Code는 .claude/skills만, Codex는 .agents/skills만 읽는다(#39).
 SKILLS_SRC = ROOT / ".claude" / "skills"
 SKILLS_DST = ROOT / ".agents" / "skills"
@@ -542,28 +544,38 @@ def stop_tree(proc):
     """proc와 그 자식 프로세스를 멈춘다(#327).
 
     Windows의 npm `opencode.cmd`는 cmd.exe가 opencode.exe를 자식으로 띄운다. proc.kill()은 cmd.exe만
-    멈추므로 `taskkill /T`로 자식까지 멈춘다. POSIX에서는 리뷰어를 새 세션(start_new_session)으로 띄웠으므로
-    그 프로세스 그룹 전체에 SIGTERM을 보낸다. 10초 뒤에도 리뷰어가 끝나지 않으면 그룹에 SIGKILL을 보낸다.
-    리뷰어가 끝난 뒤에는 그룹에 신호를 보내지 않는다. 그 번호를 다른 프로세스가 받을 수 있어서다.
+    멈추므로 `taskkill /T /F`로 자식까지 멈춘다. POSIX에서는 리뷰어를 새 세션(start_new_session)으로
+    띄웠으므로 그 프로세스 그룹 전체에 SIGTERM을 보낸다. 그룹에 프로세스가 남아 있는 동안
+    STOP_GRACE초까지 기다리고, 그 뒤에도 남으면 그룹에 SIGKILL을 보낸다. SIGTERM을 무시하는 자식도
+    멈추려는 것이다. 그룹이 비면 더 보내지 않는다. 빈 그룹의 번호는 다른 프로세스가 받을 수 있다.
     """
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True)
         try:
-            proc.wait(timeout=10)
+            proc.wait(timeout=STOP_GRACE)
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
         return
-    for sig, wait in ((signal.SIGTERM, 10), (signal.SIGKILL, None)):
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except OSError:
+        pass
+    deadline = time.monotonic() + STOP_GRACE
+    while True:
+        proc.poll()  # 끝난 리뷰어를 거둔다. 거두지 않은 리뷰어는 그룹에 남은 것으로 보인다.
         try:
-            os.killpg(proc.pid, sig)
-        except ProcessLookupError:
-            pass
-        try:
-            proc.wait(timeout=wait)
-            return
-        except subprocess.TimeoutExpired:
-            pass
+            os.killpg(proc.pid, 0)  # 신호 0: 그룹에 프로세스가 남았는지만 본다.
+        except OSError:
+            break
+        if time.monotonic() >= deadline:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            break
+        time.sleep(0.1)
+    proc.wait()
 
 
 def run_opencode_review(cmd, input, env, limit=None, poll=1.0):

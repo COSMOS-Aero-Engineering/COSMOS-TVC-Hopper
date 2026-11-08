@@ -901,6 +901,25 @@ class OpenCodeReviewLimitTest(unittest.TestCase):
         time.sleep(1)
         self.assertEqual(beat.read_text(), first)
 
+    @unittest.skipIf(os.name == "nt", "POSIX 프로세스 그룹 검사. Windows는 taskkill /F가 바로 멈춘다.")
+    def test_stop_kills_child_that_ignores_sigterm(self):
+        # 리뷰어가 SIGTERM에 먼저 끝나도 그룹에 남은 자식에게 STOP_GRACE 뒤 SIGKILL을 보낸다.
+        beat = self.dir / "beat.txt"
+        child = ("import signal, time, pathlib\n"
+                 "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                 "for i in range(600):\n"
+                 f"    pathlib.Path({str(beat)!r}).write_text(str(i)); time.sleep(0.1)\n")
+        script = (f"import subprocess; subprocess.Popen([sys.executable, '-c', {child!r}]); "
+                  f"time.sleep(1); log({log_line(QUOTA)!r}); time.sleep(60)")
+        with mock.patch.object(ship, "STOP_GRACE", 1):
+            code, _, took = self.review(script)
+        self.assertEqual(code, 1)
+        self.assertLess(took, 20)
+        time.sleep(1)
+        first = beat.read_text()
+        time.sleep(1)
+        self.assertEqual(beat.read_text(), first)
+
     def test_log_parser_reads_escaped_error_text(self):
         lines = (log_line('AI_APICallError: say "hi"') + log_line(QUOTA, small="true")
                  + "timestamp=x level=INFO message=cleanup\n")
