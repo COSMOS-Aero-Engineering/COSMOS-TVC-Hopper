@@ -776,6 +776,10 @@ def cmd_review(a):
     records, summary = review_records()
     if records is None:
         print(f"[주의] PR·이슈 기록을 리뷰어에게 넘기지 않는다: {summary}", flush=True)
+        # 그래도 빈 입력을 넘긴다(#322). input=None이면 리뷰어가 ship.py의 표준 입력을 물려받는다. 그 입력이
+        # 터미널이 아니고 닫히지 않으면(예: 에이전트의 셸 도구) codex exec가 입력의 끝을 기다리며 멈춘다.
+        # 빈 입력은 바로 닫힌다. codex exec는 빈 입력을 요청 문장에 붙이지 않는다.
+        records = ""
     else:
         print(f"리뷰어에게 표준 입력으로 넘기는 기록: {summary}", flush=True)
     # 리뷰 요청에는 범위만 넣는다(AGENTS.md §작업 순서 6). 힌트나 체크리스트를 넣지 않는다.
