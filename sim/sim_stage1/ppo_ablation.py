@@ -152,8 +152,9 @@ def train(args):
         from stable_baselines3.common.callbacks import CheckpointCallback
         from stable_baselines3.common.logger import configure
         model.set_logger(configure(str(out / "sb3"), ["csv"]))
+        # 관측 정규화 조건은 통계(model_vecnormalize_<스텝>_steps.pkl)도 같이 남긴다. 없으면 체크포인트를 바르게 평가하지 못한다
         callbacks.append(CheckpointCallback(save_freq=CURVE_EVERY, save_path=str(out / "checkpoints"),
-                                            name_prefix="model"))
+                                            name_prefix="model", save_vecnormalize=cfg["vecnormalize"]))
 
     t0 = time.time()
     model.learn(total_timesteps=args.steps, callback=callbacks)
