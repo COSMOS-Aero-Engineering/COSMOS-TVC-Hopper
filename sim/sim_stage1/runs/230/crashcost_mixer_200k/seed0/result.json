@@ -1,0 +1,13 @@
+{
+  "return": -5.84947054208593,
+  "length": 500.0,
+  "crash": 0.0,
+  "median_tilt_deg": 4.574541091918945,
+  "throttle_mean": 1.0,
+  "throttle_zero": 0.0,
+  "condition": "crashcost_mixer",
+  "seed": 0,
+  "train_seed": 10000,
+  "timesteps": 200000,
+  "train_seconds": 267.3
+}

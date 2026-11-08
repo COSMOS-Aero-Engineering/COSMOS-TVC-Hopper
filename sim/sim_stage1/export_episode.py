@@ -31,7 +31,6 @@ from datetime import date
 import numpy as np
 
 from hopper_aviary import N_STATE, OBS_NAMES, HopperAttitudeEnv
-from pd_gate import model_policy
 
 COLUMNS = [
     "t_ms", "source", "mode",
@@ -75,11 +74,11 @@ def make_policy(name, model_path):
     if name == "zero":
         return zero_policy
     try:
-        from stable_baselines3 import PPO
+        from policy_io import load_policy
     except ImportError as e:
         raise SystemExit("--policy ppo 는 stable-baselines3가 필요합니다 (sim/README.md 환경 세팅).") from e
-    model = PPO.load(model_path)
-    return model_policy(model)   # 모델 관측 차원이 환경(7)과 다르면 멈춘다(#201)
+    # 모델 옆 json·정규화 통계도 읽는다(#230). 모델 관측 차원이 환경(7)과 다르면 멈춘다(#201)
+    return load_policy(model_path)
 
 
 def git_commit():

@@ -1,0 +1,107 @@
+# 스로틀 0 지름길을 막은 뒤 PPO 학습 조건 비교 (#230)
+
+## 결론
+
+스로틀을 100 %로 고정하고 1M 스텝 학습하면 PPO가 PD보다 낫다. 조건을 하나씩 더 바꾼 것 중에는 종료 비용(`crashcost`)이 가장 좋았다. 학습 seed 3개 평균 리턴 -1.93, 넘어짐 0 %, 최종 기울기 중앙값 0.7°다. PD는 -4.82, 0 %, 2.5°다.
+
+- 200k 스텝에서는 고정 스로틀만으로 부족하다. 평가 seed의 93.7 %가 넘어진다. 학습 곡선은 약 250k 스텝 뒤에 넘어짐에서 벗어난다.
+- 종료 비용을 더하면 이 시점이 빨라진다. 200k에서 학습 seed 3개 중 2개가 PD보다 낫다. 종료 비용과 3축 믹서를 같이 쓰면 3개 모두 넘어짐 0 %다.
+- 1M 스텝에서는 네 조건(`fixed`, `mixer`, `vecnorm`, `crashcost`)이 모두 PD보다 낫다. 차이는 리턴 0.3 이하다.
+- 저장소에 둔 모델은 `hopper_attitude_ppo_230.zip`(`crashcost`, 1M, 학습 seed 10001)이다.
+
+Stage 1 결과다. 물리 상수는 실험 A 전 임시값이다. 실기 성능으로 해석하지 않는다.
+
+## 조건
+
+모든 조건은 SB3 PPO 기본 하이퍼파라미터(`gamma` 0.99)를 쓴다. 각 조건은 기준 조건에서 한 가지만 바꾼다. 정의는 `ppo_ablation.py` 머리 설명과 `policy_io.py`에 있다.
+
+| 조건 | 기준 | 바꾼 것 |
+|---|---|---|
+| `learned` | - | #230 전 `train.py`. 정책이 베인 4개와 스로틀을 낸다 |
+| `fixed` | `learned` | 스로틀 100 % 고정. 정책은 베인 4개만 낸다 |
+| `mixer` | `fixed` | 롤·피치·요 3축 믹서 행동 |
+| `vecnorm` | `fixed` | 관측만 `VecNormalize`로 정규화 |
+| `crashcost` | `fixed` | 넘어질 때 종료 비용 |
+| `crashcost_mixer` | `crashcost` | 3축 믹서 행동 |
+| `crashcost_vecnorm` | `crashcost` | 관측만 `VecNormalize`로 정규화 |
+
+종료 비용: 넘어진 스텝의 보상 r에 r·γ·(1 - γ^n)/(1 - γ)를 더한다. n은 남은 스텝 수다. 넘어진 상태로 에피소드 끝까지 머문 할인 리턴과 같다. 학습에서만 쓴다. 평가 리턴은 환경 보상 그대로다. 고정 길이 평가 대신 이 방법을 골랐다. 60°를 넘은 뒤 적분을 계속하면 오일러각 특이점(θ = 90°)에 가까워지기 때문이다.
+
+## 결과
+
+평가 seed 0-199, 도메인 랜덤화 켬, 결정적 행동. 학습 seed 3개(10000, 10001, 10002)의 평균 ± 표준편차다.
+
+| 조건 | 학습 스텝 | 평균 리턴 | 넘어짐 | 최종 기울기 중앙값 | 평균 스로틀 | 스로틀 0 비율 |
+|---|---:|---:|---:|---:|---:|---:|
+| PD (kp=8, kd=2) | - | -4.82 | 0.0 % | 2.5° | 1.000 | 0.0 % |
+| `learned` | 200k | -32.66 ± 2.65 | 1.3 ± 1.9 % | 13.6 ± 0.7° | 0.021 ± 0.008 | 59.3 ± 17.4 % |
+| `fixed` | 200k | -16.72 ± 0.19 | 93.7 ± 9.0 % | 61.6 ± 0.2° | 1.000 | 0.0 % |
+| `fixed` | 1000k | -2.21 ± 0.23 | 0.0 % | 0.9 ± 0.1° | 1.000 | 0.0 % |
+| `mixer` | 200k | -13.72 ± 1.79 | 64.0 ± 25.7 % | 34.6 ± 22.4° | 1.000 | 0.0 % |
+| `mixer` | 1000k | -2.11 ± 0.21 | 0.0 % | 0.8 ± 0.1° | 1.000 | 0.0 % |
+| `vecnorm` | 200k | -14.05 ± 2.28 | 82.3 ± 25.0 % | 43.6 ± 25.5° | 1.000 | 0.0 % |
+| `vecnorm` | 1000k | -2.24 ± 0.04 | 0.0 % | 0.8 ± 0.1° | 1.000 | 0.0 % |
+| `crashcost` | 200k | -86.50 ± 118.59 | 32.2 ± 45.5 % | 21.9 ± 28.5° | 1.000 | 0.0 % |
+| `crashcost` | 1000k | **-1.93 ± 0.04** | **0.0 %** | **0.7 ± 0.1°** | 1.000 | 0.0 % |
+| `crashcost_mixer` | 200k | -3.44 ± 1.70 | 0.0 % | 2.3 ± 1.6° | 1.000 | 0.0 % |
+| `crashcost_vecnorm` | 200k | -245.95 ± 345.03 | 0.0 % | 5.7 ± 7.1° | 1.000 | 0.0 % |
+
+실행별 값과 학습 곡선은 `runs/230/<조건>_<스텝>k/seed<k>/`의 `result.json`, `curve.csv`에 있다. 곡선은 50k 스텝마다 곡선용 seed 100000-100019로 평가한 값이다.
+
+- `crashcost` 200k의 평균이 나쁜 이유: 학습 seed 2가 아직 넘어짐을 벗어나지 못했다(리턴 -254.22, 넘어짐 96.5 %). 나머지 둘은 -2.97, -2.32다.
+- `crashcost_vecnorm` 200k의 학습 seed 0은 넘어지지 않지만 리턴이 -733.90이다. 평가 seed 20개에서 에피소드 끝 요각 |ψ| 평균이 3.7 rad였다. 요가 계속 돌아서 0.1·ψ² 비용이 커진 것으로 보인다.
+- `learned`는 학습 seed 3개 모두 스로틀 0 지름길로 갔다(#90과 같다).
+
+## 판정 (#230 할 일)
+
+| 할 일 | 결과 |
+|---|---|
+| 고정 스로틀 200k와 1M | 200k는 넘어짐 93.7 %. 1M은 PD보다 낫다. 학습량이 부족했다 |
+| 베인 4개 독립 vs 3축 믹서 | 200k에서 믹서가 조금 낫다(넘어짐 64.0 % vs 93.7 %). 1M에서는 차이가 표준편차 안이다 |
+| 관측 `VecNormalize` | 200k에서 조금 낫다(82.3 %). 1M에서는 차이가 표준편차 안이다 |
+| 종료 비용 | 넘어짐에서 벗어나는 시점이 빨라진다. 1M에서 가장 좋고 학습 seed 간 차이가 가장 작다 |
+| 학습 seed 3개와 학습 곡선 | 모든 조건 3개. 곡선은 `curve.csv` |
+
+## 저장소 모델 (#277, #318이 쓴다)
+
+`sim/sim_stage1/hopper_attitude_ppo_230.zip`과 `hopper_attitude_ppo_230.json`이다. `crashcost` 조건이라 관측 정규화 통계는 없다. json에 행동 구조(`vanes4`, 스로틀 100 % 고정)가 있다. `pd_gate.py`, `compare_metrics.py`, `export_episode.py`는 `policy_io.load_policy()`로 json을 같이 읽는다.
+
+고른 방법: 1M 실행 12개를 선택용 seed 1000-1199로 평가해 평균 리턴이 가장 높은 것을 골랐다(`ppo_ablation.py select`). 평가 seed 0-199로 고르면 표의 숫자가 고른 쪽으로 치우친다. `crashcost` 학습 seed 1(-1.90)과 `mixer` 학습 seed 0(-1.90)이 같았다. 조건 평균이 더 좋은 `crashcost`를 골랐다.
+
+이 모델의 `compare_metrics.py` 결과(평가 seed 0-199):
+
+| 초기 자세 | 정책 | 넘어짐 | 복원시간 평균(s) | 미복원 | 오버슈트 | 정상오차 |
+|---|---|---:|---:|---:|---:|---:|
+| 학습 분포 | PD | 0.0 % | 3.41 | 129/200 | 8.0 % | 2.40° |
+| 학습 분포 | PPO | 0.0 % | 0.38 | 0/200 | 3.3 % | 0.64° |
+| TC-3(10°) | PD | 0.0 % | 3.38 | 129/200 | 8.7 % | 2.40° |
+| TC-3(10°) | PPO | 0.0 % | 0.31 | 0/200 | 2.5 % | 0.64° |
+
+`--tilt-deg 10 20 30 40`에서도 PPO는 넘어짐 0 %, 미복원 0/200이다. 표는 #318이 낸다.
+
+## 재현
+
+저장소 루트에서 실행한다. 학습 하나는 이 서버(Linux, CPU 코어 1개)에서 200k 약 5분, 1M 약 23분 걸렸다.
+
+```bash
+cd sim/sim_stage1
+# 저장소 모델 다시 만들기
+python ../../ship.py capped 8G -- python ppo_ablation.py train --condition crashcost --seed 1 --steps 1000000
+# 조건 하나 x 학습 seed k (결과: runs/230/<조건>_<스텝>k/seed<k>/)
+python ../../ship.py capped 8G -- python ppo_ablation.py train --condition fixed --seed 0 --steps 200000
+python ppo_ablation.py table runs/230      # 위 결과 표
+python ppo_ablation.py select runs/230/crashcost_1000k/seed1 runs/230/mixer_1000k/seed0   # 모델 고르기(model.zip 필요)
+python ../../ship.py capped 8G -- python compare_metrics.py --model hopper_attitude_ppo_230.zip
+```
+
+같은 커밋에서 `crashcost` 200k 학습 seed 0을 다시 학습하면 정책 가중치(`policy.pth`)의 SHA-256이 같았다. `result.json`도 학습 시간 외에는 같았다. zip 파일 자체는 저장 시각 때문에 다르다.
+
+저장소에는 저장소 모델 하나만 둔다. 나머지 32개 모델은 위 명령으로 다시 만든다(모델 하나 약 150 KB).
+
+## 근거
+
+- SB3 RL Tips and Tricks: 정규화, 여러 학습 seed, 별도 평가 seed. https://stable-baselines3.readthedocs.io/en/master/guide/rl_tips.html
+- SB3 `VecNormalize` 저장과 불러오기(평가 때 `training=False`): https://stable-baselines3.readthedocs.io/en/master/guide/vec_envs.html#vecnormalize
+- Gymnasium `terminated`와 `truncated` 구분: https://gymnasium.farama.org/tutorials/gymnasium_basics/handling_time_limits/
+- Pardo et al. 2018, "Time Limits in Reinforcement Learning"(arXiv:1712.00378): 종료와 시간 제한을 섞으면 가치 추정이 틀린다.
+- 원인 분석: `ppo-diagnosis.md`(#90). 고정 스로틀 20k가 모두 넘어진 결과와 이 표의 200k 결과가 같은 방향이다.

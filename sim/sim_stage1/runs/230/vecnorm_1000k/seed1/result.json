@@ -1,0 +1,13 @@
+{
+  "return": -2.2816950878467908,
+  "length": 500.0,
+  "crash": 0.0,
+  "median_tilt_deg": 0.6673410534858704,
+  "throttle_mean": 1.0,
+  "throttle_zero": 0.0,
+  "condition": "vecnorm",
+  "seed": 1,
+  "train_seed": 10001,
+  "timesteps": 1000000,
+  "train_seconds": 1541.8
+}
