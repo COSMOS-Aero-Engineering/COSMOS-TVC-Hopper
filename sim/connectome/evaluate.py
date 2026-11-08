@@ -9,7 +9,8 @@ AGENTS.md가 정한 지표 그대로다: **복원시간 · 오버슈트 · 정�
 생기지 않는다. 이걸 안 맞추면 시드 운으로 순위가 뒤집힌다 — RL 비교에서 제일 흔한 사고다.
 
 기울기는 롤·피치를 합친 크기 hypot(phi, theta)다(요는 따로 본다). 지표 정의와 교재 정의의 차이는
-episode_metrics()의 설명과 sim/sim_stage1/compare_metrics.py에 있다(#266).
+episode_metrics()의 설명과 sim/sim_stage1/compare_metrics.py에 있다(#266). 복원 판정 기준과 오버슈트
+정의의 근거는 docs/design/00-hopper-master-design.md §11.1(#274), §11.2(#273)다.
 """
 from __future__ import annotations
 
@@ -29,12 +30,14 @@ def episode_metrics(xy, dt: float) -> dict:
     따로 둔다(check.py 6번).
 
     돌려주는 값:
-      overshoot        (최대 기울기 - 초기 기울기) / 초기 기울기. 기울기는 크기(hypot)라서 0을 지나
-                       반대쪽으로 넘어간 것은 보지 못한다. 이 값은 "처음보다 더 기울어진 정도"다.
-      overshoot_cross  초기 기울기 방향 u0 = xy[0]/|xy[0]|에 기록을 투영한 e(t) = xy(t)·u0에서
+      overshoot_cross  오버슈트. format_table()과 compare_metrics.py 표의 "오버슈트" 열이 이 값이다.
+                       초기 기울기 방향 u0 = xy[0]/|xy[0]|에 기록을 투영한 e(t) = xy(t)·u0에서
                        max(0, -min e(t)) / |xy[0]|. 0을 지나 반대쪽으로 넘어간 최대 크기를 초기 오프셋으로
                        나눈 값이다. 교재의 최대 오버슈트(목표값을 넘어간 최대 크기 / 응답의 변화 크기)를
-                       초기 오프셋에서 0으로 돌아오는 응답에 맞춘 것이다(#266).
+                       초기 오프셋에서 0으로 돌아오는 응답에 맞춘 것이다(#266). 복원하지 않고 멈춘 기록도
+                       0이므로 미복원 수, 정상오차와 함께 읽는다.
+                       예전 키 overshoot((최대 기울기 - 초기 기울기) / 초기 기울기)는 뺐다. 근거는
+                       docs/design/00-hopper-master-design.md §11.2(#273).
       steady_err_deg   마지막 20 % 구간의 평균 기울기(deg).
       settle_s         SETTLE_DEG 아래로 내려가서 끝까지 유지된 첫 시점(s). 끝까지 못 내려오면 기록 길이.
       censored         끝까지 SETTLE_DEG 아래로 못 내려왔으면 True.
@@ -43,10 +46,7 @@ def episode_metrics(xy, dt: float) -> dict:
     trace = np.hypot(xy[:, 0], xy[:, 1])
     tilt0 = trace[0]
 
-    # 오버슈트: 시작보다 얼마나 더 나빠졌나. 0이면 한 번도 초기 기울기를 안 넘었다는 뜻.
-    overshoot = float(max(0.0, trace[1:].max() - tilt0) / max(tilt0, 1e-9))
-
-    # 0을 지나 반대쪽으로 넘어간 크기. 초기 기울기가 0이면 방향이 없으므로 0으로 둔다.
+    # 오버슈트: 0을 지나 반대쪽으로 넘어간 크기. 초기 기울기가 0이면 방향이 없으므로 0으로 둔다.
     if tilt0 > 1e-9:
         e = xy[1:] @ (xy[0] / tilt0)
         overshoot_cross = float(max(0.0, -e.min()) / tilt0)
@@ -71,8 +71,8 @@ def episode_metrics(xy, dt: float) -> dict:
     else:
         settle_s = float(above[-1] + 1) * dt
 
-    return {"overshoot": overshoot, "overshoot_cross": overshoot_cross,
-            "steady_err_deg": steady_err_deg, "settle_s": settle_s, "censored": censored}
+    return {"overshoot_cross": overshoot_cross, "steady_err_deg": steady_err_deg,
+            "settle_s": settle_s, "censored": censored}
 
 
 def run_episodes(policy, env, episodes: int = 30, seed_base: int = EVAL_SEED_BASE,
@@ -108,7 +108,6 @@ def run_episodes(policy, env, episodes: int = 30, seed_base: int = EVAL_SEED_BAS
         "mean_reward": float(np.mean(rewards)),
         "settle_s": mean("settle_s"),
         "settle_censored": sum(m["censored"] for m in per_episode),
-        "overshoot": mean("overshoot"),
         "overshoot_cross": mean("overshoot_cross"),
         "steady_err_deg": mean("steady_err_deg"),
         "crash_rate": crashes / episodes,
@@ -124,12 +123,14 @@ def format_table(results: dict) -> str:
         # 시드 평균을 거치면 정수 항목도 float이 되므로 표시 형식을 하나로 맞춘다
         # (PD는 30, RL은 30.0 으로 찍혀서 서로 다른 값처럼 보였다).
         # 추락률은 소수점 한 자리로 쓴다. 정수 %로 쓰면 200개 중 1개(0.5 %)가 0 %로 보인다(#278).
+        # 오버슈트는 compare_metrics.py 표와 같은 값(overshoot_cross)을 같은 단위(%)로 쓴다(#273).
         lines.append(
             f"{name:<22}{m['mean_reward']:>10.1f}{m['settle_s']:>10.2f}"
-            f"{m['settle_censored']:>8.0f}{m['overshoot']:>10.2f}"
+            f"{m['settle_censored']:>8.0f}{m['overshoot_cross']:>10.1%}"
             f"{m['steady_err_deg']:>14.2f}{m['crash_rate']:>8.1%}"
         )
     lines.append("")
     lines.append(f"* 복원 판정 기준 {SETTLE_DEG}도 · '미복원' 은 끝까지 그 아래로 못 내려온 에피소드 수")
-    lines.append("* 오버슈트 = (최대 기울기 - 초기 기울기) / 초기 기울기, 0이면 초기값을 안 넘음")
+    lines.append("* 오버슈트 = 수평(0도)을 지나 반대쪽으로 기운 최대 각도 / 초기 기울기(마스터 설계 §11.2). "
+                 "복원하지 않고 멈춰도 0 %")
     return "\n".join(lines)

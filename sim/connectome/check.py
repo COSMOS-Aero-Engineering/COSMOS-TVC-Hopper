@@ -127,18 +127,27 @@ def main() -> int:
     deg = np.deg2rad
     roll = [10, 6, 2, -1, -3, -2, -1, 0.5, 0.5, 0.5, 0.5]
     em = episode_metrics(np.column_stack([deg(roll), np.zeros(len(roll))]), dt=0.1)
-    # 0 넘음 3/10 = 0.3, 초기값 초과 0(10°를 넘은 적 없음), 2° 초과의 마지막 점은 4번(-3°)이라 복원 0.5 s,
+    # 오버슈트(0 넘음) 3/10 = 0.3, 2° 초과의 마지막 점은 4번(-3°)이라 복원 0.5 s,
     # 마지막 20 %는 int(11*0.8)=8번부터 3점, 평균 0.5°.
-    check("평가 지표 손계산 (0 넘음 0.3, 초기값 초과 0, 복원 0.5 s, 정상오차 0.5°)",
-          np.isclose(em["overshoot_cross"], 0.3) and np.isclose(em["overshoot"], 0.0)
+    check("평가 지표 손계산 (오버슈트 0.3, 복원 0.5 s, 정상오차 0.5°)",
+          np.isclose(em["overshoot_cross"], 0.3)
           and np.isclose(em["settle_s"], 0.5) and np.isclose(em["steady_err_deg"], 0.5)
           and not em["censored"], f"{em}")
+    # 오버슈트는 0을 넘은 크기만 본다(#273, 마스터 설계 §11.2). 10°에서 12°로 더 기울었다가
+    # 0을 넘지 않고 돌아오면 0이다. 예전 overshoot((최대 - 초기) / 초기)는 0.2였다.
+    rise = [10, 12, 8, 4, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+    em_rise = episode_metrics(np.column_stack([deg(rise), np.zeros(len(rise))]), dt=0.1)
+    check("초기값보다 더 기울어도 0을 넘지 않으면 오버슈트 0", np.isclose(em_rise["overshoot_cross"], 0.0),
+          f"{em_rise['overshoot_cross']}")
     # 롤·피치 대각선(같은 방향)으로 시작해도 투영이 같은 값을 내야 한다.
     diag = np.column_stack([deg(roll), deg(roll)]) / np.sqrt(2)
     check("0 넘음은 기울기 방향에 상관없다", np.isclose(episode_metrics(diag, 0.1)["overshoot_cross"], 0.3))
     # 추락률 0.005(200개 중 1개)가 표에서 0 %로 보이면 안 된다(#278).
     row = format_table({"crash": dict(m, crash_rate=0.005)}).splitlines()[2]
     check("표의 추락률 0.005가 0.5%로 보인다", row.split()[-1] == "0.5%", row.split()[-1])
+    # 표의 "오버슈트" 열은 0 넘음 값이다(#273). 위 손계산 기록의 0.3이 30.0%로 보여야 한다.
+    row = format_table({"x": dict(m, overshoot_cross=em["overshoot_cross"])}).splitlines()[2]
+    check("표의 오버슈트 열이 0 넘음 값이다", row.split()[4] == "30.0%", row.split()[4])
 
     print("\n7) 제어권한 진단 (과제가 풀 수 있는 것인가)")
     auth = authority()
