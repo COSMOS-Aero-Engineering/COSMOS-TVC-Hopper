@@ -31,7 +31,7 @@ from pathlib import Path
 
 try:
     import tomllib
-except ImportError:  # 파이썬 3.10 이하. codex_config_has_sandbox_mode()가 글자로 찾는다.
+except ImportError:  # 파이썬 3.10 이하. codex_config_has_sandbox_mode()가 True로 본다.
     tomllib = None
 
 ROOT = Path(__file__).resolve().parent
@@ -532,9 +532,11 @@ def codex_config_has_sandbox_mode(text):
 
     키 이름의 따옴표와 이스케이프는 tomllib이 푼다. tomllib이 없거나(파이썬 3.10 이하) 글을 읽지 못하면
     True로 본다. 그러면 리뷰는 read-only로 돈다. 권한이 넓어지는 쪽으로 틀리지 않게 하려는 것이다.
+    글자로 찾지 않는 이유: TOML은 따옴표 키 안의 유니코드 이스케이프를 푼다. 글자 검색은 그런 키를
+    놓친다.
     """
     if tomllib is None:
-        return "sandbox_mode" in text
+        return True
     try:
         stack = [tomllib.loads(text)]
     except tomllib.TOMLDecodeError:
@@ -575,8 +577,8 @@ def codex_review_cmd(prompt, tmp):
     Codex 권한 프로필(https://learn.chatgpt.com/docs/permissions)로 `:read-only`를 상속하고 tmp에만
     write를 준다. 저장소와 다른 경로는 읽기만 되고 네트워크는 막힌다. `--sandbox`를 같이 주면 Codex가
     권한 프로필을 쓰지 않으므로 `--sandbox`는 넣지 않는다. 경로는 json.dumps로 적는다. json.dumps가
-    쓰는 이스케이프(\\\\, \\", \\n 등)는 TOML 기본 문자열에서도 뜻이 같아서 Windows 역슬래시와 한글
-    경로도 그대로 읽힌다.
+    쓰는 이스케이프(역슬래시, 큰따옴표, 제어 문자)는 TOML 기본 문자열에서도 뜻이 같다. 그래서
+    Windows 역슬래시와 한글 경로도 그대로 읽힌다.
     """
     profile = f"permissions.{CODEX_PROFILE}"
     path = json.dumps(str(tmp), ensure_ascii=False)
@@ -776,7 +778,9 @@ def cmd_review(a):
     if legacy is not None:
         # 권한 프로필이 빠질 수 있으면 #283 이전처럼 --sandbox read-only로 리뷰한다. 리뷰어 권한이
         # 사용자의 sandbox_mode로 넓어지지 않게 하려는 것이다. 대신 임시 폴더가 없다.
-        print(f"[주의] {legacy}에 sandbox_mode가 있다. Codex는 이때 권한 프로필을 쓰지 않는다.\n"
+        print(f"[주의] {legacy}에서 sandbox_mode를 찾았거나, 이 파이썬으로 확인하지 못했다"
+              "(tomllib 없음 또는 TOML 오류).\n"
+              "       sandbox_mode가 있으면 Codex는 권한 프로필을 쓰지 않는다.\n"
               "       그래서 --sandbox read-only로 리뷰한다. 리뷰어는 임시 파일이 필요한 스크립트"
               "(PyTorch 등)를 돌리지 못한다.\n"
               "       임시 폴더를 쓰려면 그 파일에서 sandbox_mode 줄을 지우거나 주석으로 바꾼다.", flush=True)

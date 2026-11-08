@@ -565,7 +565,7 @@ class CmdReviewTest(unittest.TestCase):
         prompt = ship.REVIEW_PROMPT.format(base="origin/main")
         self.assertEqual(cmd, ["codex", "exec", "--sandbox", "read-only", prompt])
         self.assertIsNone(self.env)
-        self.assertIn(f"[주의] {legacy}에 sandbox_mode가 있다", out)
+        self.assertIn(f"[주의] {legacy}에서 sandbox_mode를 찾았거나", out)
 
     def test_codex_temp_folder_is_removed_when_review_stops(self):
         self.run_review((None, "no PR"), lambda c: c[0] == "codex", fail=SystemExit(1))
@@ -619,8 +619,8 @@ class CodexLegacySandboxConfigTest(unittest.TestCase):
         # 권한이 넓어지는 쪽으로 틀리지 않는다: 모르면 read-only로 리뷰한다.
         self.assertTrue(self.find('sandbox_mode = \n'))
         with mock.patch.object(ship, "tomllib", None):
-            self.assertTrue(self.find('# sandbox_mode = "workspace-write"\n'))
-            self.assertFalse(self.find('model = "x"\n'))
+            self.assertTrue(self.find('"sandbox\\u005fmode" = "workspace-write"\n'))
+            self.assertTrue(self.find('model = "x"\n'))
 
     def test_candidates_cover_codex_home_and_every_project_layer(self):
         cwd = Path("repo") / "sim" / "sim_stage1"
