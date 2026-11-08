@@ -500,31 +500,36 @@ def parse_toml_value(text):
 
 
 class CmdReviewTest(unittest.TestCase):
-    def run_review(self, records, logged, fail=None, conflict=None):
+    def run_review(self, records, logged, fail=None, conflict=None, venv=None):
         """cmd_review를 가짜 call로 돌린다. 리뷰 명령을 부를 때의 환경과 TMPDIR 폴더 유무를 남긴다.
 
         conflict는 권한 프로필을 바꾸는 Codex 설정 파일이다. 이 PC의 실제 Codex 설정은 읽지 않는다.
+        venv는 venv_problem()의 결과다. 이 PC의 .venv와 uv는 보지 않는다. 리뷰 명령을 부르기 전까지의
+        출력은 self.out_before_review에 남는다.
         """
         calls = []
-        self.env, self.tmp_existed = None, None
+        self.env, self.tmp_existed, self.out_before_review = None, None, None
+        out = io.StringIO()
 
         def fake_call(cmd, check=True, capture=False, cwd=None, input=None, env=None):
             calls.append((cmd, input))
             if cmd[0] == "git":  # 리뷰 전의 git fetch
                 return subprocess.CompletedProcess(cmd, 0, "", "")
             self.env = env
+            self.out_before_review = out.getvalue()
             tmp = (env or {}).get("TMPDIR")
             self.tmp_existed = tmp is not None and Path(tmp).is_dir()
             if fail:
                 raise fail
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
-        out = io.StringIO()
+        self.venv_check = mock.Mock(return_value=venv)
         with mock.patch.object(ship, "call", fake_call), \
                 mock.patch.object(ship, "review_records", return_value=records), \
                 mock.patch.object(ship, "logged_in", side_effect=logged), \
                 mock.patch.object(ship, "opencode_model", return_value="opencode/mimo-free"), \
                 mock.patch.object(ship, "codex_conflicting_config", return_value=conflict), \
+                mock.patch.object(ship, "venv_problem", self.venv_check), \
                 redirect_stdout(out), self.assertRaises(SystemExit):
             ship.cmd_review(argparse.Namespace(author="claude", base="origin/main"))
         return calls[-1], out.getvalue()
@@ -590,6 +595,67 @@ class CmdReviewTest(unittest.TestCase):
         self.assertEqual(cmd[0], "codex")
         self.assertIsNone(stdin)
         self.assertIn("[주의]", out)
+
+    def test_codex_warns_before_review_when_venv_does_not_match_lock(self):
+        # #321: .venv가 없거나 uv.lock과 다르면 샌드박스의 uv run이 exit 2다. 리뷰 전에 알리고 맞추는
+        # 명령을 보인다. sim과 상관없는 PR도 있으므로 리뷰는 그대로 돈다.
+        problem = "uv sync --check exit 1: error: The environment is outdated"
+        (cmd, _), out = self.run_review((None, "no PR"), lambda c: c[0] == "codex", venv=problem)
+        self.assertEqual(cmd[:2], ["codex", "exec"])
+        self.assertNotIn("--sandbox", cmd)
+        self.assertIn(f"[주의] .venv가 uv.lock과 맞지 않거나 확인하지 못했다 ({problem})",
+                      self.out_before_review)
+        self.assertIn("맞추는 명령: python tasks.py setup", self.out_before_review)
+        self.venv_check.assert_called_once_with()
+
+    def test_matching_venv_prints_no_venv_warning(self):
+        self.run_review((None, "no PR"), lambda c: c[0] == "codex")
+        self.venv_check.assert_called_once_with()
+        self.assertNotIn(".venv", self.out_before_review)
+
+    def test_venv_is_checked_only_for_codex_with_temp_folder(self):
+        # read-only 샌드박스는 이미 uv run을 돌리지 못한다고 알린다. Claude·OpenCode 리뷰어는 이 샌드박스를
+        # 쓰지 않는다. 두 경우는 .venv를 보지 않는다.
+        conflict = Path("home") / ".codex" / "config.toml"
+        for logged, conflict_file in ((lambda c: c[0] == "codex", conflict), (lambda c: False, None)):
+            with self.subTest(conflict=conflict_file):
+                _, out = self.run_review((None, "no PR"), logged, conflict=conflict_file, venv="x")
+                self.venv_check.assert_not_called()
+                self.assertNotIn(".venv가 uv.lock과", out)
+
+
+class VenvProblemTest(unittest.TestCase):
+    def check(self, uv_path, result=None):
+        calls = []
+
+        def fake_call(cmd, check=True, capture=False, cwd=None, input=None, env=None):
+            calls.append((cmd, check, capture, cwd))
+            return result
+
+        with mock.patch.object(ship.shutil, "which", return_value=uv_path), \
+                mock.patch.object(ship, "call", fake_call), redirect_stdout(io.StringIO()):
+            return ship.venv_problem(), calls
+
+    def test_matching_venv_is_no_problem(self):
+        ok = subprocess.CompletedProcess([], 0, "", "Would make no changes\n")
+        problem, calls = self.check("/usr/bin/uv", ok)
+        self.assertIsNone(problem)
+        # 샌드박스 밖에서 확인만 한다: .venv를 바꾸지 않고(--check) 네트워크를 쓰지 않는다(--offline).
+        # uv run처럼 uv.lock에 없는 패키지는 문제로 보지 않는다(--inexact). 워크스페이스 루트에서 돈다.
+        self.assertEqual(calls, [(["uv", "sync", "--frozen", "--inexact", "--check", "--offline"],
+                                  False, True, ship.ROOT)])
+
+    def test_outdated_venv_reports_exit_code_and_last_uv_line(self):
+        stderr = ("Would create project environment at: .venv\n + numpy==2.5.3\n"
+                  "error: The environment is outdated; run `uv sync` to update the environment\n\n")
+        problem, _ = self.check("/usr/bin/uv", subprocess.CompletedProcess([], 1, "", stderr))
+        self.assertEqual(problem, "uv sync --check exit 1: error: The environment is outdated; "
+                                  "run `uv sync` to update the environment")
+
+    def test_missing_uv_is_a_problem_without_running_it(self):
+        problem, calls = self.check(None)
+        self.assertEqual(problem, "uv가 없다")
+        self.assertEqual(calls, [])
 
 
 class CodexConfigConflictTest(unittest.TestCase):

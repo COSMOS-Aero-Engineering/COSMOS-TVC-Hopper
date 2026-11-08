@@ -596,6 +596,24 @@ def codex_review_cmd(prompt, tmp):
             prompt]
 
 
+def venv_problem():
+    """.venv가 uv.lock과 맞지 않으면 그 이유를 돌려준다. 맞으면 None(#321).
+
+    샌드박스는 worktree 쓰기와 네트워크를 막는다. 그래서 .venv가 없거나 uv.lock과 다르면 리뷰어의
+    `uv run --frozen`이 .venv를 만들거나 패키지를 받지 못하고 exit 2로 멈춘다. 여기서는 샌드박스 밖에서
+    확인만 한다. `--check`는 .venv를 바꾸지 않고, `--offline`은 네트워크를 쓰지 않는다. `--inexact`인
+    이유: uv run은 uv.lock에 없는 패키지를 지우지 않는다. 그런 패키지가 더 있어도 리뷰어의 uv run은 돈다.
+    """
+    if not shutil.which("uv"):
+        return "uv가 없다"
+    r = call(["uv", "sync", "--frozen", "--inexact", "--check", "--offline"], check=False,
+             capture=True, cwd=ROOT)
+    if r.returncode == 0:
+        return None
+    last = next((line.strip() for line in reversed(r.stderr.splitlines()) if line.strip()), "")
+    return f"uv sync --check exit {r.returncode}: {last}"
+
+
 def gh_json(cmd):
     """gh 명령의 JSON 출력을 읽는다. 실패하면 None."""
     r = call(cmd, check=False, capture=True)
@@ -793,6 +811,12 @@ def cmd_review(a):
               "       임시 폴더를 쓰려면 그 파일에서 그 설정을 지우거나 주석으로 바꾼다.", flush=True)
         reviewer, cmd = "codex", ["codex", "exec", "--sandbox", "read-only", prompt]
     elif use_codex:
+        problem = venv_problem()
+        if problem is not None:
+            # 리뷰는 멈추지 않는다. sim과 상관없는 PR은 uv run 없이도 리뷰할 수 있다(#321).
+            print(f"[주의] .venv가 uv.lock과 맞지 않거나 확인하지 못했다 ({problem}).\n"
+                  "       리뷰어는 샌드박스에서 .venv를 고치지 못해서 uv run을 돌리지 못한다.\n"
+                  "       맞추는 명령: python tasks.py setup  (맞춘 뒤 리뷰를 다시 돌린다)", flush=True)
         # 리뷰어가 쓸 수 있는 유일한 폴더다(#283). 리뷰가 끝나면 지운다. TMPDIR은 파이썬 tempfile이
         # 모든 OS에서 가장 먼저 보는 변수다. macOS의 /var -> /private/var 같은 링크는 실제 경로로 푼다.
         # uv 캐시도 이 폴더 안에 둔다(#314). uv run은 .venv가 uv.lock과 맞아도 캐시 폴더에 잠금 파일을
