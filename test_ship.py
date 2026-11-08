@@ -821,7 +821,7 @@ class OpenCodeIsolationTest(unittest.TestCase):
         self.assertEqual(self.flags_for("1.19.1\n"), [])
 
     def test_unreadable_version_stops(self):
-        with redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             self.flags_for("")
 
     def test_v2_flags_reach_models_and_run(self):
