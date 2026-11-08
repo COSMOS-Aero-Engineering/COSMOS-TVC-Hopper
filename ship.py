@@ -616,6 +616,24 @@ def codex_review_tmp(windows=None):
     return path.resolve(), lambda: shutil.rmtree(path, ignore_errors=True)
 
 
+def venv_problem():
+    """.venv가 uv.lock과 맞지 않으면 그 이유를 돌려준다. 맞으면 None(#321).
+
+    샌드박스는 worktree 쓰기와 네트워크를 막는다. 그래서 .venv가 없거나 uv.lock과 다르면 리뷰어의
+    `uv run --frozen`이 .venv를 만들거나 패키지를 받지 못하고 exit 2로 멈춘다. 여기서는 샌드박스 밖에서
+    확인만 한다. `--check`는 .venv를 바꾸지 않고, `--offline`은 네트워크를 쓰지 않는다. `--inexact`인
+    이유: uv run은 uv.lock에 없는 패키지를 지우지 않는다. 그런 패키지가 더 있어도 리뷰어의 uv run은 돈다.
+    """
+    if not shutil.which("uv"):
+        return "uv가 없다"
+    r = call(["uv", "sync", "--frozen", "--inexact", "--check", "--offline"], check=False,
+             capture=True, cwd=ROOT)
+    if r.returncode == 0:
+        return None
+    last = next((line.strip() for line in reversed(r.stderr.splitlines()) if line.strip()), "")
+    return f"uv sync --check exit {r.returncode}: {last}"
+
+
 def gh_json(cmd):
     """gh 명령의 JSON 출력을 읽는다. 실패하면 None."""
     r = call(cmd, check=False, capture=True)
@@ -796,6 +814,10 @@ def cmd_review(a):
     records, summary = review_records()
     if records is None:
         print(f"[주의] PR·이슈 기록을 리뷰어에게 넘기지 않는다: {summary}", flush=True)
+        # 그래도 빈 입력을 넘긴다(#322). input=None이면 리뷰어가 ship.py의 표준 입력을 물려받는다. 그 입력이
+        # 터미널이 아니고 닫히지 않으면(예: 에이전트의 셸 도구) codex exec가 입력의 끝을 기다리며 멈춘다.
+        # 빈 입력은 바로 닫힌다. codex exec는 빈 입력을 요청 문장에 붙이지 않는다.
+        records = ""
     else:
         print(f"리뷰어에게 표준 입력으로 넘기는 기록: {summary}", flush=True)
     # 리뷰 요청에는 범위만 넣는다(AGENTS.md §작업 순서 6). 힌트나 체크리스트를 넣지 않는다.
@@ -813,6 +835,12 @@ def cmd_review(a):
               "       임시 폴더를 쓰려면 그 파일에서 그 설정을 지우거나 주석으로 바꾼다.", flush=True)
         reviewer, cmd = "codex", ["codex", "exec", "--sandbox", "read-only", prompt]
     elif use_codex:
+        problem = venv_problem()
+        if problem is not None:
+            # 리뷰는 멈추지 않는다. sim과 상관없는 PR은 uv run 없이도 리뷰할 수 있다(#321).
+            print(f"[주의] .venv가 uv.lock과 맞지 않거나 확인하지 못했다 ({problem}).\n"
+                  "       리뷰어는 샌드박스에서 .venv를 고치지 못해서 uv run을 돌리지 못한다.\n"
+                  "       맞추는 명령: python tasks.py setup  (맞춘 뒤 리뷰를 다시 돌린다)", flush=True)
         # 리뷰어가 쓸 수 있는 유일한 폴더다(#283). 리뷰가 끝나면 지운다. TMPDIR은 파이썬 tempfile이
         # 모든 OS에서 가장 먼저 보는 변수다. 폴더를 만드는 방법은 codex_review_tmp()에 있다(#315).
         # uv 캐시도 이 폴더 안에 둔다(#314). uv run은 .venv가 uv.lock과 맞아도 캐시 폴더에 잠금 파일을
