@@ -67,9 +67,9 @@ PHASE 2(실물 Teensy에서 PID 자리에 RL)는 이번 학기에 하지 않는 
 - 발표에서 시뮬레이션 결과를 실기 성능이라고 말하지 않는다. Stage 1은 파이프라인 검증용이고 최종 학습 결과로 쓰지 않는다([03 문서](../design/03-control-pipeline-design.md) §1). `CL`, `vane_arm_l`, `mass`는 아직 실측이 아니다(`STATUS.md`).
 - G1을 통과해도 11/16까지 TC-3-TC-5를 모두 하기는 어렵다고 본다(§1 추론). G1을 통과하면 TC-0까지를 실물 추가 결과로 낼지 검토자가 정한다.
 
-### 4.1 PD와 PPO 비교표 (#230 모델, #277, 2026-11-09)
+### 4.1 PD, PID, PPO 비교표 (#230 모델, #277, #349, 2026-11-09)
 
-발표 비교표는 #230 모델 `sim/sim_stage1/hopper_attitude_ppo_230.zip`(`.json`과 한 쌍, [`ppo-ablation.md`](../../sim/sim_stage1/ppo-ablation.md))로 낸다. 평가 seed 0-199, 도메인 랜덤화 켬이다. `origin/main` `8df19bd`에서 아래 명령으로 냈다.
+발표 비교표는 #230 모델 `sim/sim_stage1/hopper_attitude_ppo_230.zip`(`.json`과 한 쌍, [`ppo-ablation.md`](../../sim/sim_stage1/ppo-ablation.md))로 낸다. 평가 seed 0-199, 도메인 랜덤화 켬이다. PD와 PPO 행은 `origin/main` `8df19bd`에서, PID 행은 #349 브랜치에서 아래 명령으로 냈다. #349 브랜치에서도 PD와 PPO 행은 같은 값이 나왔다.
 
 ```bash
 python ship.py capped 8G -- uv run --frozen --project . python sim/sim_stage1/compare_metrics.py --model sim/sim_stage1/hopper_attitude_ppo_230.zip
@@ -78,14 +78,17 @@ python ship.py capped 8G -- uv run --frozen --project . python sim/sim_stage1/co
 | 초기 자세 | 제어기 | 넘어짐 | 복원시간 평균(s) | 미복원 | 오버슈트 | 정상오차 |
 |---|---|---:|---:|---:|---:|---:|
 | TC-3(기울기 10°) | PD (kp=8, kd=2) | 0.0 % | 3.38 | 129/200 | 8.7 % | 2.40° |
+| TC-3(기울기 10°) | PID (kp=28, kd=8, ki=2.5) | 0.0 % | 0.46 | 0/200 | 3.4 % | 0.51° |
 | TC-3(기울기 10°) | PPO (#230) | 0.0 % | 0.31 | 0/200 | 2.5 % | 0.64° |
 | 학습 분포(각 축 ±17°) | PD (kp=8, kd=2) | 0.0 % | 3.41 | 129/200 | 8.0 % | 2.40° |
+| 학습 분포(각 축 ±17°) | PID (kp=28, kd=8, ki=2.5) | 0.0 % | 0.52 | 0/200 | 3.2 % | 0.52° |
 | 학습 분포(각 축 ±17°) | PPO (#230) | 0.0 % | 0.38 | 0/200 | 3.3 % | 0.64° |
 
 - 복원시간: 기울기가 2° 아래로 내려와 끝까지 머문 첫 시점이다(마스터 설계 §11.1). 미복원 에피소드는 에피소드 길이 5 s로 평균에 넣는다.
 - 오버슈트: 수평(0°)을 지나 반대쪽으로 기운 최대 각도 / 초기 기울기다. 복원하지 않고 멈춘 에피소드도 0 %다(마스터 설계 §11.2).
 - 정상오차: 마지막 20 % 구간(1 s)의 평균 기울기다.
-- 두 제어기 모두 스로틀 100 % 고정이다(`pd_gate.pd()`, `policy_io.py`의 `vanes4`). 두 조건 모두 PD 미복원 129개는 전부 정상오차가 2°보다 크다(같은 seed로 에피소드별 값을 따로 뽑아 확인). 곧 PD는 넘어지지 않지만 2° 넘게 기운 채 멈춘다.
+- PD 행은 튜닝하지 않은 기준값이다. 게인은 #21 재현 스크립트의 값이다. PID 행은 #349에서 더했다. 게인은 `pid_tune.py`가 튜닝 seed 1000-1199(평가·학습 seed와 겹치지 않음)에서 평균 리턴이 가장 큰 격자점으로 골랐다. 발표의 PD와 RL 비교는 PID 행으로 한다(`docs/decisions.md` "발표 비교표의 기준 제어기", #349).
+- 세 제어기 모두 스로틀 100 % 고정이다(`pd_gate.pd()`, `compare_metrics.PID`, `policy_io.py`의 `vanes4`). 두 조건 모두 PD 미복원 129개는 전부 정상오차가 2°보다 크다(같은 seed로 에피소드별 값을 따로 뽑아 확인). 곧 PD는 넘어지지 않지만 2° 넘게 기운 채 멈춘다.
 - 이 표는 Stage 1 시뮬레이션 결과다. `CL`, `vane_arm_l`, `mass`, `Kf`는 실측이 아니다. 실기 성능이라고 말하지 않는다.
 - G4(§3): #230 모델은 PD 합격 기준(넘어짐 ≤ 5 %, 최종 기울기 중앙값 ≤ 5°)을 통과한다. 넘어짐 0 %, 최종 기울기 중앙값 0.6°다(PD 2.5°. `pd_gate.py --model sim/sim_stage1/hopper_attitude_ppo_230.zip`).
 - 이전 표(#266, `hopper_attitude_ppo.zip`)는 스로틀 0으로 수렴한 모델이라 발표에 쓰지 않는다(#90). 학습 분포 밖 기울기 표(`--tilt-deg`)는 #318이 낸다.

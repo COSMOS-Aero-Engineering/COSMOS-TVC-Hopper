@@ -523,9 +523,9 @@ def task_compile():
 
 def task_sanity():
     """환경을 20스텝 돌려 보고, reset(options=...)의 단위 검사(test_reset_options.py, #276)와
-    PPO 행동 구조·종료 비용의 단위 검사(test_policy_io.py, #230)를 돌린다."""
+    PPO 행동 구조·종료 비용의 단위 검사(test_policy_io.py, #230), PID 기준 제어기의 단위 검사(test_pid.py, #349)를 돌린다."""
     uv_run(["python", "sanity_check.py"], cwd=STAGE1)
-    uv_run(["python", "-m", "unittest", "-q", "test_reset_options", "test_policy_io"], cwd=STAGE1)
+    uv_run(["python", "-m", "unittest", "-q", "test_reset_options", "test_policy_io", "test_pid"], cwd=STAGE1)
 
 
 def task_gate():
