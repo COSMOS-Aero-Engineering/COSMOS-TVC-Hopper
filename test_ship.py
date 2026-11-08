@@ -9,6 +9,7 @@ import io
 import json
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -590,11 +591,37 @@ class CmdReviewTest(unittest.TestCase):
                 self.assertEqual(parse_toml_value(codex_config(cmd)[f"{profile}.filesystem"]),
                                  {path: "write"})
 
-    def test_without_records_review_still_runs(self):
-        (cmd, stdin), out = self.run_review((None, "gh가 없다"), lambda c: c[0] == "codex")
-        self.assertEqual(cmd[0], "codex")
-        self.assertIsNone(stdin)
-        self.assertIn("[주의]", out)
+    def test_without_records_review_gets_empty_stdin(self):
+        # #322: 기록이 없어도 빈 입력을 넘긴다. None이면 리뷰어가 ship.py의 표준 입력을 물려받는다. 그 입력이
+        # 닫히지 않으면 리뷰어가 입력의 끝을 기다리며 멈춘다.
+        for logged, head in ((lambda c: c[0] == "codex", "codex"), (lambda c: False, "opencode")):
+            with self.subTest(head=head):
+                (cmd, stdin), out = self.run_review((None, "gh가 없다"), logged)
+                self.assertEqual(cmd[0], head)
+                self.assertEqual(stdin, "")
+                self.assertIn("[주의]", out)
+
+    def test_empty_input_ends_child_stdin_while_parent_stdin_stays_open(self):
+        # #322: 실제 프로세스로 본다. 부모(ship.call을 부르는 파이썬)의 표준 입력은 닫지 않는 파이프다.
+        # input=""이면 자식이 바로 입력의 끝을 받고 끝난다. 대조군 input=None은 자식이 그 파이프를 물려받아
+        # 기다린다. 대조군은 1초 뒤 파이프를 닫아서 끝낸다.
+        reader = "import sys; sys.stdin.read()"
+        for value, ends in (("", True), (None, False)):
+            with self.subTest(input=value):
+                script = (f"import sys; sys.path.insert(0, {str(ship.ROOT)!r}); import ship; "
+                          f"ship.call([sys.executable, '-c', {reader!r}], input={value!r})")
+                proc = subprocess.Popen([sys.executable, "-c", script], stdin=subprocess.PIPE,
+                                        stdout=subprocess.DEVNULL)
+                try:
+                    proc.wait(timeout=30 if ends else 1)
+                    ended = True
+                except subprocess.TimeoutExpired:
+                    ended = False
+                finally:
+                    proc.stdin.close()
+                    proc.wait(timeout=30)
+                self.assertEqual(ended, ends)
+                self.assertEqual(proc.returncode, 0)
 
     def test_codex_warns_before_review_when_venv_does_not_match_lock(self):
         # #321: .venv가 없거나 uv.lock과 다르면 샌드박스의 uv run이 exit 2다. 리뷰 전에 알리고 맞추는
