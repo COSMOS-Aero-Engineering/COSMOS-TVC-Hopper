@@ -69,5 +69,22 @@ class ResetOptionTest(unittest.TestCase):
                 self.env.reset(seed=0, options=options)
 
 
+class OutsideTrainingInitTest(unittest.TestCase):
+    """compare_metrics.py --tilt-deg가 표마다 내는 '학습 초기 범위 밖' 에피소드 수(#312).
+
+    기울기가 0.3 rad(17.2°) 이하이면 어느 방향이든 두 축 모두 범위 안이다. 0.3·√2 rad(24.3°)보다 크면
+    어느 방향이든 한 축 이상이 범위 밖이다. 그 사이는 방향에 따라 다르다.
+    """
+
+    def test_counts(self):
+        from compare_metrics import outside_training_init   # 학습 분포 None도 같은 함수로 센다
+
+        n = len(SEEDS)
+        self.assertEqual(outside_training_init(None), 0, "학습 분포가 학습 초기 범위 밖으로 나갔다")
+        self.assertEqual(outside_training_init({"initial_tilt_deg": TILT_DEG}), 0)
+        self.assertEqual(outside_training_init({"initial_tilt_deg": 30.0}), n)
+        self.assertTrue(0 < outside_training_init({"initial_tilt_deg": 20.0}) < n)
+
+
 if __name__ == "__main__":
     unittest.main()

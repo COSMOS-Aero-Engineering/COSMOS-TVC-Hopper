@@ -78,6 +78,9 @@ EPISODE_STREAMS = (
 # reset(options=...)이 받는 키(#276). 다른 키를 주면 ValueError를 낸다. 오타가 조용히 기본 분포로 돌아가지 않게 한다.
 RESET_OPTION_KEYS = ("initial_tilt_deg",)
 CRASH_DEG = 60.0   # 롤이나 피치가 이 각도를 넘으면 에피소드가 끝난다(step()의 terminated)
+# 기본 초기 자세(학습 분포)의 범위(rad). reset()은 세 축 각각 U(-값, 값)에서 뽑는다(약 ±17.2°).
+# compare_metrics.py가 고정 기울기 조건에서 이 범위 밖으로 나간 에피소드 수를 셀 때도 쓴다(#312).
+INITIAL_ATTITUDE_RAD = 0.3
 
 # 회전자 상수의 랜덤화 분포(#121). 범위는 params.yaml domain_rand의 <이름>_range([아래, 위])에 있다.
 # True = 로그 균등(ln 값이 균등. 비율마다 같은 확률), False = 균등.
@@ -265,7 +268,7 @@ class HopperAttitudeEnv(gym.Env):
         if tilt_deg is None:
             # 완전 수평에서 시작하면 학습할 게 없으므로 초기 교란을 줌
             # (구속 스탠드 실험에서 손으로 살짝 기울여 놓고 시작하는 것과 같은 셋업)
-            phi, theta, psi = self._rng("initial_attitude").uniform(-0.3, 0.3, size=3)
+            phi, theta, psi = self._rng("initial_attitude").uniform(-INITIAL_ATTITUDE_RAD, INITIAL_ATTITUDE_RAD, size=3)
         else:
             # TC-3 조건(#276): 기울기 크기는 고정하고 방향만 seed에서 뽑는다. 요 오프셋은 주지 않는다.
             direction = self._rng("initial_tilt_dir").uniform(0.0, 2.0 * np.pi)
