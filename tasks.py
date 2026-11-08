@@ -7,7 +7,7 @@
     python tasks.py check --force   캐시 무시하고 전부 다시 실행
     python tasks.py graph           작업 그래프와 캐시 상태 보기
     python tasks.py lock            의존성 다시 풀고 uv.lock/requirements.txt 갱신
-    python tasks.py train           PPO 본 학습 (200k 스텝, 오래 걸림)
+    python tasks.py train           PPO 본 학습 (#230 crashcost 조건 1M 스텝, 오래 걸림)
 
 check와 CI: CI(.github/workflows/ci.yml)의 sim job이 `python tasks.py check`를 그대로 돌린다.
 CI는 그 밖에 학습 자료 목록·내부 링크 검사와 펌웨어 PlatformIO 빌드를 ci.yml에서 직접 돌린다.
@@ -1091,9 +1091,20 @@ def task_check():
     print("\n전부 통과. PR 올려도 된다.")
 
 
+# 본 학습은 #230에서 가장 좋았던 조건을 ppo_ablation.py로 학습한다(#345). 학습 코드는 그 파일 하나에만 둔다.
+# 조건: 스로틀 100 % 고정 + 종료 비용(crashcost), 1M 스텝. 학습 seed 1은 저장소 모델 hopper_attitude_ppo_230.zip과 같다.
+# 결과 폴더 sim/runs/train/은 git에서 뺀 폴더다. 커밋한 runs/230/ 결과와 저장소 모델을 덮어쓰지 않는다.
+TRAIN_ARGS = ["--condition", "crashcost", "--seed", "1", "--steps", "1000000"]
+TRAIN_OUT = SIM / "runs" / "train"
+
+
 def task_train():
-    print("200k 스텝 학습을 시작한다. 중간에 끊으려면 Ctrl+C.")
-    uv_run(["python", "train.py"], cwd=STAGE1)
+    print("PPO 본 학습을 시작한다: crashcost 조건, 1M 스텝, 학습 seed 1(#230, #345).\n"
+          "에이전트 서버(CPU 코어 1개)에서 약 23분 걸렸다. 중간에 끊으려면 Ctrl+C.\n"
+          f"결과 폴더: {TRAIN_OUT}. 다시 돌리면 덮어쓴다.")
+    uv_run(["python", "ppo_ablation.py", "train", *TRAIN_ARGS, "--out", str(TRAIN_OUT)], cwd=STAGE1)
+    print(f"학습 완료: {TRAIN_OUT / 'model.zip'} 저장됨. PD와 비교하려면 sim/sim_stage1에서:\n"
+          f"  python compare_metrics.py --model {TRAIN_OUT / 'model.zip'}")
 
 
 def task_deck():
@@ -1171,8 +1182,8 @@ TASKS = {t.name: t for t in [
          " 단계 목록은 graph)", task_check,
          deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "agentsref", "cad",
                "vcruntime", "compile", "ledger", "sanity", "gate", "yaw", "smoke", "conncheck"]),
-    Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
-         uses_env=True, needs_torch=True),
+    Task("train", "PPO 본 학습 (#230 crashcost 조건 1M 스텝, 오래 걸림. PD 합격 기준 gate를 먼저 본다)",
+         task_train, deps=["gate"], cacheable=False, uses_env=True, needs_torch=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
          inputs=["docs/presentation/build_deck.js", "docs/presentation/speaker-notes.md"],
          outputs=["docs/presentation/cosmos-info-session.pptx"]),
