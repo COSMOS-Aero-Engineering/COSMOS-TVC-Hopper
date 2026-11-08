@@ -5,6 +5,7 @@
     python ppo_ablation.py table runs/230            결과 표(마크다운)
     python ppo_ablation.py curves runs/230           학습 곡선 표(마크다운)
     python ppo_ablation.py select runs/230/crashcost_1000k/seed1 ...   선택용 seed로 모델 고르기
+    python ppo_ablation.py breakdown <model.zip> ...  리턴을 보상 항별로 나누고 행동 경계 비율을 잰다(#359)
 결과와 판정은 ppo-ablation.md에 있다. 저장소 모델 hopper_attitude_ppo_230.zip은 crashcost, 1M, seed 1이다.
 python tasks.py train도 이 파일로 같은 조건(crashcost, 1M, seed 1)을 학습한다. 결과는 sim/runs/train/(git 제외)이다(#345).
 
@@ -38,7 +39,7 @@ import numpy as np
 
 from hopper_aviary import HopperAttitudeEnv
 from pd_gate import EVAL_SEEDS, pd
-from policy_io import ActionAdapter, load_policy, to_env_action
+from policy_io import MIXER, ActionAdapter, load_policy, read_meta, to_env_action
 
 HERE = Path(__file__).resolve().parent
 TRAIN_SEED = 10_000                      # #230 전 train.py와 같은 기준. 실행 seed k는 TRAIN_SEED + k
@@ -144,8 +145,18 @@ def train(args):
                       f"crash {m['crash'] * 100:.0f} %, tilt {m['median_tilt_deg']:.1f} deg", flush=True)
             return True
 
+    callbacks = [Curve()]
+    if args.sb3_log:
+        # #359: SB3 학습 지표(train/entropy_loss, approx_kl, clip_fraction, std 등)를 sb3/progress.csv에,
+        # 정책을 CURVE_EVERY마다 checkpoints/에 남긴다. 둘 다 난수를 쓰지 않아 학습 결과는 그대로다
+        from stable_baselines3.common.callbacks import CheckpointCallback
+        from stable_baselines3.common.logger import configure
+        model.set_logger(configure(str(out / "sb3"), ["csv"]))
+        callbacks.append(CheckpointCallback(save_freq=CURVE_EVERY, save_path=str(out / "checkpoints"),
+                                            name_prefix="model"))
+
     t0 = time.time()
-    model.learn(total_timesteps=args.steps, callback=Curve())
+    model.learn(total_timesteps=args.steps, callback=callbacks)
     train_s = time.time() - t0
     if not curve_rows:   # CURVE_EVERY보다 짧은 학습(점검용)도 곡선 점 하나를 남긴다. 학습 뒤라 학습 결과는 그대로다
         curve_rows.append({"timesteps": model.num_timesteps, **rollout_stats(current_policy(), CURVE_SEEDS)})
@@ -231,6 +242,64 @@ def select(args):
     return 0
 
 
+def breakdown_stats(model_path, seeds=CURVE_SEEDS):
+    """모델 하나를 seeds로 결정적 평가해 리턴을 보상 항별로 나누고 행동이 경계에 붙는 비율을 잰다(#359).
+
+    보상 항은 hopper_aviary.py step()의 식을 그대로 다시 계산한다. 넷의 합은 환경 보상과 같다(검사한다).
+    raw: 정책 평균 행동(SB3 predict가 [-1, 1]로 자르기 전). vane: 환경에 들어가는 베인 명령 4개(믹서는 자른 뒤).
+    """
+    import torch
+    from stable_baselines3 import PPO
+
+    kind = read_meta(model_path)["action"]
+    model = PPO.load(str(model_path), device="cpu")
+    env = HopperAttitudeEnv()
+    terms = np.zeros(4)   # 기울기, 요, 각속도, 행동 크기. 에피소드 합의 평균
+    raw_all, vane_all, mix_all = [], [], []
+    for s in seeds:
+        obs, _ = env.reset(seed=s)
+        done = False
+        while not done:
+            with torch.no_grad():
+                dist = model.policy.get_distribution(model.policy.obs_to_tensor(obs)[0])
+                raw = dist.distribution.mean.numpy()[0]
+            a = np.clip(raw, -1.0, 1.0)            # SB3 predict와 같다
+            act = to_env_action(kind, a)
+            obs, r, term, trunc, _ = env.step(act)
+            phi, theta, psi, wx, wy, wz = env.state.astype(np.float64)
+            t = np.array([-(phi ** 2 + theta ** 2), -0.1 * psi ** 2, -0.01 * (wx ** 2 + wy ** 2 + wz ** 2),
+                          -0.001 * float(np.sum(np.square(act.astype(np.float64))))])
+            if abs(t.sum() - r) > 1e-4:
+                raise AssertionError(f"보상 항 합 {t.sum()}이 환경 보상 {r}과 다르다. hopper_aviary.py 식이 바뀌었나?")
+            terms += t / len(seeds)
+            raw_all.append(raw)
+            vane_all.append(act[:4])
+            if kind == "mixer3":
+                mix_all.append(MIXER @ a)
+            done = term or trunc
+    raw_all, vane_all = np.asarray(raw_all), np.asarray(vane_all)
+    out = {"return": float(terms.sum()), "tilt": float(terms[0]), "yaw": float(terms[1]), "rate": float(terms[2]),
+           "action": float(terms[3]),
+           "raw_out": float(np.mean(np.abs(raw_all) > 1.0)),          # 정책 평균이 [-1, 1] 밖인 성분 비율
+           "vane_sat": float(np.mean(np.abs(vane_all) >= 1.0 - 1e-6)),  # 베인 명령이 경계에 붙은 비율
+           "vane_abs": float(np.mean(np.abs(vane_all)))}
+    if mix_all:
+        out["mixer_clip"] = float(np.mean(np.abs(np.asarray(mix_all)) > 1.0))   # 믹서 출력이 잘린 비율
+    return out
+
+
+def breakdown(args):
+    print(f"곡선용 seed {CURVE_SEEDS.start}-{CURVE_SEEDS.stop - 1}, 결정적 행동. 리턴과 보상 항은 에피소드 합의 평균\n")
+    print("| 모델 | 리턴 | 기울기 | 요 | 각속도 | 행동 | 정책 평균 [-1,1] 밖 | 베인 명령 경계 | 믹서 잘림 | 베인 명령 평균 크기 |")
+    print("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+    for path in args.models:
+        m = breakdown_stats(path)
+        mix = f"{m['mixer_clip'] * 100:.1f} %" if "mixer_clip" in m else "-"
+        print(f"| {path} | {m['return']:.3f} | {m['tilt']:.3f} | {m['yaw']:.3f} | {m['rate']:.3f} | {m['action']:.3f} | "
+              f"{m['raw_out'] * 100:.1f} % | {m['vane_sat'] * 100:.1f} % | {mix} | {m['vane_abs']:.3f} |", flush=True)
+    return 0
+
+
 def curves(args):
     print(f"학습 곡선: 곡선용 seed {CURVE_SEEDS.start}-{CURVE_SEEDS.stop - 1}(20개) 평균 리턴 / 넘어짐 / 최종 기울기 중앙값\n")
     for path in sorted(Path(args.root).glob("*/seed*/curve.csv")):
@@ -250,13 +319,17 @@ def main():
     t.add_argument("--seed", type=int, default=0, help="학습 seed 번호 k. 실제 seed는 TRAIN_SEED + k")
     t.add_argument("--steps", type=int, default=200_000)
     t.add_argument("--out", help="결과 폴더. 기본 runs/230/<조건>_<스텝>k/seed<k>")
+    t.add_argument("--sb3-log", action="store_true",
+                   help="SB3 학습 지표(sb3/progress.csv)와 50k마다 정책(checkpoints/)을 남긴다(#359)")
     sel = sub.add_parser("select", help="실행 폴더 여러 개를 선택용 seed로 평가한다")
     sel.add_argument("runs", nargs="+", help="model.zip이 든 실행 폴더")
+    b = sub.add_parser("breakdown", help="모델 리턴을 보상 항별로 나누고 행동 경계 비율을 잰다(#359)")
+    b.add_argument("models", nargs="+", help="model.zip 경로")
     for name in ("table", "curves"):
         p = sub.add_parser(name)
         p.add_argument("root", nargs="?", default=str(HERE / "runs" / "230"))
     args = ap.parse_args()
-    return {"train": train, "table": table, "curves": curves, "select": select}[args.cmd](args)
+    return {"train": train, "table": table, "curves": curves, "select": select, "breakdown": breakdown}[args.cmd](args)
 
 
 if __name__ == "__main__":
