@@ -251,8 +251,15 @@ def breakdown_stats(model_path, seeds=CURVE_SEEDS):
     import torch
     from stable_baselines3 import PPO
 
-    kind = read_meta(model_path)["action"]
+    meta = read_meta(model_path)
+    if meta.get("vecnormalize"):
+        # 정책 분포를 직접 읽어서 load_policy()의 관측 정규화를 거치지 않는다. 잘못된 값을 내지 않게 거부한다
+        raise ValueError(f"{model_path}: 관측 정규화(VecNormalize) 모델은 breakdown이 지원하지 않는다.")
+    kind = meta["action"]
     model = PPO.load(str(model_path), device="cpu")
+    if int(model.action_space.shape[0]) != ActionAdapter.SIZES[kind]:
+        raise ValueError(f"{model_path}: 모델 행동 {model.action_space.shape[0]}차원이 json의 행동 구조 {kind!r}와 다르다. "
+                         "체크포인트면 실행 폴더의 model.json을 <이름>.json으로 복사한다.")
     env = HopperAttitudeEnv()
     terms = np.zeros(4)   # 기울기, 요, 각속도, 행동 크기. 에피소드 합의 평균
     raw_all, vane_all, mix_all = [], [], []

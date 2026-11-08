@@ -70,7 +70,7 @@ python ../../ship.py capped 8G -- python ppo_ablation.py train --condition crash
 python ppo_ablation.py breakdown <폴더>/checkpoints/model_400000_steps.zip <폴더>/checkpoints/model_1000000_steps.zip
 ```
 
-`--sb3-log`는 SB3 학습 지표를 `sb3/progress.csv`에, 정책을 50k마다 `checkpoints/`에 남긴다. 결과 폴더는 커밋하지 않았다. `breakdown`은 리턴을 `hopper_aviary.py` 보상 항으로 나누고 행동이 [-1, 1] 경계에 붙는 비율을 잰다(곡선용 seed 100000-100019). 체크포인트 옆에 실행 폴더의 `model.json`을 같은 이름으로 복사해야 행동 구조를 읽는다.
+`--sb3-log`는 SB3 학습 지표를 `sb3/progress.csv`에, 정책을 50k마다 `checkpoints/`에 남긴다. 결과 폴더는 커밋하지 않았다. `breakdown`은 리턴을 `hopper_aviary.py` 보상 항으로 나누고 행동이 [-1, 1] 경계에 붙는 비율을 잰다(곡선용 seed 100000-100019). 체크포인트 옆에 실행 폴더의 `model.json`을 같은 이름으로 복사해야 행동 구조를 읽는다. 관측 정규화 모델은 지원하지 않는다.
 
 **보상 항(결정적 행동, 곡선용 seed 20개 평균).** 행동 항 약 -0.5는 고정 스로틀 1.0의 비용(0.001 × 500 스텝)이다.
 
