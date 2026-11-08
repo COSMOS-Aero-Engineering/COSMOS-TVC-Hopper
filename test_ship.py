@@ -543,13 +543,16 @@ class CmdReviewTest(unittest.TestCase):
     def test_codex_writes_only_to_its_temp_folder(self):
         # #283: :read-only를 상속한 권한 프로필이 TMPDIR 폴더 하나만 쓰기로 연다. --sandbox를 같이 주면
         # Codex가 권한 프로필을 쓰지 않는다. 폴더는 리뷰하는 동안만 있고 부모 환경의 TMPDIR은 그대로다.
-        with mock.patch.dict(ship.os.environ, {"TMPDIR": "parent-tmp"}):
+        # #314: uv 캐시도 이 폴더 안에 둔다. 부모 환경의 UV_CACHE_DIR(공유 캐시)은 리뷰어에게 넘기지 않는다.
+        with mock.patch.dict(ship.os.environ, {"TMPDIR": "parent-tmp", "UV_CACHE_DIR": "parent-cache"}):
             (cmd, _), out = self.run_review((None, "no PR"), lambda c: c[0] == "codex")
             self.assertEqual(ship.os.environ["TMPDIR"], "parent-tmp")
+            self.assertEqual(ship.os.environ["UV_CACHE_DIR"], "parent-cache")
         tmp = self.env["TMPDIR"]
         self.assertTrue(self.tmp_existed)
         self.assertFalse(Path(tmp).exists())
         self.assertIn(tmp, out)
+        self.assertEqual(Path(self.env["UV_CACHE_DIR"]).parent, Path(tmp))
         self.assertNotIn("--sandbox", cmd)
         profile = f"permissions.{ship.CODEX_PROFILE}"
         config = codex_config(cmd)
@@ -567,6 +570,7 @@ class CmdReviewTest(unittest.TestCase):
         self.assertEqual(cmd, ["codex", "exec", "--sandbox", "read-only", prompt])
         self.assertIsNone(self.env)
         self.assertIn(f"[주의] {conflict}에서 sandbox_mode나 permissions.cosmos_review를 찾았거나", out)
+        self.assertIn("리뷰어는 uv run과 임시 파일이 필요한 스크립트(PyTorch 등)를 돌리지 못한다", out)
 
     def test_codex_temp_folder_is_removed_when_review_stops(self):
         self.run_review((None, "no PR"), lambda c: c[0] == "codex", fail=SystemExit(1))

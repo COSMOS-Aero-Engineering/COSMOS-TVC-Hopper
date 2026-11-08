@@ -788,18 +788,22 @@ def cmd_review(a):
         print(f"[주의] {conflict}에서 sandbox_mode나 permissions.{CODEX_PROFILE}를 찾았거나, "
               "이 파이썬으로 확인하지 못했다(tomllib 없음 또는 TOML 오류).\n"
               "       이 설정은 리뷰어의 권한 프로필을 바꾼다.\n"
-              "       그래서 --sandbox read-only로 리뷰한다. 리뷰어는 임시 파일이 필요한 스크립트"
-              "(PyTorch 등)를 돌리지 못한다.\n"
+              "       그래서 --sandbox read-only로 리뷰한다. 리뷰어는 uv run과 임시 파일이 필요한"
+              " 스크립트(PyTorch 등)를 돌리지 못한다.\n"
               "       임시 폴더를 쓰려면 그 파일에서 그 설정을 지우거나 주석으로 바꾼다.", flush=True)
         reviewer, cmd = "codex", ["codex", "exec", "--sandbox", "read-only", prompt]
     elif use_codex:
         # 리뷰어가 쓸 수 있는 유일한 폴더다(#283). 리뷰가 끝나면 지운다. TMPDIR은 파이썬 tempfile이
         # 모든 OS에서 가장 먼저 보는 변수다. macOS의 /var -> /private/var 같은 링크는 실제 경로로 푼다.
+        # uv 캐시도 이 폴더 안에 둔다(#314). uv run은 .venv가 uv.lock과 맞아도 캐시 폴더에 잠금 파일을
+        # 만든다. 기본 캐시(~/.cache/uv 등)는 샌드박스에서 읽기 전용이라 uv run이 exit 2로 멈췄다.
+        # 환경 변수는 uv 설정 파일의 cache-dir보다 앞선다. 공유 캐시 쓰기를 열지 않는 이유: 리뷰어가 다른
+        # 작업이 같이 쓰는 캐시를 바꿀 수 있다. 빈 캐시라서 .venv에 없는 패키지는 받지 못한다(네트워크 막힘).
         tmp = tempfile.TemporaryDirectory(prefix="cosmos-review-", ignore_cleanup_errors=True)
         tmp_path = Path(tmp.name).resolve()
-        env = dict(os.environ, TMPDIR=str(tmp_path))
+        env = dict(os.environ, TMPDIR=str(tmp_path), UV_CACHE_DIR=str(tmp_path / "uv-cache"))
         reviewer, cmd = "codex", codex_review_cmd(prompt, tmp_path)
-        print(f"리뷰어가 쓸 수 있는 폴더(TMPDIR, 리뷰 뒤에 지운다): {tmp_path}", flush=True)
+        print(f"리뷰어가 쓸 수 있는 폴더(TMPDIR, uv 캐시 포함, 리뷰 뒤에 지운다): {tmp_path}", flush=True)
     elif author != "claude" and logged_in(["claude", "auth", "status"]):
         reviewer, cmd = "claude", ["claude", "-p", "--permission-mode", "plan", prompt]
     else:
