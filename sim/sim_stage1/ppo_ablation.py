@@ -155,7 +155,7 @@ def train(args):
     with open(out / "model.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
     with open(out / "curve.csv", "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(curve_rows[0]))
+        w = csv.DictWriter(f, fieldnames=list(curve_rows[0]), lineterminator="\n")
         w.writeheader()
         w.writerows(curve_rows)
 
