@@ -146,6 +146,8 @@ def train(args):
     t0 = time.time()
     model.learn(total_timesteps=args.steps, callback=Curve())
     train_s = time.time() - t0
+    if not curve_rows:   # CURVE_EVERY보다 짧은 학습(점검용)도 곡선 점 하나를 남긴다. 학습 뒤라 학습 결과는 그대로다
+        curve_rows.append({"timesteps": model.num_timesteps, **rollout_stats(current_policy(), CURVE_SEEDS)})
 
     model.save(out / "model")
     if isinstance(venv, VecNormalize):
