@@ -1,4 +1,4 @@
-# 스로틀 0 지름길을 막은 뒤 PPO 학습 조건 비교 (#230, #344)
+# 스로틀 0 지름길을 막은 뒤 PPO 학습 조건 비교 (#230, #344, #359)
 
 ## 결론
 
@@ -8,6 +8,7 @@
 - 종료 비용을 더하면 이 시점이 빨라진다. 200k에서 학습 seed 3개 중 2개가 PD보다 낫다. 종료 비용과 3축 믹서를 같이 쓰면 3개 모두 넘어짐 0 %다.
 - 1M 스텝에서는 네 조건(`fixed`, `mixer`, `vecnorm`, `crashcost`)이 모두 PD보다 낫다. 차이는 리턴 0.3 이하다.
 - 2차 조합 `crashcost_mixer`, `crashcost_vecnorm`도 1M에서 PD보다 낫다(-2.53, -2.04). 둘 다 `crashcost` 1M(-1.93)보다 좋지 않다(#344).
+- `crashcost_mixer` 1M 곡선이 400k 뒤 나빠지는 것은 결정적 평가 차이 때문이 아니다. 처음 1초의 복원이 나빠진다. 행동이 경계에 붙는 비율은 대조군과 같은 정도로 변했다. 근본 원인은 확인하지 못했다(#359).
 - 저장소에 둔 모델은 `hopper_attitude_ppo_230.zip`(`crashcost`, 1M, 학습 seed 10001)이다.
 
 Stage 1 결과다. 물리 상수는 실험 A 전 임시값이다. 실기 성능으로 해석하지 않는다.
@@ -54,8 +55,68 @@ Stage 1 결과다. 물리 상수는 실험 A 전 임시값이다. 실기 성능�
 - `crashcost` 200k의 평균이 나쁜 이유: 학습 seed 2가 아직 넘어짐을 벗어나지 못했다(리턴 -254.22, 넘어짐 96.5 %). 나머지 둘은 -2.97, -2.32다.
 - `crashcost_vecnorm` 200k의 학습 seed 0은 넘어지지 않지만 리턴이 -733.90이다. 평가 seed 20개에서 에피소드 끝 요각 |ψ| 평균이 3.7 rad였다. 요가 계속 돌아서 0.1·ψ² 비용이 커진 것으로 보인다.
 - `learned`는 학습 seed 3개 모두 스로틀 0 지름길로 갔다(#90과 같다).
-- `crashcost_mixer` 1M(#344): 학습 seed 3개의 리턴은 -2.91, -2.20, -2.49다. 학습 곡선은 300k-500k에서 가장 좋은 값(-1.8에서 -2.1)에 닿은 뒤 1M까지 조금씩 나빠진다. 학습 seed 0은 400k -1.8에서 1M -2.7이 됐다. 원인은 아직 확인하지 못했다(#359).
+- `crashcost_mixer` 1M(#344): 학습 seed 3개의 리턴은 -2.91, -2.20, -2.49다. 학습 곡선은 300k-500k에서 가장 좋은 값(-1.8에서 -2.1)에 닿은 뒤 1M까지 조금씩 나빠진다. 학습 seed 0은 400k -1.8에서 1M -2.7이 됐다. 원인 후보를 확인한 기록은 아래 §crashcost_mixer 1M 곡선이 나빠지는 원인(#359)에 있다.
 - `crashcost_vecnorm` 1M(#344): 200k에서 본 요 회전(학습 seed 0)은 300k 뒤 사라졌다. 곡선 리턴이 200k -787.7에서 300k -3.1이 됐다. 1M 리턴은 -2.11, -1.92, -2.08이다.
+
+## crashcost_mixer 1M 곡선이 나빠지는 원인 (#359)
+
+**결론:** "결정적 평가와 확률적 학습의 차이"는 원인이 아니다. 행동 클리핑 비율은 나빠지지 않는 `crashcost`와 같은 정도로 변해서 원인을 가르지 못한다. 나빠진 리턴은 처음 1초의 복원 구간에서 생긴다. 정책 엔트로피 감소와 큰 정책 갱신(approx_kl)은 나빠지지 않는 `crashcost`에서도 같이 생겨서, 이것만으로는 설명하지 못한다. 근본 원인은 아직 확인하지 못했다.
+
+학습 seed 0을 `crashcost_mixer`와 대조군 `crashcost`로 1M씩 다시 학습했다. 두 곡선(`curve.csv`)과 `result.json` 리턴은 `runs/230`의 값과 같았다. 그래서 아래 값은 표의 실행과 같은 학습이다.
+
+```bash
+cd sim/sim_stage1
+python ../../ship.py capped 8G -- python ppo_ablation.py train --condition crashcost_mixer --seed 0 --steps 1000000 --out <폴더> --sb3-log
+python ppo_ablation.py breakdown <폴더>/checkpoints/model_400000_steps.zip <폴더>/checkpoints/model_1000000_steps.zip
+```
+
+`--sb3-log`는 SB3 학습 지표를 `sb3/progress.csv`에, 정책을 50k마다 `checkpoints/`에 남긴다. 결과 폴더는 커밋하지 않았다. `breakdown`은 리턴을 `hopper_aviary.py` 보상 항으로 나누고 행동이 [-1, 1] 경계에 붙는 비율을 잰다(곡선용 seed 100000-100019). 체크포인트 옆에 실행 폴더의 `model.json`을 같은 이름으로 복사해야 행동 구조를 읽는다. 관측 정규화 모델은 지원하지 않는다.
+
+**보상 항(결정적 행동, 곡선용 seed 20개 평균).** 행동 항 약 -0.5는 고정 스로틀 1.0의 비용(0.001 × 500 스텝)이다.
+
+| 조건 | 스텝 | 리턴 | 기울기 | 요 | 각속도 | 행동 | 베인 명령 경계 비율 | 확률적 행동 리턴 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `crashcost_mixer` | 400k | -1.84 | -0.86 | -0.11 | -0.17 | -0.71 | 0.7 % | -2.23 |
+| `crashcost_mixer` | 1M | -2.69 | -1.44 | -0.15 | -0.37 | -0.74 | 1.5 % | -2.78 |
+| `crashcost` | 400k | -1.96 | -0.91 | -0.16 | -0.17 | -0.72 | 1.1 % | -2.28 |
+| `crashcost` | 1M | -1.83 | -0.78 | -0.14 | -0.19 | -0.72 | 1.4 % | -1.87 |
+
+**SB3 학습 지표(각 100k 구간의 평균).**
+
+| 조건 | 구간 | 학습 리턴 `ep_rew_mean` | `std` | `entropy_loss` | `approx_kl` | `clip_fraction` | `explained_variance` | `value_loss` |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `crashcost_mixer` | 400k | -2.32 | 0.21 | 0.47 | 0.025 | 0.22 | 0.971 | 0.00038 |
+| `crashcost_mixer` | 800k-900k | -2.56, -2.71 | 0.11 | 2.49, 2.56 | 0.064, 0.068 | 0.32, 0.33 | 0.945, 0.928 | 0.0031, 0.0026 |
+| `crashcost` | 400k | -2.25 | 0.28 | -0.55 | 0.023 | 0.20 | 0.970 | 0.00028 |
+| `crashcost` | 800k-900k | -1.92, -2.00 | 0.13, 0.12 | 2.41, 2.73 | 0.084, 0.076 | 0.33, 0.34 | 0.962, 0.954 | 0.00040, 0.00044 |
+
+후보별 판정:
+
+| 후보 | 판정 | 근거 |
+|---|---|---|
+| 믹서 행동 클리핑 | 비율로는 가르지 못한다. 믹서가 자를 때 축이 섞이는 효과는 배제하지 못했다 | 아래 클리핑 표. 처음 1초에 몰려 있고, 두 조건이 같은 정도로 변했다 |
+| 결정적 평가와 확률적 학습의 차이 | 아니다 | 확률적 행동 리턴(-2.23 → -2.78)과 학습 리턴 `ep_rew_mean`(-2.32 → -2.81)도 같이 나빠진다 |
+| 학습률 | 원인을 가르지 못한다 | 두 조건 모두 SB3 기본값 3e-4로 일정하다(`train/learning_rate`). 감쇠를 시험하지 않았다 |
+| 정책 엔트로피(`std`) 감소 | 혼자서는 설명하지 못한다 | `std`가 두 조건 모두 0.2-0.3에서 0.10-0.12로 줄었다. `crashcost`는 나빠지지 않는다 |
+| 큰 정책 갱신(approx_kl, clip_fraction) | 혼자서는 설명하지 못한다 | 두 조건 모두 approx_kl 0.06-0.08, clip_fraction 0.3 이상이다. SB3 기본값은 `target_kl` 없음이다 |
+| 가치 함수 | 관련 있어 보인다. 원인인지는 확인하지 못했다 | `crashcost_mixer`만 800k-900k에서 `explained_variance`가 0.97에서 0.93으로 떨어지고 `value_loss`가 약 7-8배 커졌다 |
+
+**행동 클리핑(경계에 붙은 베인 명령 비율, 처음 1초 / 1-5초).** 결정적은 정책 평균, 표본은 학습처럼 정책 분포에서 뽑은 행동이다. 표본 행으로 에피소드를 진행했다(곡선용 seed 20개, 체크포인트에서 `torch.manual_seed(0)`). 위 보상 항 표의 경계 비율은 에피소드 전체의 결정적 값이다.
+
+| 조건 | 스텝 | 결정적 | 표본 |
+|---|---:|---:|---:|
+| `crashcost_mixer` | 400k | 4.7 % / 0.3 % | 9.5 % / 5.4 % |
+| `crashcost_mixer` | 1M | 7.8 % / 0.0 % | 8.0 % / 0.1 % |
+| `crashcost` | 400k | 5.6 % / 0.1 % | 10.0 % / 4.5 % |
+| `crashcost` | 1M | 7.1 % / 0.0 % | 7.2 % / 0.0 % |
+
+이 표는 `ppo_ablation.py`에 넣지 않은 임시 스크립트로 쟀다. 표본 클리핑은 두 조건 모두 줄었다. `std`가 줄었기 때문으로 보인다.
+
+나빠진 곳: `crashcost_mixer` 400k → 1M에서 리턴 차이 -0.85 중 기울기 항이 -0.58, 각속도 항이 -0.20이다. 에피소드 처음 1초(100 스텝)만 보면 기울기 비용이 0.75에서 1.25로, 각속도 비용이 0.16에서 0.37로 커졌다. 1-5초 구간은 각각 0.11 → 0.19, 0.001 → 0.002다. 최종 기울기 중앙값은 1M에서도 0.8°다. 그래서 정상오차가 아니라 초기 기울기(최대 ±17°)에서 복원하는 과정이 느려지거나 더 흔들리는 것으로 보인다.
+
+- 학습 seed 0만 다시 학습했다. 학습 seed 1, 2는 1M 모델만 있어서 같은 비교를 하지 못했다. 1M 모델의 경계 비율은 1.0 %, 0.7 %다(`breakdown`, #344 모델).
+- 학습률 감쇠나 `target_kl`로 곡선이 나빠지지 않는지는 시험하지 않았다(#367).
+- 저장소 모델(`crashcost`)은 이 현상과 관계없다. `crashcost` 1M 곡선은 나빠지지 않는다.
 
 ## 판정 (#230 할 일)
 
@@ -139,5 +200,8 @@ python ../../ship.py capped 8G -- python compare_metrics.py --model hopper_attit
 - SB3 RL Tips and Tricks: 정규화, 여러 학습 seed, 별도 평가 seed. https://stable-baselines3.readthedocs.io/en/master/guide/rl_tips.html
 - SB3 `VecNormalize` 저장과 불러오기(평가 때 `training=False`): https://stable-baselines3.readthedocs.io/en/master/guide/vec_envs.html#vecnormalize
 - Gymnasium `terminated`와 `truncated` 구분: https://gymnasium.farama.org/tutorials/gymnasium_basics/handling_time_limits/
+- SB3 PPO 문서: 기본 하이퍼파라미터(학습률 3e-4 일정, `ent_coef` 0, `target_kl` 없음)와 학습 지표 뜻. https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html , https://stable-baselines3.readthedocs.io/en/master/common/logger.html
+- Andrychowicz et al. 2021, "What Matters in On-Policy Reinforcement Learning?"(arXiv:2006.05990): 행동 클리핑, 초기 `std`, 학습률 감쇠가 PPO 성능에 주는 영향.
+- Chou et al. 2017, "Improving Stochastic Policy Gradients in Continuous Control with Deep RL using the Beta Distribution"(ICML): 가우시안 정책을 경계에서 자르면 기울기 추정이 치우친다.
 - Pardo et al. 2018, "Time Limits in Reinforcement Learning"(arXiv:1712.00378): 종료와 시간 제한을 섞으면 가치 추정이 틀린다.
 - 원인 분석: `ppo-diagnosis.md`(#90). 고정 스로틀 20k가 모두 넘어진 결과와 이 표의 200k 결과가 같은 방향이다.
