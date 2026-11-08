@@ -45,6 +45,8 @@ REVIEW_PROMPT = ("Review the changes on this branch against {base}. Report concr
 # 막혀 gh로 PR·이슈를 읽지 못한다. 기록은 리뷰 요청 문장과 따로 넘기고, 요청 문장은 범위만 둔다.
 # Codex 리뷰어의 권한 프로필 이름(#283). codex_review_cmd()가 -c로 이 이름의 프로필을 만든다.
 CODEX_PROFILE = "cosmos_review"
+# Codex 설정 파일의 sandbox_mode 키(주석 줄 제외). 문서상 이 키가 있으면 Codex가 권한 프로필을 쓰지 않는다.
+LEGACY_SANDBOX_KEY = re.compile(r'^[^#\n]*\bsandbox_mode"?\s*=', re.M)
 RECORD_FIELDS = "number,title,state,url,author,createdAt,body,comments"
 # PR이면 더 읽는 필드. `gh issue view`의 comments에는 PR 리뷰(승인·변경 요청)가 없다.
 PR_FIELDS = "mergedAt,commits,reviews"
@@ -505,6 +507,33 @@ def opencode_model(author, env=None):
     die("OpenCode 무료 모델 중 쓸 수 있는 리뷰어를 못 찾았다. `opencode models`로 목록을 본다.")
 
 
+def codex_config_files():
+    """Codex가 읽는 설정 파일 후보: 사용자(CODEX_HOME), 이 저장소(.codex), 시스템(/etc/codex)."""
+    home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    files = [home / "config.toml", ROOT / ".codex" / "config.toml"]
+    if os.name != "nt":
+        files.append(Path("/etc/codex/config.toml"))
+    return files
+
+
+def codex_legacy_sandbox_config(files=None):
+    """sandbox_mode 키가 있는 첫 Codex 설정 파일. 없으면 None.
+
+    Codex 문서(https://learn.chatgpt.com/docs/permissions)는 읽은 설정 파일에 sandbox_mode가 있으면
+    권한 프로필 대신 옛 sandbox 설정을 쓴다고 쓴다. 그러면 codex_review_cmd()의 프로필이 빠지고 사용자의
+    sandbox_mode(예: workspace-write)로 리뷰가 돈다. 표의 `[profiles.x]` 안의 키도 찾는다. 파일 내용은
+    출력하지 않는다.
+    """
+    for f in codex_config_files() if files is None else files:
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if LEGACY_SANDBOX_KEY.search(text):
+            return f
+    return None
+
+
 def codex_review_cmd(prompt, tmp):
     """Codex 리뷰 명령. 읽기 전용 샌드박스에서 임시 폴더 tmp 하나만 쓰기를 연다(#283).
 
@@ -709,7 +738,17 @@ def cmd_review(a):
         print(f"리뷰어에게 표준 입력으로 넘기는 기록: {summary}", flush=True)
     # 리뷰 요청에는 범위만 넣는다(AGENTS.md §작업 순서 6). 힌트나 체크리스트를 넣지 않는다.
     env, tmp = None, None
-    if author != "openai" and logged_in(["codex", "login", "status"]):
+    use_codex = author != "openai" and logged_in(["codex", "login", "status"])
+    legacy = codex_legacy_sandbox_config() if use_codex else None
+    if legacy is not None:
+        # 권한 프로필이 빠질 수 있으면 #283 이전처럼 --sandbox read-only로 리뷰한다. 리뷰어 권한이
+        # 사용자의 sandbox_mode로 넓어지지 않게 하려는 것이다. 대신 임시 폴더가 없다.
+        print(f"[주의] {legacy}에 sandbox_mode가 있다. Codex는 이때 권한 프로필을 쓰지 않는다.\n"
+              "       그래서 --sandbox read-only로 리뷰한다. 리뷰어는 임시 파일이 필요한 스크립트"
+              "(PyTorch 등)를 돌리지 못한다.\n"
+              "       임시 폴더를 쓰려면 그 파일에서 sandbox_mode 줄을 지우거나 주석으로 바꾼다.", flush=True)
+        reviewer, cmd = "codex", ["codex", "exec", "--sandbox", "read-only", prompt]
+    elif use_codex:
         # 리뷰어가 쓸 수 있는 유일한 폴더다(#283). 리뷰가 끝나면 지운다. TMPDIR은 파이썬 tempfile이
         # 모든 OS에서 가장 먼저 보는 변수다. macOS의 /var -> /private/var 같은 링크는 실제 경로로 푼다.
         tmp = tempfile.TemporaryDirectory(prefix="cosmos-review-", ignore_cleanup_errors=True)
