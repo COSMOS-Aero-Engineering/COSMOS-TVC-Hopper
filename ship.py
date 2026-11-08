@@ -29,6 +29,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+try:
+    import tomllib
+except ImportError:  # 파이썬 3.10 이하. codex_config_has_sandbox_mode()가 글자로 찾는다.
+    tomllib = None
+
 ROOT = Path(__file__).resolve().parent
 TAGS = ("cad", "fw", "sim", "web", "kicad", "data", "docs", "infra")
 # 이슈 라벨 → 브랜치 태그. 제목에 [태그]가 없을 때만 쓴다.
@@ -45,8 +50,6 @@ REVIEW_PROMPT = ("Review the changes on this branch against {base}. Report concr
 # 막혀 gh로 PR·이슈를 읽지 못한다. 기록은 리뷰 요청 문장과 따로 넘기고, 요청 문장은 범위만 둔다.
 # Codex 리뷰어의 권한 프로필 이름(#283). codex_review_cmd()가 -c로 이 이름의 프로필을 만든다.
 CODEX_PROFILE = "cosmos_review"
-# Codex 설정 파일의 sandbox_mode 키(주석 줄 제외). 문서상 이 키가 있으면 Codex가 권한 프로필을 쓰지 않는다.
-LEGACY_SANDBOX_KEY = re.compile(r'^[^#\n]*\bsandbox_mode"?\s*=', re.M)
 RECORD_FIELDS = "number,title,state,url,author,createdAt,body,comments"
 # PR이면 더 읽는 필드. `gh issue view`의 comments에는 PR 리뷰(승인·변경 요청)가 없다.
 PR_FIELDS = "mergedAt,commits,reviews"
@@ -507,13 +510,44 @@ def opencode_model(author, env=None):
     die("OpenCode 무료 모델 중 쓸 수 있는 리뷰어를 못 찾았다. `opencode models`로 목록을 본다.")
 
 
-def codex_config_files():
-    """Codex가 읽는 설정 파일 후보: 사용자(CODEX_HOME), 이 저장소(.codex), 시스템(/etc/codex)."""
+def codex_config_files(cwd=None):
+    """Codex가 읽을 수 있는 설정 파일 후보. 실제로 읽는 파일보다 넓게 잡는다.
+
+    Codex 설정 순서(https://learn.chatgpt.com/docs/config-file/config-basic): 사용자 설정
+    `$CODEX_HOME/config.toml`, 프로젝트 루트에서 현재 폴더까지의 모든 `.codex/config.toml`(신뢰한 프로젝트만),
+    시스템 설정 `/etc/codex/config.toml`. 여기서는 프로젝트 루트를 찾지 않고 현재 폴더의 모든 상위 폴더를 본다.
+    신뢰 여부도 보지 않는다. 후보가 많으면 read-only로 도는 경우만 늘어난다.
+    """
+    cwd = Path.cwd() if cwd is None else Path(cwd)
     home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
-    files = [home / "config.toml", ROOT / ".codex" / "config.toml"]
+    files = [home / "config.toml"]
+    files += [d / ".codex" / "config.toml" for d in (cwd, *cwd.parents)]
     if os.name != "nt":
         files.append(Path("/etc/codex/config.toml"))
-    return files
+    return list(dict.fromkeys(files))  # 현재 폴더가 홈 아래면 사용자 설정이 두 번 나온다.
+
+
+def codex_config_has_sandbox_mode(text):
+    """TOML 글에 sandbox_mode 키가 어느 깊이에든 있으면 True.
+
+    키 이름의 따옴표와 이스케이프는 tomllib이 푼다. tomllib이 없거나(파이썬 3.10 이하) 글을 읽지 못하면
+    True로 본다. 그러면 리뷰는 read-only로 돈다. 권한이 넓어지는 쪽으로 틀리지 않게 하려는 것이다.
+    """
+    if tomllib is None:
+        return "sandbox_mode" in text
+    try:
+        stack = [tomllib.loads(text)]
+    except tomllib.TOMLDecodeError:
+        return True
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if "sandbox_mode" in node:
+                return True
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return False
 
 
 def codex_legacy_sandbox_config(files=None):
@@ -521,15 +555,14 @@ def codex_legacy_sandbox_config(files=None):
 
     Codex 문서(https://learn.chatgpt.com/docs/permissions)는 읽은 설정 파일에 sandbox_mode가 있으면
     권한 프로필 대신 옛 sandbox 설정을 쓴다고 쓴다. 그러면 codex_review_cmd()의 프로필이 빠지고 사용자의
-    sandbox_mode(예: workspace-write)로 리뷰가 돈다. 표의 `[profiles.x]` 안의 키도 찾는다. 파일 내용은
-    출력하지 않는다.
+    sandbox_mode(예: workspace-write)로 리뷰가 돈다. 파일 내용은 출력하지 않는다.
     """
     for f in codex_config_files() if files is None else files:
         try:
-            text = f.read_text(encoding="utf-8", errors="replace")
+            text = f.read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
             continue
-        if LEGACY_SANDBOX_KEY.search(text):
+        if codex_config_has_sandbox_mode(text):
             return f
     return None
 

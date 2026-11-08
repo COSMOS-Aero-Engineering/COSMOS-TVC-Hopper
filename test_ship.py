@@ -594,15 +594,20 @@ class CodexLegacySandboxConfigTest(unittest.TestCase):
             f.write_text(text, encoding="utf-8")
             return ship.codex_legacy_sandbox_config([Path(tmp) / "missing.toml", f]) == f
 
-    def test_finds_sandbox_mode_at_top_level_and_in_profiles(self):
+    def test_finds_sandbox_mode_in_any_toml_spelling(self):
         for text in ('sandbox_mode = "workspace-write"\n',
+                     "'sandbox_mode' = 'workspace-write'\n",
+                     '"sandbox\\u005fmode" = "workspace-write"\n',
                      'model = "x"\n\n[profiles.fast]\nsandbox_mode = "danger-full-access"\n',
                      'profiles.fast.sandbox_mode="read-only"\n',
-                     '[profiles]\nfast = { sandbox_mode = "workspace-write" }\n'):
+                     '[profiles]\nfast = { sandbox_mode = "workspace-write" }\n',
+                     '\ufeffsandbox_mode = "workspace-write"\n'):
             with self.subTest(text=text):
                 self.assertTrue(self.find(text))
 
     def test_ignores_comments_other_keys_and_missing_files(self):
+        if ship.tomllib is None:
+            self.skipTest("tomllib가 없다 (파이썬 3.11 미만)")
         for text in ('# sandbox_mode = "workspace-write"\n',
                      'model = "x"\n[sandbox_workspace_write]\nnetwork_access = true\n',
                      'default_permissions = ":workspace"\n'):
@@ -610,10 +615,20 @@ class CodexLegacySandboxConfigTest(unittest.TestCase):
                 self.assertFalse(self.find(text))
         self.assertIsNone(ship.codex_legacy_sandbox_config([Path("no-such-dir") / "config.toml"]))
 
-    def test_user_config_follows_codex_home(self):
+    def test_unreadable_toml_or_no_tomllib_counts_as_found(self):
+        # 권한이 넓어지는 쪽으로 틀리지 않는다: 모르면 read-only로 리뷰한다.
+        self.assertTrue(self.find('sandbox_mode = \n'))
+        with mock.patch.object(ship, "tomllib", None):
+            self.assertTrue(self.find('# sandbox_mode = "workspace-write"\n'))
+            self.assertFalse(self.find('model = "x"\n'))
+
+    def test_candidates_cover_codex_home_and_every_project_layer(self):
+        cwd = Path("repo") / "sim" / "sim_stage1"
         with mock.patch.dict(ship.os.environ, {"CODEX_HOME": "custom-home"}):
-            self.assertEqual(ship.codex_config_files()[0], Path("custom-home") / "config.toml")
-        self.assertIn(ship.ROOT / ".codex" / "config.toml", ship.codex_config_files())
+            files = ship.codex_config_files(cwd)
+        self.assertEqual(files[0], Path("custom-home") / "config.toml")
+        for d in (cwd, Path("repo") / "sim", Path("repo")):
+            self.assertIn(d / ".codex" / "config.toml", files)
 
 
 class OpenCodeIsolationTest(unittest.TestCase):
