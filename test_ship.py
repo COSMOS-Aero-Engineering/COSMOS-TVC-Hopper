@@ -7,6 +7,7 @@
 import argparse
 import io
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -584,6 +585,24 @@ class CmdReviewTest(unittest.TestCase):
                 cmd = ship.codex_review_cmd("prompt", path)
                 self.assertEqual(parse_toml_value(codex_config(cmd)[f"{profile}.filesystem"]),
                                  {path: "write"})
+
+    def test_windows_temp_folder_inherits_temp_acl(self):
+        # #315: Windows에서 mkdtemp(mode 0o700)의 ACL 폴더는 Codex unelevated 샌드박스가 쓰지 못했다.
+        # Windows 분기는 mkdtemp를 부르지 않고 mode 0o700 없이 %TEMP% 아래에 만든다.
+        with tempfile.TemporaryDirectory() as base, \
+                mock.patch.object(ship.tempfile, "gettempdir", return_value=base), \
+                mock.patch.object(ship.tempfile, "mkdtemp", side_effect=AssertionError("mkdtemp")), \
+                mock.patch("os.mkdir", wraps=os.mkdir) as mkdir:
+            path, cleanup = ship.codex_review_tmp(windows=True)
+            self.assertTrue(path.is_dir())
+            self.assertEqual(path.parent, Path(base).resolve())
+            self.assertTrue(path.name.startswith("cosmos-review-"))
+            args = mkdir.call_args
+            self.assertNotEqual((args.args[1:] or (args.kwargs.get("mode", 0o777),))[0], 0o700)
+            (path / "uv-cache").mkdir()
+            (path / "uv-cache" / "f").write_text("x")
+            cleanup()
+            self.assertFalse(path.exists())
 
     def test_without_records_review_still_runs(self):
         (cmd, stdin), out = self.run_review((None, "gh가 없다"), lambda c: c[0] == "codex")
