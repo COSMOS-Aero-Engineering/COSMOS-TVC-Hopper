@@ -22,12 +22,12 @@
                쓴다. 여기서는 절대 띠 2°를 쓴다. 초기 기울기가 10°이면 2°는 변화량의 20 %다.
                TC-3 실측과 같은 기준을 쓰려고 상대 띠 복원시간은 같이 내지 않는다.
                근거는 docs/design/00-hopper-master-design.md §11.1(#274).
-  오버슈트     두 값을 같이 낸다.
-               - 0 넘음: stepinfo의 정의(ynorm = (y - yinit)/(yfinal - yinit), 오버슈트 = max(0, max(ynorm - 1)))에
-                 초기 기울기 방향으로 투영한 기울기를 넣은 값. 0을 지나 반대쪽으로 넘어간 최대 크기 / 초기 기울기.
-                 발표 표의 "오버슈트"는 이 값이 교재 정의와 같다.
-               - 초기값 초과: evaluate.py가 원래 내던 값. (최대 기울기 - 초기 기울기) / 초기 기울기.
-                 처음보다 더 기울어진 정도이고 교재의 오버슈트와 다르다.
+  오버슈트     0 넘음. 수평(0°)을 지나 반대쪽으로 기운 최대 각도 / 초기 기울기(evaluate.py의 overshoot_cross).
+               MATLAB stepinfo의 정의(ynorm = (y - yinit)/(yfinal - yinit), 오버슈트 = max(0, max(ynorm - 1)))에
+               초기 기울기 방향으로 투영한 기울기와 yfinal = 0을 넣은 값이다. 복원하지 않고 멈춘 에피소드도
+               0이므로 미복원 수, 정상오차와 함께 읽는다.
+               예전 표의 "초기값 초과"((최대 기울기 - 초기 기울기) / 초기 기울기)는 표에서 뺐다.
+               근거는 docs/design/00-hopper-master-design.md §11.2(#273).
   정상오차     마지막 20 % 구간(1 s)의 평균 기울기(°). 교재 정의는 e(t)의 t -> 무한대 극한이다.
                에피소드가 5 s로 끝나므로 마지막 구간 평균으로 대신한다.
   넘어짐       롤이나 피치가 60°를 넘어 에피소드가 끝난 비율(hopper_aviary.py의 terminated).
@@ -83,7 +83,7 @@ def evaluate(act, reset_options=None):
 def row(name, m):
     return (f"| {name} | {m['crash_rate'] * 100:.1f} % | {m['settle_s']:.2f} | "
             f"{m['settle_censored']}/{m['episodes']} | {m['overshoot_cross'] * 100:.1f} % | "
-            f"{m['overshoot'] * 100:.1f} % | {m['steady_err_deg']:.2f}° | {m['mean_reward']:.2f} |")
+            f"{m['steady_err_deg']:.2f}° | {m['mean_reward']:.2f} |")
 
 
 def main():
@@ -102,13 +102,13 @@ def main():
     print(f"평가 seed {EVAL_SEEDS.start}-{EVAL_SEEDS.stop - 1}, 도메인 랜덤화 켬, 복원 기준 {SETTLE_DEG}°")
     for condition, options in CONDITIONS.items():
         print(f"\n초기 자세: {condition}\n")
-        print("| 정책 | 넘어짐 | 복원시간 평균(s) | 미복원 | 오버슈트(0 넘음) | 초기값 초과 | 정상오차 | 평균 리턴 |")
-        print("|---|---:|---:|---:|---:|---:|---:|---:|")
+        print("| 정책 | 넘어짐 | 복원시간 평균(s) | 미복원 | 오버슈트 | 정상오차 | 평균 리턴 |")
+        print("|---|---:|---:|---:|---:|---:|---:|")
         for name, act in policies.items():
             print(row(name, evaluate(act, reset_options=options)))
     print("\n* 미복원: 끝까지 복원 기준 아래로 못 내려온 에피소드 수. 복원시간 평균에는 에피소드 길이(5 s)로 들어간다.")
-    print("* 오버슈트(0 넘음): 0을 지나 반대쪽으로 넘어간 최대 크기 / 초기 기울기(MATLAB stepinfo 정의).")
-    print("* 초기값 초과: (최대 기울기 - 초기 기울기) / 초기 기울기(evaluate.py의 overshoot).")
+    print("* 오버슈트: 수평(0°)을 지나 반대쪽으로 기운 최대 각도 / 초기 기울기(MATLAB stepinfo 정의, 최종값 0. "
+          "마스터 설계 §11.2). 복원하지 않고 멈춘 에피소드도 0 %다.")
     print("* 정상오차: 마지막 20 % 구간의 평균 기울기. 넘어진 에피소드도 평균에 들어간다.")
     return 0
 
