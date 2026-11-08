@@ -31,7 +31,7 @@ from pathlib import Path
 
 try:
     import tomllib
-except ImportError:  # 파이썬 3.10 이하. codex_config_has_sandbox_mode()가 True로 본다.
+except ImportError:  # 파이썬 3.10 이하. codex_config_has_conflict()가 True로 본다.
     tomllib = None
 
 ROOT = Path(__file__).resolve().parent
@@ -527,8 +527,12 @@ def codex_config_files(cwd=None):
     return list(dict.fromkeys(files))  # 현재 폴더가 홈 아래면 사용자 설정이 두 번 나온다.
 
 
-def codex_config_has_sandbox_mode(text):
-    """TOML 글에 sandbox_mode 키가 어느 깊이에든 있으면 True.
+def codex_config_has_conflict(text):
+    """TOML 글이 리뷰 권한 프로필을 바꿀 수 있으면 True.
+
+    두 경우다. (1) sandbox_mode 키가 어느 깊이에든 있다. Codex 문서는 이때 권한 프로필 대신 옛 sandbox
+    설정을 쓴다고 쓴다. (2) `permissions.cosmos_review` 표가 이미 있다. Codex는 설정 층을 합치므로
+    codex_review_cmd()의 -c가 정하지 않은 키(예: network.enabled, 다른 경로의 write)가 남는다.
 
     키 이름의 따옴표와 이스케이프는 tomllib이 푼다. tomllib이 없거나(파이썬 3.10 이하) 글을 읽지 못하면
     True로 본다. 그러면 리뷰는 read-only로 돈다. 권한이 넓어지는 쪽으로 틀리지 않게 하려는 것이다.
@@ -538,9 +542,13 @@ def codex_config_has_sandbox_mode(text):
     if tomllib is None:
         return True
     try:
-        stack = [tomllib.loads(text)]
+        data = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
         return True
+    profiles = data.get("permissions")
+    if isinstance(profiles, dict) and CODEX_PROFILE in profiles:
+        return True
+    stack = [data]
     while stack:
         node = stack.pop()
         if isinstance(node, dict):
@@ -552,19 +560,17 @@ def codex_config_has_sandbox_mode(text):
     return False
 
 
-def codex_legacy_sandbox_config(files=None):
-    """sandbox_mode 키가 있는 첫 Codex 설정 파일. 없으면 None.
+def codex_conflicting_config(files=None):
+    """리뷰 권한 프로필을 바꿀 수 있는 첫 Codex 설정 파일. 없으면 None.
 
-    Codex 문서(https://learn.chatgpt.com/docs/permissions)는 읽은 설정 파일에 sandbox_mode가 있으면
-    권한 프로필 대신 옛 sandbox 설정을 쓴다고 쓴다. 그러면 codex_review_cmd()의 프로필이 빠지고 사용자의
-    sandbox_mode(예: workspace-write)로 리뷰가 돈다. 파일 내용은 출력하지 않는다.
+    무엇이 충돌인지는 codex_config_has_conflict()에 있다. 파일 내용은 출력하지 않는다.
     """
     for f in codex_config_files() if files is None else files:
         try:
             text = f.read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
             continue
-        if codex_config_has_sandbox_mode(text):
+        if codex_config_has_conflict(text):
             return f
     return None
 
@@ -586,6 +592,7 @@ def codex_review_cmd(prompt, tmp):
             "-c", f'default_permissions="{CODEX_PROFILE}"',
             "-c", f'{profile}.extends=":read-only"',
             "-c", f'{profile}.filesystem={{{path}="write"}}',
+            "-c", f"{profile}.network.enabled=false",
             prompt]
 
 
@@ -774,16 +781,16 @@ def cmd_review(a):
     # 리뷰 요청에는 범위만 넣는다(AGENTS.md §작업 순서 6). 힌트나 체크리스트를 넣지 않는다.
     env, tmp = None, None
     use_codex = author != "openai" and logged_in(["codex", "login", "status"])
-    legacy = codex_legacy_sandbox_config() if use_codex else None
-    if legacy is not None:
-        # 권한 프로필이 빠질 수 있으면 #283 이전처럼 --sandbox read-only로 리뷰한다. 리뷰어 권한이
-        # 사용자의 sandbox_mode로 넓어지지 않게 하려는 것이다. 대신 임시 폴더가 없다.
-        print(f"[주의] {legacy}에서 sandbox_mode를 찾았거나, 이 파이썬으로 확인하지 못했다"
-              "(tomllib 없음 또는 TOML 오류).\n"
-              "       sandbox_mode가 있으면 Codex는 권한 프로필을 쓰지 않는다.\n"
+    conflict = codex_conflicting_config() if use_codex else None
+    if conflict is not None:
+        # 권한 프로필이 빠지거나 바뀔 수 있으면 #283 이전처럼 --sandbox read-only로 리뷰한다. 리뷰어
+        # 권한이 사용자의 설정으로 넓어지지 않게 하려는 것이다. 대신 임시 폴더가 없다.
+        print(f"[주의] {conflict}에서 sandbox_mode나 permissions.{CODEX_PROFILE}를 찾았거나, "
+              "이 파이썬으로 확인하지 못했다(tomllib 없음 또는 TOML 오류).\n"
+              "       이 설정은 리뷰어의 권한 프로필을 바꾼다.\n"
               "       그래서 --sandbox read-only로 리뷰한다. 리뷰어는 임시 파일이 필요한 스크립트"
               "(PyTorch 등)를 돌리지 못한다.\n"
-              "       임시 폴더를 쓰려면 그 파일에서 sandbox_mode 줄을 지우거나 주석으로 바꾼다.", flush=True)
+              "       임시 폴더를 쓰려면 그 파일에서 그 설정을 지우거나 주석으로 바꾼다.", flush=True)
         reviewer, cmd = "codex", ["codex", "exec", "--sandbox", "read-only", prompt]
     elif use_codex:
         # 리뷰어가 쓸 수 있는 유일한 폴더다(#283). 리뷰가 끝나면 지운다. TMPDIR은 파이썬 tempfile이

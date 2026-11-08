@@ -500,10 +500,10 @@ def parse_toml_value(text):
 
 
 class CmdReviewTest(unittest.TestCase):
-    def run_review(self, records, logged, fail=None, legacy=None):
+    def run_review(self, records, logged, fail=None, conflict=None):
         """cmd_review를 가짜 call로 돌린다. 리뷰 명령을 부를 때의 환경과 TMPDIR 폴더 유무를 남긴다.
 
-        legacy는 sandbox_mode가 든 Codex 설정 파일이다. 이 PC의 실제 Codex 설정은 읽지 않는다.
+        conflict는 권한 프로필을 바꾸는 Codex 설정 파일이다. 이 PC의 실제 Codex 설정은 읽지 않는다.
         """
         calls = []
         self.env, self.tmp_existed = None, None
@@ -524,7 +524,7 @@ class CmdReviewTest(unittest.TestCase):
                 mock.patch.object(ship, "review_records", return_value=records), \
                 mock.patch.object(ship, "logged_in", side_effect=logged), \
                 mock.patch.object(ship, "opencode_model", return_value="opencode/mimo-free"), \
-                mock.patch.object(ship, "codex_legacy_sandbox_config", return_value=legacy), \
+                mock.patch.object(ship, "codex_conflicting_config", return_value=conflict), \
                 redirect_stdout(out), self.assertRaises(SystemExit):
             ship.cmd_review(argparse.Namespace(author="claude", base="origin/main"))
         return calls[-1], out.getvalue()
@@ -556,16 +556,17 @@ class CmdReviewTest(unittest.TestCase):
         self.assertEqual(config["default_permissions"], f'"{ship.CODEX_PROFILE}"')
         self.assertEqual(config[f"{profile}.extends"], '":read-only"')
         self.assertEqual(parse_toml_value(config[f"{profile}.filesystem"]), {tmp: "write"})
+        self.assertIs(parse_toml_value(config[f"{profile}.network.enabled"]), False)
 
     def test_codex_keeps_read_only_sandbox_when_config_has_sandbox_mode(self):
         # Codex 문서: 설정 파일에 sandbox_mode가 있으면 권한 프로필을 쓰지 않는다. 그때는 #283 이전 명령을
         # 그대로 쓴다. 리뷰어 권한이 사용자의 sandbox_mode(예: workspace-write)로 넓어지지 않는다.
-        legacy = Path("home") / ".codex" / "config.toml"
-        (cmd, _), out = self.run_review((None, "no PR"), lambda c: c[0] == "codex", legacy=legacy)
+        conflict = Path("home") / ".codex" / "config.toml"
+        (cmd, _), out = self.run_review((None, "no PR"), lambda c: c[0] == "codex", conflict=conflict)
         prompt = ship.REVIEW_PROMPT.format(base="origin/main")
         self.assertEqual(cmd, ["codex", "exec", "--sandbox", "read-only", prompt])
         self.assertIsNone(self.env)
-        self.assertIn(f"[주의] {legacy}에서 sandbox_mode를 찾았거나", out)
+        self.assertIn(f"[주의] {conflict}에서 sandbox_mode나 permissions.cosmos_review를 찾았거나", out)
 
     def test_codex_temp_folder_is_removed_when_review_stops(self):
         self.run_review((None, "no PR"), lambda c: c[0] == "codex", fail=SystemExit(1))
@@ -587,12 +588,12 @@ class CmdReviewTest(unittest.TestCase):
         self.assertIn("[주의]", out)
 
 
-class CodexLegacySandboxConfigTest(unittest.TestCase):
+class CodexConfigConflictTest(unittest.TestCase):
     def find(self, text):
         with tempfile.TemporaryDirectory() as tmp:
             f = Path(tmp) / "config.toml"
             f.write_text(text, encoding="utf-8")
-            return ship.codex_legacy_sandbox_config([Path(tmp) / "missing.toml", f]) == f
+            return ship.codex_conflicting_config([Path(tmp) / "missing.toml", f]) == f
 
     def test_finds_sandbox_mode_in_any_toml_spelling(self):
         for text in ('sandbox_mode = "workspace-write"\n',
@@ -605,15 +606,24 @@ class CodexLegacySandboxConfigTest(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertTrue(self.find(text))
 
+    def test_finds_existing_review_profile(self):
+        # Codex는 설정 층을 합친다. 같은 이름의 프로필이 이미 있으면 -c가 정하지 않은 키가 남는다.
+        for text in ('[permissions.cosmos_review.network]\nenabled = true\n',
+                     '[permissions.cosmos_review.filesystem]\n"/" = "write"\n',
+                     'permissions.cosmos_review.workspace_roots."~/code" = true\n'):
+            with self.subTest(text=text):
+                self.assertTrue(self.find(text))
+
     def test_ignores_comments_other_keys_and_missing_files(self):
         if ship.tomllib is None:
             self.skipTest("tomllib가 없다 (파이썬 3.11 미만)")
         for text in ('# sandbox_mode = "workspace-write"\n',
                      'model = "x"\n[sandbox_workspace_write]\nnetwork_access = true\n',
-                     'default_permissions = ":workspace"\n'):
+                     'default_permissions = ":workspace"\n',
+                     '[permissions.other]\nextends = ":workspace"\n'):
             with self.subTest(text=text):
                 self.assertFalse(self.find(text))
-        self.assertIsNone(ship.codex_legacy_sandbox_config([Path("no-such-dir") / "config.toml"]))
+        self.assertIsNone(ship.codex_conflicting_config([Path("no-such-dir") / "config.toml"]))
 
     def test_unreadable_toml_or_no_tomllib_counts_as_found(self):
         # 권한이 넓어지는 쪽으로 틀리지 않는다: 모르면 read-only로 리뷰한다.
