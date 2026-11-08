@@ -1,0 +1,35 @@
+name: Integrated firmware dry-run
+
+on:
+  pull_request:
+    paths:
+      - 'firmware/cosmos/integrated/**'
+      - 'firmware/cosmos/imu_test/src/BNO080.*'
+      - 'firmware/cosmos/rc_bench/src/rc_logic.h'
+      - 'sim/sim_stage1/params.yaml'
+      - '.github/workflows/integrated-firmware.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware/cosmos/integrated
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and exercise host SIL
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror src/control.cpp src/telemetry.cpp sil/main.cpp -o "$RUNNER_TEMP/sil"
+          c++ -std=c++17 -Wall -Wextra -Werror src/control.cpp sil/policy_check.cpp -o "$RUNNER_TEMP/policy-check"
+          "$RUNNER_TEMP/policy-check"
+          python3 sil/check.py "$RUNNER_TEMP/sil"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build Teensy input-only image
+        run: |
+          pip install platformio
+          pio run
