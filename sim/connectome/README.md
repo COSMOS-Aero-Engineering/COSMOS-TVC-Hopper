@@ -30,7 +30,7 @@ python run_comparison.py --timesteps 60000 --seeds 3
 | `shuffle.py` | 차수보존 셔플 대조군 — **이게 이 실험의 핵심** |
 | `policy.py` | `ConnectomeExtractor` — SB3에 꽂는 정책망 |
 | `baseline_pd.py` | PD baseline + 게인 격자탐색 |
-| `evaluate.py` | 복원시간·오버슈트·정상상태오차·추락률 측정 (모든 비교군 공통) |
+| `evaluate.py` | 복원시간·오버슈트·정상상태오차·추락률 측정 (모든 비교군 공통). 복원 기준과 오버슈트 정의는 [마스터 설계](../../docs/design/00-hopper-master-design.md) §11.1·§11.2 |
 | `authority.py` | **제어권한 진단** — "이 과제가 애초에 풀 수 있는가" |
 | `run_comparison.py` | 4개 비교군을 같은 조건에서 돌리고 표로 출력 |
 | `check.py` | 자체 점검 (CI가 매 PR마다 실행) |
