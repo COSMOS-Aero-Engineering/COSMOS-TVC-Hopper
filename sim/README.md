@@ -67,13 +67,14 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 ```bash
 python tasks.py sanity   # 환경 정상 동작 확인 (20스텝)
 python tasks.py check    # CI sim job의 check 단계와 같은 검사 — PR 올리기 전에
-python tasks.py train    # PPO 학습 (crashcost 조건 1M 스텝, 서버에서 약 23분)
+python tasks.py train    # PPO 학습 (crashcost 조건 1M 스텝, 서버 약 23분, Windows 러너 약 18분)
 ```
 
 `train`은 #230에서 가장 좋았던 조건(스로틀 100 % 고정 + 종료 비용, 1M 스텝)을 `ppo_ablation.py`로 학습한다(#345).
 학습 seed 1은 저장소 모델 `hopper_attitude_ppo_230.zip`과 같다. 먼저 `gate`(PD 합격 기준)를 보고, 불합격이면 학습하지 않는다.
 결과는 `sim/runs/train/`(git 제외)에 쌓이고 저장소 모델은 덮어쓰지 않는다. 조건·seed·스텝을 바꾸려면 `ppo_ablation.py train`을 직접 쓴다([`ppo-ablation.md`](sim_stage1/ppo-ablation.md) §재현).
 CI와 `check`는 학습하지 않는다.
+학습 시간은 에이전트 서버(Linux, CPU 코어 1개)에서 약 23분, GitHub `windows-latest` 러너(Windows Server 2025, AMD EPYC 7763)에서 약 18분이었다(#352). 학습은 코어 하나만 쓴다(`torch.set_num_threads(1)`). 그래서 부원 PC의 시간은 CPU 코어 하나의 속도에 따라 다르다. 부원 PC에서는 아직 재지 않았다.
 
 `check`는 CI 전체가 아니다. CI는 `check` 말고도 학습 자료 목록·내부 링크 검사와 펌웨어 PlatformIO 빌드를 따로 돌린다.
 이 둘은 `check`에 없다. 명령은 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)의 각 단계에 있다.

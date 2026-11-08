@@ -1114,7 +1114,8 @@ def task_trainargs():
 
 def task_train():
     print("PPO 본 학습을 시작한다: crashcost 조건, 1M 스텝, 학습 seed 1(#230, #345).\n"
-          "에이전트 서버(CPU 코어 1개)에서 약 23분 걸렸다. 중간에 끊으려면 Ctrl+C.\n"
+          "에이전트 서버(Linux, CPU 코어 1개)에서 약 23분, GitHub windows-latest 러너(Windows Server 2025)에서\n"
+          "약 18분 걸렸다(#352). 부원 PC는 CPU가 달라서 시간도 다르다. 중간에 끊으려면 Ctrl+C.\n"
           f"결과 폴더: {TRAIN_OUT}. 다시 돌리면 덮어쓴다.")
     uv_run(train_cmd(), cwd=STAGE1)
     print(f"학습 완료: {TRAIN_OUT / 'model.zip'} 저장됨. PD와 비교하려면 sim/sim_stage1에서:\n"
