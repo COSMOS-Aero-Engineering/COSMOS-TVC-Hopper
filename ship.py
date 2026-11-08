@@ -24,9 +24,12 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 try:
@@ -41,6 +44,11 @@ LABEL_TAGS = {"fw": "fw", "sim": "sim", "web": "web", "cad": "cad", "kicad": "ki
               "documentation": "docs"}
 # 리뷰 모델 계열. 작성자와 같은 계열은 리뷰어로 고르지 않는다.
 OPENCODE_REVIEWERS = ("mimo", "muse-spark", "deepseek", "nemotron")
+# OpenCode 리뷰어의 시간 제한(초, #327). opencode 1.x의 `run`은 모델 오류를 다시 시도하는 동안 끝나지
+# 않는다. 이 시간이 지나면 ship.py가 리뷰어를 멈춘다. 로그에서 사용 한도 오류를 찾으면 바로 멈춘다.
+OPENCODE_REVIEW_LIMIT = 30 * 60
+# 바로 멈출 모델 오류. 무료 모델은 `Free usage limit reached`, OpenCode Go는 `Monthly usage limit reached` 등.
+OPENCODE_QUOTA = re.compile(r"usage limit reached", re.IGNORECASE)
 # 스킬 정본과 Codex용 복사본. Claude Code는 .claude/skills만, Codex는 .agents/skills만 읽는다(#39).
 SKILLS_SRC = ROOT / ".claude" / "skills"
 SKILLS_DST = ROOT / ".agents" / "skills"
@@ -510,6 +518,124 @@ def opencode_model(author, env=None):
     die("OpenCode 무료 모델 중 쓸 수 있는 리뷰어를 못 찾았다. `opencode models`로 목록을 본다.")
 
 
+def opencode_log_errors(text):
+    """opencode 로그 글에서 리뷰 요청의 모델 오류 글을 순서대로 돌려준다(#327).
+
+    opencode 1.19는 모델 요청이 실패할 때마다 XDG_DATA_HOME/opencode/log/opencode.log에 한 줄을 쓴다:
+    `level=ERROR ... message="stream error" ... small=false ... error.error="AI_APICallError: ..."`.
+    small=true 줄은 세션 제목을 만드는 요청이라 빼고 본다. 이 형식은 opencode 내부 로그라서 바뀔 수
+    있다. 바뀌면 이 함수는 오류를 찾지 못하고, OPENCODE_REVIEW_LIMIT이 리뷰어를 멈춘다.
+    """
+    errors = []
+    for line in text.splitlines():
+        if "level=ERROR" not in line or 'message="stream error"' not in line or " small=true" in line:
+            continue
+        m = re.search(r'error\.error=("(?:[^"\\]|\\.)*")', line)
+        try:
+            errors.append(json.loads(m.group(1)) if m else line)
+        except ValueError:
+            errors.append(m.group(1))
+    return errors
+
+
+def stop_tree(proc):
+    """proc와 그 자식 프로세스를 멈춘다(#327).
+
+    Windows의 npm `opencode.cmd`는 cmd.exe가 opencode.exe를 자식으로 띄운다. proc.kill()은 cmd.exe만
+    멈추므로 `taskkill /T`로 자식까지 멈춘다. POSIX에서는 리뷰어를 새 세션(start_new_session)으로 띄웠으므로
+    그 프로세스 그룹 전체에 SIGTERM을 보낸다. 10초 뒤에도 리뷰어가 끝나지 않으면 그룹에 SIGKILL을 보낸다.
+    리뷰어가 끝난 뒤에는 그룹에 신호를 보내지 않는다. 그 번호를 다른 프로세스가 받을 수 있어서다.
+    """
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True)
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+        return
+    for sig, wait in ((signal.SIGTERM, 10), (signal.SIGKILL, None)):
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            pass
+        try:
+            proc.wait(timeout=wait)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+
+
+def run_opencode_review(cmd, input, env, limit=None, poll=1.0):
+    """OpenCode 리뷰어를 돌리고 exit 코드를 돌려준다. 끝나지 않으면 멈추고 die한다(#327).
+
+    opencode 1.19의 `run`은 세션이 idle이 될 때만 끝난다. 무료 모델의 `Free usage limit reached`는
+    다시 시도할 오류로 분류되고, 다시 시도하기 전에 응답 헤더의 Retry-After만큼 기다린다. 2026-11-08 서버에서는
+    약 10시간이었다. 그동안 세션은 idle이 아니라서 `run`이 오류를 출력하지 않고 기다린다. 그래서 리뷰어가
+    도는 동안 로그를 읽는다. 사용 한도 오류가 나오면 바로, limit 초가 지나면 그때 리뷰어를 멈춘다.
+    """
+    limit = OPENCODE_REVIEW_LIMIT if limit is None else limit
+    log = Path(env["XDG_DATA_HOME"]) / "opencode" / "log" / "opencode.log"
+    try:
+        offset = log.stat().st_size  # 이 실행 전에 쓴 줄은 읽지 않는다.
+    except OSError:
+        offset = 0
+    say(cmd)
+    proc = subprocess.Popen([exe_of(cmd[0]), *map(str, cmd[1:])], stdin=subprocess.PIPE, text=True,
+                            encoding="utf-8", errors="replace", env=env,
+                            start_new_session=os.name != "nt")
+
+    def feed():
+        # 기록이 파이프 버퍼보다 크면 write가 막힌다. 그래서 스레드에서 쓰고 닫는다.
+        try:
+            proc.stdin.write(input or "")
+        except OSError:  # 리뷰어가 입력을 다 읽기 전에 끝났다.
+            pass
+        finally:
+            try:
+                proc.stdin.close()
+            except OSError:
+                pass
+
+    threading.Thread(target=feed, daemon=True).start()
+    deadline = time.monotonic() + limit
+    errors, rest, reason = [], b"", None
+    try:
+        while True:
+            try:
+                return proc.wait(timeout=poll)
+            except subprocess.TimeoutExpired:
+                pass
+            try:
+                with open(log, "rb") as f:
+                    if f.seek(0, os.SEEK_END) < offset:  # 로그 파일이 줄었다(새로 만들어졌다).
+                        offset, rest = 0, b""
+                    f.seek(offset)
+                    data = f.read()
+            except OSError:
+                data = b""
+            offset += len(data)
+            *lines, rest = (rest + data).split(b"\n")
+            errors += opencode_log_errors(b"\n".join(lines).decode("utf-8", "replace"))
+            quota = next((e for e in errors if OPENCODE_QUOTA.search(e)), None)
+            if quota is not None:
+                reason = (f"OpenCode 리뷰어가 사용 한도 오류를 받았다: {quota}\n"
+                          "     opencode 1.x는 한도가 풀릴 때까지 기다렸다가 다시 시도한다. 그래서 리뷰어를"
+                          " 멈췄다.\n"
+                          "     한도가 풀린 뒤 다시 실행하거나, Codex나 Claude Code에 로그인한 뒤 다시"
+                          " 실행한다.")
+                break
+            if time.monotonic() >= deadline:
+                last = f"마지막 모델 오류: {errors[-1]}" if errors else f"로그에 모델 오류가 없다({log})."
+                span = f"{limit // 60}분" if limit % 60 == 0 else f"{limit}초"
+                reason = f"OpenCode 리뷰어가 {span} 안에 끝나지 않아서 멈췄다.\n     {last}"
+                break
+    finally:
+        if proc.poll() is None:
+            stop_tree(proc)
+    die(reason)
+
+
 def codex_config_files(cwd=None):
     """Codex가 읽을 수 있는 설정 파일 후보. 실제로 읽는 파일보다 넓게 잡는다.
 
@@ -821,7 +947,7 @@ def cmd_review(a):
     else:
         print(f"리뷰어에게 표준 입력으로 넘기는 기록: {summary}", flush=True)
     # 리뷰 요청에는 범위만 넣는다(AGENTS.md §작업 순서 6). 힌트나 체크리스트를 넣지 않는다.
-    env, cleanup = None, None
+    env, cleanup, opencode = None, None, False
     use_codex = author != "openai" and logged_in(["codex", "login", "status"])
     conflict = codex_conflicting_config() if use_codex else None
     if conflict is not None:
@@ -857,15 +983,21 @@ def cmd_review(a):
         env = opencode_env()
         model = opencode_model(author, env=env)
         reviewer, cmd = model, ["opencode", "run", "--agent", "plan", "-m", model, prompt]
+        opencode = True
+        print(f"OpenCode 리뷰어가 사용 한도 오류를 받거나 {OPENCODE_REVIEW_LIMIT // 60}분 안에 끝나지 않으면"
+              " 멈춘다(#327).", flush=True)
     print(f"작성자 계열: {author} / 리뷰어: {reviewer}\n", flush=True)
     try:
-        r = call(cmd, check=False, input=records, env=env)
+        if opencode:
+            code = run_opencode_review(cmd, records, env)
+        else:
+            code = call(cmd, check=False, input=records, env=env).returncode
     finally:
         if cleanup is not None:
             cleanup()
     print(f"\nPR 템플릿 \"교차 리뷰\"에 적는다: `{reviewer}: 지적 N건, 고침 <커밋> / "
           "받아들이지 않음 <이유>`")
-    sys.exit(r.returncode)
+    sys.exit(code)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
