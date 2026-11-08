@@ -6,7 +6,13 @@
     ... compare_metrics.py --tilt-deg 10 20 30 40    기울기를 x°로 고정한 조건만 x마다 낸다(#312)
 
 평가 조건은 pd_gate.py와 같다: 평가 seed 0-199, 도메인 랜덤화 켬, PD(kp=8, kd=2), PPO는 결정적 행동.
-에피소드 k는 두 정책 모두 env.reset(seed=k)로 시작하므로 초기 자세와 랜덤화된 기체가 같다.
+에피소드 k는 모든 정책이 env.reset(seed=k)로 시작하므로 초기 자세와 랜덤화된 기체가 같다.
+
+제어기는 셋이다(#349).
+  PD (kp=8, kd=2)   pd_gate.pd(). #21 재현 스크립트의 게인이고 튜닝하지 않았다. 예전 표와 같은 값을 내도록 그대로 둔다.
+  PID               PID 클래스. 게인 PID_GAINS는 pid_tune.py가 튜닝 seed(평가·학습 seed와 겹치지 않음)에서
+                    평균 리턴이 가장 큰 격자점으로 골랐다. 리턴은 PPO가 학습하는 보상과 같다.
+  PPO               --model의 결정적 행동.
 지표 계산은 새로 만들지 않고 커넥톰 트랙의 sim/connectome/evaluate.py run_episodes()를 쓴다.
 
 초기 자세 조건(CONDITIONS). 두 조건 모두 같은 seed 0-199를 쓰고 seed k의 랜덤화된 기체는 두 조건에서 같다.
@@ -58,6 +64,8 @@ from hopper_aviary import INITIAL_ATTITUDE_RAD, HopperAttitudeEnv  # noqa: E402
 from pd_gate import EVAL_SEEDS, pd  # noqa: E402
 
 DEFAULT_MODEL = HERE / "hopper_attitude_ppo.zip"
+# pid_tune.py 결과(#349). 튜닝 seed 1000-1199, 학습 분포 조건에서 평균 리턴이 가장 큰 격자점이다.
+PID_GAINS = {"kp": 28.0, "kd": 8.0, "ki": 2.5}
 TC3_TILT_DEG = 10.0   # 마스터 설계 §11 TC-3의 초기 오프셋(°)
 
 # 초기 자세 조건 이름 -> env.reset(options=...). None은 학습 분포다.
@@ -86,6 +94,59 @@ def outside_training_init(reset_options):
     return count
 
 
+class PID:
+    """pd_gate.pd()에 롤·피치 오차의 적분 항을 더한 PID(#349). 부호와 행동 구조는 pd()와 같다.
+
+    ki = 0이면 pd()와 같은 행동을 낸다. 적분 항은 CG 오프셋처럼 일정한 외란 토크를 버티는 몫을 맡는다.
+    비례 항만으로 버티면 기울기가 남는다(정상오차).
+    상태(적분값)가 있으므로 에피소드마다 reset()을 부른다. evaluate()와 pid_tune.py가 env.reset() 직후 부른다.
+    와인드업 방지: 조건부 적분(clamping). 출력이 포화됐고 오차가 출력을 같은 쪽으로 더 밀면 그 스텝은 적분하지 않는다.
+    """
+
+    def __init__(self, kp, kd, ki, dt):
+        self.kp, self.kd, self.ki, self.dt = kp, kd, ki, dt
+        self.reset()
+
+    def reset(self):
+        self.ix = 0.0   # 롤 오차 phi의 적분(rad·s)
+        self.iy = 0.0   # 피치 오차 theta의 적분(rad·s)
+
+    def __call__(self, obs):
+        phi, theta, _, wx, wy, _ = obs[:6]
+        vx = -self.kp * phi - self.kd * wx - self.ki * self.ix   # pd()의 ux에 적분 항을 더했다
+        vy = self.kp * theta + self.kd * wy + self.ki * self.iy  # pd()의 uy에 적분 항을 더했다
+        if self.ki:
+            if abs(vx) < 1 or np.sign(vx) != np.sign(-phi):
+                self.ix += phi * self.dt
+            if abs(vy) < 1 or np.sign(vy) != np.sign(theta):
+                self.iy += theta * self.dt
+        ux, uy = np.clip(vx, -1, 1), np.clip(vy, -1, 1)
+        return np.array([ux, uy, ux, uy, 1.0], dtype=np.float32)
+
+
+class _ResetHook:
+    """env.reset()마다 상태가 있는 정책의 reset()을 부른다. run_episodes()가 쓰는 reset, step, dt만 넘긴다."""
+
+    def __init__(self, env, on_reset):
+        self.env, self.on_reset = env, on_reset
+        self.step, self.dt = env.step, env.dt
+
+    def reset(self, **kwargs):
+        out = self.env.reset(**kwargs)
+        self.on_reset()
+        return out
+
+
+def make_pid(gains=None):
+    gains = PID_GAINS if gains is None else gains
+    return PID(dt=HopperAttitudeEnv().dt, **gains)
+
+
+def pid_name(gains=None):
+    g = PID_GAINS if gains is None else gains
+    return f"PID (kp={g['kp']:g}, kd={g['kd']:g}, ki={g['ki']:g})"
+
+
 class Predictor:
     """관측 -> 행동 함수를 run_episodes()가 부르는 predict(obs, deterministic) 형식으로 감싼다."""
 
@@ -96,13 +157,16 @@ class Predictor:
         return self.act(obs), None
 
 
-def evaluate(act, reset_options=None):
+def evaluate(act, reset_options=None, seeds=EVAL_SEEDS):
+    """seeds는 연속한 범위여야 한다. pid_tune.py는 튜닝 seed를 넘긴다."""
     env = HopperAttitudeEnv()
     if not env.dr.get("enabled", False):
         raise ValueError("params.yaml의 domain_rand.enabled가 false다. 이 표는 랜덤화를 켠 상태에서만 낸다.")
-    seeds = list(EVAL_SEEDS)
+    if hasattr(act, "reset"):
+        env = _ResetHook(env, act.reset)   # 상태가 있는 정책(PID)은 에피소드마다 처음 상태로 시작한다
+    seeds = list(seeds)
     if seeds != list(range(seeds[0], seeds[0] + len(seeds))):
-        raise ValueError("EVAL_SEEDS가 연속한 범위가 아니다. run_episodes()는 seed_base + k만 쓴다.")
+        raise ValueError("seed가 연속한 범위가 아니다. run_episodes()는 seed_base + k만 쓴다.")
     return run_episodes(Predictor(act), env, episodes=len(seeds), seed_base=seeds[0],
                         reset_options=reset_options)
 
@@ -126,6 +190,7 @@ def main():
 
     policies = {
         "PD (kp=8, kd=2)": pd,
+        pid_name(): make_pid(),
         f"PPO ({Path(args.model).name})": load_policy(args.model),
     }
 
@@ -142,6 +207,7 @@ def main():
     print("* 오버슈트: 수평(0°)을 지나 반대쪽으로 기운 최대 각도 / 초기 기울기(MATLAB stepinfo 정의, 최종값 0. "
           "마스터 설계 §11.2). 복원하지 않고 멈춘 에피소드도 0 %다.")
     print("* 정상오차: 마지막 20 % 구간의 평균 기울기. 넘어진 에피소드도 평균에 들어간다.")
+    print("* PD 게인은 튜닝하지 않은 #21 값이다. PID 게인은 pid_tune.py가 튜닝 seed에서 골랐다(#349).")
     return 0
 
 

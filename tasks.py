@@ -523,9 +523,9 @@ def task_compile():
 
 def task_sanity():
     """환경을 20스텝 돌려 보고, reset(options=...)의 단위 검사(test_reset_options.py, #276)와
-    PPO 행동 구조·종료 비용의 단위 검사(test_policy_io.py, #230)를 돌린다."""
+    PPO 행동 구조·종료 비용의 단위 검사(test_policy_io.py, #230), PID 기준 제어기의 단위 검사(test_pid.py, #349)를 돌린다."""
     uv_run(["python", "sanity_check.py"], cwd=STAGE1)
-    uv_run(["python", "-m", "unittest", "-q", "test_reset_options", "test_policy_io"], cwd=STAGE1)
+    uv_run(["python", "-m", "unittest", "-q", "test_reset_options", "test_policy_io", "test_pid"], cwd=STAGE1)
 
 
 def task_gate():
@@ -1098,12 +1098,26 @@ TRAIN_ARGS = ["--condition", "crashcost", "--seed", "1", "--steps", "1000000"]
 TRAIN_OUT = SIM / "runs" / "train"
 
 
+def train_cmd():
+    """task_train이 sim/sim_stage1에서 실행하는 명령. trainargs 작업도 이 명령에 --dry-run만 붙여 쓴다(#351)."""
+    return ["python", "ppo_ablation.py", "train", *TRAIN_ARGS, "--out", str(TRAIN_OUT)]
+
+
+def task_trainargs():
+    """train 작업의 인자를 ppo_ablation.py의 인자 파서가 받는지 본다(#351). 학습은 하지 않는다.
+
+    check와 CI는 1M 학습(train)을 돌리지 않는다. 그래서 ppo_ablation.py의 조건 이름이나 인자가
+    바뀌면 train만 깨지고 check는 통과했다. 인자가 맞지 않으면 argparse가 exit 2로 끝난다.
+    """
+    uv_run([*train_cmd(), "--dry-run"], cwd=STAGE1)
+
+
 def task_train():
     print("PPO 본 학습을 시작한다: crashcost 조건, 1M 스텝, 학습 seed 1(#230, #345).\n"
           "에이전트 서버(Linux, CPU 코어 1개)에서 약 23분, GitHub windows-latest 러너(Windows Server 2025)에서\n"
           "약 18분 걸렸다(#352). 부원 PC는 CPU가 달라서 시간도 다르다. 중간에 끊으려면 Ctrl+C.\n"
           f"결과 폴더: {TRAIN_OUT}. 다시 돌리면 덮어쓴다.")
-    uv_run(["python", "ppo_ablation.py", "train", *TRAIN_ARGS, "--out", str(TRAIN_OUT)], cwd=STAGE1)
+    uv_run(train_cmd(), cwd=STAGE1)
     print(f"학습 완료: {TRAIN_OUT / 'model.zip'} 저장됨. PD와 비교하려면 sim/sim_stage1에서:\n"
           f"  python compare_metrics.py --model {TRAIN_OUT / 'model.zip'}")
 
@@ -1182,7 +1196,10 @@ TASKS = {t.name: t for t in [
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
          " 단계 목록은 graph)", task_check,
          deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "agentsref", "cad",
-               "vcruntime", "compile", "ledger", "sanity", "gate", "yaw", "smoke", "conncheck"]),
+               "vcruntime", "compile", "ledger", "sanity", "gate", "yaw", "smoke", "conncheck",
+               "trainargs"]),
+    Task("trainargs", "train 작업의 인자를 ppo_ablation.py가 받는지 확인 (학습 안 함, #351)", task_trainargs,
+         inputs=SIM_IN, uses_env=True),
     Task("train", "PPO 본 학습 (#230 crashcost 조건 1M 스텝, 오래 걸림. PD 합격 기준 gate를 먼저 본다)",
          task_train, deps=["gate"], cacheable=False, uses_env=True, needs_torch=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
