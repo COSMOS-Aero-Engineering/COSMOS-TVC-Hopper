@@ -7,6 +7,7 @@
     python ppo_ablation.py select runs/230/crashcost_1000k/seed1 ...   선택용 seed로 모델 고르기
 결과와 판정은 ppo-ablation.md에 있다. 저장소 모델 hopper_attitude_ppo_230.zip은 crashcost, 1M, seed 1이다.
 python tasks.py train도 이 파일로 같은 조건(crashcost, 1M, seed 1)을 학습한다. 결과는 sim/runs/train/(git 제외)이다(#345).
+train --dry-run은 인자만 읽고 학습하지 않는다. python tasks.py check가 tasks.py train의 인자를 이것으로 확인한다(#351).
 
 조건(CONDITIONS). 각 조건은 "기준" 조건에서 한 가지만 바꾼다. 학습 하이퍼파라미터는 모두 SB3 PPO 기본값이다.
   learned     #230 전 train.py와 같다. 정책이 베인 4개와 스로틀을 낸다. 기준 없음(출발점)
@@ -250,12 +251,18 @@ def main():
     t.add_argument("--seed", type=int, default=0, help="학습 seed 번호 k. 실제 seed는 TRAIN_SEED + k")
     t.add_argument("--steps", type=int, default=200_000)
     t.add_argument("--out", help="결과 폴더. 기본 runs/230/<조건>_<스텝>k/seed<k>")
+    t.add_argument("--dry-run", action="store_true",
+                   help="인자만 읽고 학습하지 않는다. tasks.py check가 tasks.py train의 인자를 확인한다(#351)")
     sel = sub.add_parser("select", help="실행 폴더 여러 개를 선택용 seed로 평가한다")
     sel.add_argument("runs", nargs="+", help="model.zip이 든 실행 폴더")
     for name in ("table", "curves"):
         p = sub.add_parser(name)
         p.add_argument("root", nargs="?", default=str(HERE / "runs" / "230"))
     args = ap.parse_args()
+    if args.cmd == "train" and args.dry_run:
+        # torch를 불러오기 전에 끝낸다. 결과 폴더도 만들지 않는다
+        print(f"인자 확인 통과(학습 안 함): 조건 {args.condition}, seed {args.seed}, {args.steps} 스텝, 결과 폴더 {args.out}")
+        return 0
     return {"train": train, "table": table, "curves": curves, "select": select}[args.cmd](args)
 
 
