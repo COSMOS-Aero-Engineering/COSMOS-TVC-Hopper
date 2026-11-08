@@ -16,6 +16,8 @@ from __future__ import annotations
 import numpy as np
 
 # 복원 판정 각도. 이보다 작아진 뒤 끝까지 유지되면 "복원됐다"고 본다.
+# TC-3·TC-5 실측도 같은 절대 띠를 쓴다. 상대 띠(stepinfo의 2 %)를 쓰지 않는 근거는
+# docs/design/00-hopper-master-design.md §11.1(#274).
 SETTLE_DEG = 2.0
 EVAL_SEED_BASE = 10_000
 
