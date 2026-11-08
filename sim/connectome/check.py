@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT / "sim" / "sim_stage1"))
 
 from authority import authority  # noqa: E402
 from build_subgraph import build_synthetic  # noqa: E402
-from evaluate import episode_metrics, run_episodes  # noqa: E402
+from evaluate import episode_metrics, format_table, run_episodes  # noqa: E402
 from graph import ConnectomeGraph  # noqa: E402
 from hopper_aviary import HopperAttitudeEnv  # noqa: E402
 from policy import ConnectomeExtractor, make_policy_kwargs  # noqa: E402
@@ -136,6 +136,9 @@ def main() -> int:
     # 롤·피치 대각선(같은 방향)으로 시작해도 투영이 같은 값을 내야 한다.
     diag = np.column_stack([deg(roll), deg(roll)]) / np.sqrt(2)
     check("0 넘음은 기울기 방향에 상관없다", np.isclose(episode_metrics(diag, 0.1)["overshoot_cross"], 0.3))
+    # 추락률 0.005(200개 중 1개)가 표에서 0 %로 보이면 안 된다(#278).
+    row = format_table({"crash": dict(m, crash_rate=0.005)}).splitlines()[2]
+    check("표의 추락률 0.005가 0.5%로 보인다", row.split()[-1] == "0.5%", row.split()[-1])
 
     print("\n7) 제어권한 진단 (과제가 풀 수 있는 것인가)")
     auth = authority()
