@@ -119,6 +119,16 @@ python ship.py capped 8G -- python sim/sim_stage1/compare_metrics.py --model sim
 
 저장소 루트에서 실행한다. 학습 하나는 이 서버(Linux, CPU 코어 1개)에서 200k 약 5분, 1M 약 23분 걸렸다. #344에서 1M 3개를 나란히 돌리면 하나에 27-33분 걸렸다(`result.json`의 `train_seconds` 1634-1957).
 
+`python tasks.py train`(crashcost 1M, 학습 seed 1)을 GitHub 러너에서도 돌렸다(#352, [실행 기록](https://github.com/COSMOS-Aero-Engineering/COSMOS-TVC-Hopper/actions/runs/42519282731)). 두 러너의 CPU는 AMD EPYC 7763(코어 2개, 논리 프로세서 4개)으로 같다.
+
+| 장비 | `tasks.py train` 전체 | `train_seconds` | 스텝/s | 평가 리턴 | 넘어짐 | 기울기 중앙값 |
+|---|---|---|---|---|---|---|
+| 이 서버(Linux), `runs/230/` | 기록 없음 | 1415 | 707 | -1.89 | 0 % | 0.62° |
+| `windows-latest`(Windows Server 2025) | 1087 s(18.1분) | 1033 | 968 | -2.00 | 0 % | 0.76° |
+| `ubuntu-latest`(대조군) | 835 s(13.9분) | 791 | 1264 | -2.42 | 0 % | 0.75° |
+
+같은 CPU에서 Windows가 Linux보다 1.31배 느렸다. 부원 PC는 CPU가 달라서 이 표의 시간과 다르다. 학습 seed가 같아도 장비마다 정책이 조금 다르다. 세 실행 모두 넘어짐 0 %다. 평가 리턴은 -1.89에서 -2.42까지, 기울기 중앙값은 0.62°에서 0.76°까지 다르다. 이 서버에서는 같은 커밋으로 다시 학습하면 가중치가 같았다(아래 200k 확인). 장비 사이의 차이는 CPU와 OS마다 부동소수점 연산 순서가 달라서 생긴 것으로 보인다. 이 추정은 확인하지 않았다.
+
 ```bash
 cd sim/sim_stage1
 # 저장소 모델 다시 만들기
