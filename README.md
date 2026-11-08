@@ -256,4 +256,6 @@ gh pr create --base main --reviewer junwonkim07
 자식 프로세스에서만 적용하며 개인 `OPENCODE_DB` 재정의도 넘기지 않는다. 이 폴더는 Git에서 제외된다.
 데이터 폴더가 분리되므로 개인 OpenCode에 저장한 인증을 복사하지 않으며, 대체 리뷰는 무료 모델을 쓴다.
 개인 설정·플러그인·캐시·상태 폴더는 이번 변경의 격리 대상이 아니다.
+opencode 2.x가 설치돼 있으면 `models`와 `run`에 `--standalone`을 붙인다(#341). 2.x는 백그라운드 서비스를
+`XDG_STATE_HOME`에서 찾는다. 이 인자가 없으면 리뷰가 개인 서비스와 개인 DB를 쓴다.
 리뷰 DB는 `tasks.py clean`이 지우는 작업 캐시와 분리해 보존한다.
