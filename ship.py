@@ -596,6 +596,26 @@ def codex_review_cmd(prompt, tmp):
             prompt]
 
 
+def codex_review_tmp(windows=None):
+    """Codex 리뷰어가 쓸 수 있는 임시 폴더를 만든다(#283). (실제 경로, 지우는 함수)를 돌려준다.
+
+    windows는 검사용이다. None이면 이 PC가 Windows인지 본다.
+
+    macOS의 /var -> /private/var 같은 링크는 실제 경로로 푼다. Windows에서는 tempfile.mkdtemp를 쓰지
+    않는다(#315). 파이썬 3.12.4부터 mkdtemp는 Windows 폴더에 SYSTEM, Administrators, OWNER RIGHTS만
+    든 ACL을 붙이고 상속을 끊는다(https://docs.python.org/3/library/os.html#os.mkdir). 이 폴더는 Codex
+    Windows 샌드박스(unelevated)가 쓰기 권한을 더해도 쓰지 못했다(windows-latest 러너, codex-cli
+    0.166.0과 0.167.0). os.mkdir로 만든 폴더는 %TEMP%의 ACL을 물려받아서 쓸 수 있었다. %TEMP%는
+    사용자 전용 폴더라서 ACL을 따로 좁히지 않는다.
+    """
+    if not (os.name == "nt" if windows is None else windows):
+        tmp = tempfile.TemporaryDirectory(prefix="cosmos-review-", ignore_cleanup_errors=True)
+        return Path(tmp.name).resolve(), tmp.cleanup
+    path = Path(tempfile.gettempdir()) / f"cosmos-review-{secrets.token_hex(8)}"
+    path.mkdir()
+    return path.resolve(), lambda: shutil.rmtree(path, ignore_errors=True)
+
+
 def venv_problem():
     """.venv가 uv.lock과 맞지 않으면 그 이유를 돌려준다. 맞으면 None(#321).
 
@@ -801,7 +821,7 @@ def cmd_review(a):
     else:
         print(f"리뷰어에게 표준 입력으로 넘기는 기록: {summary}", flush=True)
     # 리뷰 요청에는 범위만 넣는다(AGENTS.md §작업 순서 6). 힌트나 체크리스트를 넣지 않는다.
-    env, tmp = None, None
+    env, cleanup = None, None
     use_codex = author != "openai" and logged_in(["codex", "login", "status"])
     conflict = codex_conflicting_config() if use_codex else None
     if conflict is not None:
@@ -822,13 +842,12 @@ def cmd_review(a):
                   "       리뷰어는 샌드박스에서 .venv를 고치지 못해서 uv run을 돌리지 못한다.\n"
                   "       맞추는 명령: python tasks.py setup  (맞춘 뒤 리뷰를 다시 돌린다)", flush=True)
         # 리뷰어가 쓸 수 있는 유일한 폴더다(#283). 리뷰가 끝나면 지운다. TMPDIR은 파이썬 tempfile이
-        # 모든 OS에서 가장 먼저 보는 변수다. macOS의 /var -> /private/var 같은 링크는 실제 경로로 푼다.
+        # 모든 OS에서 가장 먼저 보는 변수다. 폴더를 만드는 방법은 codex_review_tmp()에 있다(#315).
         # uv 캐시도 이 폴더 안에 둔다(#314). uv run은 .venv가 uv.lock과 맞아도 캐시 폴더에 잠금 파일을
         # 만든다. 기본 캐시(~/.cache/uv 등)는 샌드박스에서 읽기 전용이라 uv run이 exit 2로 멈췄다.
         # 환경 변수는 uv 설정 파일의 cache-dir보다 앞선다. 공유 캐시 쓰기를 열지 않는 이유: 리뷰어가 다른
         # 작업이 같이 쓰는 캐시를 바꿀 수 있다. 빈 캐시라서 .venv에 없는 패키지는 받지 못한다(네트워크 막힘).
-        tmp = tempfile.TemporaryDirectory(prefix="cosmos-review-", ignore_cleanup_errors=True)
-        tmp_path = Path(tmp.name).resolve()
+        tmp_path, cleanup = codex_review_tmp()
         env = dict(os.environ, TMPDIR=str(tmp_path), UV_CACHE_DIR=str(tmp_path / "uv-cache"))
         reviewer, cmd = "codex", codex_review_cmd(prompt, tmp_path)
         print(f"리뷰어가 쓸 수 있는 폴더(TMPDIR, uv 캐시 포함, 리뷰 뒤에 지운다): {tmp_path}", flush=True)
@@ -842,8 +861,8 @@ def cmd_review(a):
     try:
         r = call(cmd, check=False, input=records, env=env)
     finally:
-        if tmp is not None:
-            tmp.cleanup()
+        if cleanup is not None:
+            cleanup()
     print(f"\nPR 템플릿 \"교차 리뷰\"에 적는다: `{reviewer}: 지적 N건, 고침 <커밋> / "
           "받아들이지 않음 <이유>`")
     sys.exit(r.returncode)
