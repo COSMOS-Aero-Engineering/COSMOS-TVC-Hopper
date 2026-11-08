@@ -6,6 +6,7 @@
     python ppo_ablation.py curves runs/230           학습 곡선 표(마크다운)
     python ppo_ablation.py select runs/230/crashcost_1000k/seed1 ...   선택용 seed로 모델 고르기
     python ppo_ablation.py breakdown <model.zip> ...  리턴을 보상 항별로 나누고 행동 경계 비율을 잰다(#359)
+    train --lr-schedule linear, train --target-kl 0.02   학습 하이퍼파라미터 하나만 바꾼 변형(#367)
 결과와 판정은 ppo-ablation.md에 있다. 저장소 모델 hopper_attitude_ppo_230.zip은 crashcost, 1M, seed 1이다.
 python tasks.py train도 이 파일로 같은 조건(crashcost, 1M, seed 1)을 학습한다. 결과는 sim/runs/train/(git 제외)이다(#345).
 train --dry-run은 인자만 읽고 학습하지 않는다. python tasks.py check가 tasks.py train의 인자를 이것으로 확인한다(#351).
@@ -17,6 +18,11 @@ train --dry-run은 인자만 읽고 학습하지 않는다. python tasks.py chec
   vecnorm     fixed에서 관측만 VecNormalize로 정규화한다(보상은 정규화하지 않는다)
   crashcost   fixed에서 넘어질 때 종료 비용만 더한다(CrashCost)
   crashcost_mixer, crashcost_vecnorm  crashcost에서 한 가지만 더 바꾼다(2차 비교)
+
+하이퍼파라미터 변형(#367). 두 옵션은 기본값이면 PPO에 아무것도 넘기지 않는다. 그래서 조건의 학습은 그대로다.
+  --lr-schedule linear  학습률을 3e-4(SB3 기본값)에서 0까지 선형으로 줄인다(SB3 LinearSchedule)
+  --target-kl X         한 갱신에서 approx_kl이 1.5·X를 넘으면 남은 epoch를 건너뛴다(SB3 PPO target_kl)
+  변형 결과의 기본 폴더는 runs/367/<조건>_<변형>_<스텝>k/seed<k>이고, json에 "variant"가 들어간다.
 
 종료 비용(CrashCost). 보상은 매 스텝 음수다. 그래서 일찍 넘어지면 남은 스텝의 음수 보상을 받지 않아 리턴이 커진다.
 #90의 고정 스로틀 20k 학습이 모든 평가 seed에서 넘어진 것과 맞는 설명이다(ppo-diagnosis.md). 넘어진 스텝의 보상 r에
@@ -49,6 +55,7 @@ CURVE_EVERY = 50_000
 # 저장소에 둘 모델 하나를 고를 때 쓰는 seed(select). 평가 seed 0-199로 고르면 표의 숫자가 고른 쪽으로 치우친다
 SELECT_SEEDS = range(1_000, 1_200)
 GAMMA = 0.99                             # SB3 PPO 기본값. CrashCost가 같은 값을 쓴다
+LEARNING_RATE = 3e-4                     # SB3 PPO 기본값. --lr-schedule linear의 시작값
 
 # 이름 -> (기준 조건, 바꾼 것, 설정)
 CONDITIONS = {
@@ -77,6 +84,30 @@ class CrashCost(gym.Wrapper):
             n = base.max_steps - base.step_count
             reward += reward * self.gamma * (1.0 - self.gamma ** n) / (1.0 - self.gamma)
         return obs, reward, terminated, truncated, info
+
+
+def variant_name(lr_schedule="constant", target_kl=None):
+    """하이퍼파라미터 변형의 이름(#367). 둘 다 기본값이면 빈 문자열이다."""
+    parts = []
+    if lr_schedule == "linear":
+        parts.append("lrlinear")
+    if target_kl is not None:
+        parts.append(f"tkl{target_kl:g}")
+    return "_".join(parts)
+
+
+def ppo_kwargs(lr_schedule="constant", target_kl=None):
+    """변형이 바꾸는 PPO 인자만 낸다. 기본값이면 빈 dict라서 PPO가 자기 기본값을 쓴다."""
+    from stable_baselines3.common.utils import LinearSchedule
+
+    kw = {}
+    if lr_schedule == "linear":
+        # progress_remaining 1 -> 0. SB3는 total_timesteps를 2048 단위로 올려서 마지막 갱신에서 0보다 작아진다.
+        # LinearSchedule은 그때 end(0)를 낸다. 음수 학습률이 되지 않는다
+        kw["learning_rate"] = LinearSchedule(start=LEARNING_RATE, end=0.0, end_fraction=1.0)
+    if target_kl is not None:
+        kw["target_kl"] = target_kl
+    return kw
 
 
 def make_env(cfg, monitor_path=None):
@@ -120,7 +151,13 @@ def train(args):
 
     torch.set_num_threads(1)   # 공유 서버에서 여러 실행을 나란히 돌린다. 실행 하나가 코어 하나를 쓴다
     base, changed, cfg = CONDITIONS[args.condition]
-    out = Path(args.out) if args.out else HERE / "runs" / "230" / f"{args.condition}_{args.steps // 1000}k" / f"seed{args.seed}"
+    variant = variant_name(args.lr_schedule, args.target_kl)
+    if args.out:
+        out = Path(args.out)
+    elif variant:
+        out = HERE / "runs" / "367" / f"{args.condition}_{variant}_{args.steps // 1000}k" / f"seed{args.seed}"
+    else:
+        out = HERE / "runs" / "230" / f"{args.condition}_{args.steps // 1000}k" / f"seed{args.seed}"
     out.mkdir(parents=True, exist_ok=True)
     seed = TRAIN_SEED + args.seed
 
@@ -128,7 +165,8 @@ def train(args):
     if cfg["vecnormalize"]:
         venv = VecNormalize(venv, norm_obs=True, norm_reward=False, gamma=GAMMA)
     venv.seed(seed)
-    model = PPO("MlpPolicy", venv, verbose=0, seed=seed, gamma=GAMMA, device="cpu")
+    model = PPO("MlpPolicy", venv, verbose=0, seed=seed, gamma=GAMMA, device="cpu",
+                **ppo_kwargs(args.lr_schedule, args.target_kl))
 
     def current_policy():
         if isinstance(venv, VecNormalize):
@@ -168,6 +206,9 @@ def train(args):
         venv.save(str(out / "model.vecnormalize.pkl"))
     meta = {"condition": args.condition, "base": base, "changed": changed, **cfg,
             "train_seed": seed, "timesteps": args.steps, "gamma": GAMMA, "hyperparameters": "SB3 PPO 기본값"}
+    if variant:
+        meta.update({"variant": variant, "lr_schedule": args.lr_schedule, "target_kl": args.target_kl,
+                     "hyperparameters": "SB3 PPO 기본값에서 lr_schedule, target_kl만 바꿈"})
     with open(out / "model.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
     with open(out / "curve.csv", "w", newline="", encoding="utf-8") as f:
@@ -179,6 +220,8 @@ def train(args):
     result = rollout_stats(load_policy(out / "model.zip"))
     result.update({"condition": args.condition, "seed": args.seed, "train_seed": seed,
                    "timesteps": args.steps, "train_seconds": round(train_s, 1)})
+    if variant:
+        result["variant"] = variant
     with open(out / "result.json", "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     print(json.dumps(result, ensure_ascii=False), flush=True)
@@ -197,7 +240,7 @@ def table(args):
     rows = load_results(args.root)
     groups = {}
     for r in rows:
-        groups.setdefault((r["condition"], r["timesteps"]), []).append(r)
+        groups.setdefault((r["condition"], r.get("variant", ""), r["timesteps"]), []).append(r)
     pd_m = rollout_stats(pd)
     print(f"평가 seed {EVAL_SEEDS.start}-{EVAL_SEEDS.stop - 1}, 도메인 랜덤화 켬, 결정적 행동. 조건마다 학습 seed 평균 ± 표준편차\n")
     print("| 조건 | 기준 | 바꾼 것 | 학습 스텝 | 학습 seed 수 | 평균 리턴 | 넘어짐 | 최종 기울기 중앙값 | 평균 스로틀 | 스로틀 0 비율 |")
@@ -210,9 +253,13 @@ def table(args):
         return f"{v.mean():{fmt}} ± {v.std():{fmt}}"
 
     order = list(CONDITIONS)
-    for (cond, steps), rs in sorted(groups.items(), key=lambda kv: (order.index(kv[0][0]), kv[0][1])):
+    def key(kv):
+        return order.index(kv[0][0]), kv[0][1], kv[0][2]
+
+    for (cond, variant, steps), rs in sorted(groups.items(), key=key):
         base, changed, _ = CONDITIONS[cond]
-        print(f"| {cond} | {base or '-'} | {changed} | {steps // 1000}k | {len(rs)} | "
+        name = f"{cond} {variant}" if variant else cond
+        print(f"| {name} | {base or '-'} | {changed} | {steps // 1000}k | {len(rs)} | "
               f"{ms([r['return'] for r in rs], '.2f')} | {ms([r['crash'] for r in rs], '.1f', 100)} % | "
               f"{ms([r['median_tilt_deg'] for r in rs], '.1f')}° | {ms([r['throttle_mean'] for r in rs], '.3f')} | "
               f"{ms([r['throttle_zero'] for r in rs], '.1f', 100)} % |")
@@ -220,12 +267,13 @@ def table(args):
     print("\n실행별 값(학습 seed 0, 1, 2 순서):\n")
     print("| 조건 | 학습 스텝 | 평균 리턴 | 넘어짐 | 최종 기울기 중앙값 |")
     print("|---|---:|---|---|---|")
-    for (cond, steps), rs in sorted(groups.items(), key=lambda kv: (order.index(kv[0][0]), kv[0][1])):
+    for (cond, variant, steps), rs in sorted(groups.items(), key=key):
+        name = f"{cond} {variant}" if variant else cond
         rs = sorted(rs, key=lambda r: r["seed"])
         rets = ", ".join(f"{r['return']:.2f}" for r in rs)
         crashes = ", ".join(f"{r['crash'] * 100:.1f} %" for r in rs)
         tilts = ", ".join(f"{r['median_tilt_deg']:.1f}°" for r in rs)
-        print(f"| {cond} | {steps // 1000}k | {rets} | {crashes} | {tilts} |")
+        print(f"| {name} | {steps // 1000}k | {rets} | {crashes} | {tilts} |")
     return 0
 
 
@@ -330,6 +378,10 @@ def main():
     t.add_argument("--out", help="결과 폴더. 기본 runs/230/<조건>_<스텝>k/seed<k>")
     t.add_argument("--sb3-log", action="store_true",
                    help="SB3 학습 지표(sb3/progress.csv)와 50k마다 정책(checkpoints/)을 남긴다(#359)")
+    t.add_argument("--lr-schedule", choices=["constant", "linear"], default="constant",
+                   help="linear: 학습률을 3e-4에서 0까지 선형으로 줄인다(#367). 기본 constant는 SB3 기본값 그대로")
+    t.add_argument("--target-kl", type=float, default=None,
+                   help="SB3 PPO target_kl(#367). 기본은 없음(SB3 기본값)")
     t.add_argument("--dry-run", action="store_true",
                    help="인자만 읽고 학습하지 않는다. tasks.py check가 tasks.py train의 인자를 확인한다(#351)")
     sel = sub.add_parser("select", help="실행 폴더 여러 개를 선택용 seed로 평가한다")
