@@ -3,6 +3,7 @@
 실행(저장소 루트에서):
     python ship.py capped 8G -- uv run --frozen --project . python sim/sim_stage1/compare_metrics.py
     ... compare_metrics.py --model 다른_모델.zip      다른 PPO 모델로 같은 표를 낸다(예: #230 뒤 모델)
+    ... compare_metrics.py --tilt-deg 10 20 30 40    기울기를 x°로 고정한 조건만 x마다 낸다(#312)
 
 평가 조건은 pd_gate.py와 같다: 평가 seed 0-199, 도메인 랜덤화 켬, PD(kp=8, kd=2), PPO는 결정적 행동.
 에피소드 k는 두 정책 모두 env.reset(seed=k)로 시작하므로 초기 자세와 랜덤화된 기체가 같다.
@@ -13,6 +14,11 @@
   TC-3        마스터 설계 §11 TC-3의 ±10° 초기 오프셋. reset(options={"initial_tilt_deg": 10.0})으로
               기울기 hypot(phi, theta)를 10°로 고정한다. 방향은 seed마다 균등하게 뽑고 요는 0이다.
               학습 분포는 바꾸지 않는다. 이 옵션은 평가에서만 쓴다(hopper_aviary.py 머리 설명).
+
+--tilt-deg x를 주면 위 두 조건 대신 기울기 x° 고정 조건(TC-3과 같은 옵션)을 x마다 낸다(#312).
+학습 분포 밖 초기 자세에서 두 정책이 어떻게 움직이는지 본다. 표마다 롤·피치·요 중 한 축 이상이
+학습 초기 범위(각 축 ±INITIAL_ATTITUDE_RAD = 0.3 rad, 약 ±17.2°) 밖인 에피소드 수를 같이 낸다.
+x가 17.2° 이하이면 0이고, 17.2° · √2 = 24.3°보다 크면 모든 에피소드다. 그 사이(예: 20°)는 방향에 따라 다르다.
 
 지표 정의와 근거 (자세한 계산은 evaluate.py episode_metrics()):
   기울기       hypot(phi, theta). 목표값은 0(수평)이고 초기 기울기에서 0으로 돌아오는 응답을 본다.
@@ -41,12 +47,14 @@ import argparse
 import sys
 from pathlib import Path
 
+import numpy as np
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "connectome"))
 
 from evaluate import SETTLE_DEG, run_episodes  # noqa: E402
-from hopper_aviary import HopperAttitudeEnv  # noqa: E402
+from hopper_aviary import INITIAL_ATTITUDE_RAD, HopperAttitudeEnv  # noqa: E402
 from pd_gate import EVAL_SEEDS, model_policy, pd  # noqa: E402
 
 DEFAULT_MODEL = HERE / "hopper_attitude_ppo.zip"
@@ -57,6 +65,25 @@ CONDITIONS = {
     "학습 분포(세 축 각각 U(-0.3, 0.3) rad, 약 ±17°. pd_gate.py와 같다)": None,
     f"TC-3(기울기 {TC3_TILT_DEG:g}° 고정, 방향은 seed마다 균등, 요 0)": {"initial_tilt_deg": TC3_TILT_DEG},
 }
+
+
+def tilt_conditions(tilts_deg):
+    """--tilt-deg 값마다 기울기 고정 조건을 만든다(#312). TC-3과 같은 reset 옵션이다."""
+    return {f"기울기 {x:g}° 고정, 방향은 seed마다 균등, 요 0": {"initial_tilt_deg": x} for x in tilts_deg}
+
+
+def outside_training_init(reset_options):
+    """평가 seed마다 reset 직후 롤·피치·요 중 한 축 이상이 학습 초기 범위 밖인 에피소드 수(#312).
+
+    잘못된 옵션이면 env.reset()이 ValueError를 낸다. main()은 평가 전에 모든 조건에서 이 함수를 불러
+    오래 걸리는 평가를 시작하기 전에 멈춘다.
+    """
+    env = HopperAttitudeEnv()
+    count = 0
+    for seed in EVAL_SEEDS:
+        obs, _ = env.reset(seed=seed, options=reset_options)
+        count += bool(np.any(np.abs(obs[:3]) > INITIAL_ATTITUDE_RAD))
+    return count
 
 
 class Predictor:
@@ -89,7 +116,11 @@ def row(name, m):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--model", default=str(DEFAULT_MODEL), help="비교할 SB3 PPO 모델(.zip)")
+    ap.add_argument("--tilt-deg", type=float, nargs="+", metavar="X",
+                    help="학습 분포와 TC-3 대신 기울기 X°로 고정한 조건만 낸다(여러 개 가능, 0 < X < 60)")
     args = ap.parse_args()
+    conditions = tilt_conditions(args.tilt_deg) if args.tilt_deg else CONDITIONS
+    outside = {condition: outside_training_init(options) for condition, options in conditions.items()}
 
     from stable_baselines3 import PPO
     model = PPO.load(args.model, device="cpu")
@@ -100,8 +131,10 @@ def main():
     }
 
     print(f"평가 seed {EVAL_SEEDS.start}-{EVAL_SEEDS.stop - 1}, 도메인 랜덤화 켬, 복원 기준 {SETTLE_DEG}°")
-    for condition, options in CONDITIONS.items():
-        print(f"\n초기 자세: {condition}\n")
+    for condition, options in conditions.items():
+        print(f"\n초기 자세: {condition}")
+        print(f"한 축 이상이 학습 초기 범위(각 축 ±{INITIAL_ATTITUDE_RAD} rad) 밖: "
+              f"{outside[condition]}/{len(EVAL_SEEDS)}\n")
         print("| 정책 | 넘어짐 | 복원시간 평균(s) | 미복원 | 오버슈트(0 넘음) | 초기값 초과 | 정상오차 | 평균 리턴 |")
         print("|---|---:|---:|---:|---:|---:|---:|---:|")
         for name, act in policies.items():
