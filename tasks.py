@@ -521,6 +521,11 @@ def task_compile():
     uv_run(["python", "-m", "compileall", "-q", *files], cwd=ROOT)
 
 
+def task_stage2():
+    uv_run(["--package", "cosmos-sim", "--extra", "stage2", "python", "-m",
+            "unittest", "sim.stage2.test_landing"], cwd=ROOT)
+
+
 def task_sanity():
     uv_run(["python", "sanity_check.py"], cwd=STAGE1)
 
@@ -1122,6 +1127,9 @@ TASKS = {t.name: t for t in [
     Task("compile", "파이썬 문법 체크", task_compile,
          inputs=["sim/**/*.py", "test_*.py", "ship.py", *DEPS_IN], uses_env=True),
     Task("sanity", "환경이 살아 있는지 20스텝 확인", task_sanity, inputs=SIM_IN, uses_env=True),
+    Task("stage2", "6자유도 강체, 제트 베인, 착륙과 CSV 확인", task_stage2,
+         inputs=["sim/stage2/*.py", "cad/cg/parts.csv", "cad/cg/cg_estimate.py", *DEPS_IN],
+         uses_env=True),
     Task("gate", "RL 전 합격 기준 - 랜덤화 켠 PD 200 에피소드 (#27)", task_gate, inputs=SIM_IN,
          uses_env=True),
     Task("yaw", "요 축 검사 - 토크·회전자 항·스로틀 변화율·서보 손계산 + 요 PD 200 seed × 6조건(스로틀 고정·계단, 회전자 항 끔·켬) (#65, #86, #120, #161)",
@@ -1166,7 +1174,7 @@ TASKS = {t.name: t for t in [
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
          " 단계 목록은 graph)", task_check,
          deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "agentsref", "cad",
-               "vcruntime", "compile", "ledger", "sanity", "gate", "yaw", "smoke", "conncheck"]),
+               "vcruntime", "compile", "ledger", "sanity", "gate", "yaw", "smoke", "conncheck", "stage2"]),
     Task("train", "PPO 본 학습 (200k 스텝, 오래 걸림)", task_train, cacheable=False,
          uses_env=True, needs_torch=True),
     Task("deck", "설명회 pptx 다시 생성 (node 필요)", task_deck,
