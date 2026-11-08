@@ -256,8 +256,8 @@ class HopperAttitudeEnv(gym.Env):
         self.episode_seed = None  # reset()이 정한다. 이번 에피소드의 모든 난수 흐름이 여기서 나온다
 
     def reset(self, seed=None, options=None):
-        tilt_deg = self._parse_reset_options(options)   # 잘못된 옵션이면 상태를 바꾸기 전에 멈춘다
-        super().reset(seed=seed)
+        super().reset(seed=seed)   # Gymnasium 문서: 사용자 환경의 reset() 첫 줄
+        tilt_deg = self._parse_reset_options(options)   # 잘못된 옵션이면 np_random과 상태를 쓰기 전에 멈춘다
         # np_random에서는 에피소드 seed 하나만 뽑는다(#98). seed 없이 reset()해도 다음 에피소드가
         # 결정적으로 이어지고, 값을 더하거나 빼도 np_random을 쓰는 횟수(1회)는 그대로다.
         self.episode_seed = int(self.np_random.integers(2**64, dtype=np.uint64))
