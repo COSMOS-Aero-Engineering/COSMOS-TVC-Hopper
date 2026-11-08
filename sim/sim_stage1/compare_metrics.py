@@ -55,7 +55,7 @@ sys.path.insert(0, str(HERE.parent / "connectome"))
 
 from evaluate import SETTLE_DEG, run_episodes  # noqa: E402
 from hopper_aviary import INITIAL_ATTITUDE_RAD, HopperAttitudeEnv  # noqa: E402
-from pd_gate import EVAL_SEEDS, model_policy, pd  # noqa: E402
+from pd_gate import EVAL_SEEDS, pd  # noqa: E402
 
 DEFAULT_MODEL = HERE / "hopper_attitude_ppo.zip"
 TC3_TILT_DEG = 10.0   # 마스터 설계 §11 TC-3의 초기 오프셋(°)
@@ -122,12 +122,11 @@ def main():
     conditions = tilt_conditions(args.tilt_deg) if args.tilt_deg else CONDITIONS
     outside = {condition: outside_training_init(options) for condition, options in conditions.items()}
 
-    from stable_baselines3 import PPO
-    model = PPO.load(args.model, device="cpu")
+    from policy_io import load_policy   # 모델 옆 <이름>.json·<이름>.vecnormalize.pkl도 읽는다(#230)
 
     policies = {
         "PD (kp=8, kd=2)": pd,
-        f"PPO ({Path(args.model).name})": model_policy(model),
+        f"PPO ({Path(args.model).name})": load_policy(args.model),
     }
 
     print(f"평가 seed {EVAL_SEEDS.start}-{EVAL_SEEDS.stop - 1}, 도메인 랜덤화 켬, 복원 기준 {SETTLE_DEG}°")

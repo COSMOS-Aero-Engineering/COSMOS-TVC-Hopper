@@ -522,9 +522,10 @@ def task_compile():
 
 
 def task_sanity():
-    """환경을 20스텝 돌려 보고, reset(options=...)의 단위 검사(test_reset_options.py, #276)를 돌린다."""
+    """환경을 20스텝 돌려 보고, reset(options=...)의 단위 검사(test_reset_options.py, #276)와
+    PPO 행동 구조·종료 비용의 단위 검사(test_policy_io.py, #230)를 돌린다."""
     uv_run(["python", "sanity_check.py"], cwd=STAGE1)
-    uv_run(["python", "-m", "unittest", "-q", "test_reset_options"], cwd=STAGE1)
+    uv_run(["python", "-m", "unittest", "-q", "test_reset_options", "test_policy_io"], cwd=STAGE1)
 
 
 def task_gate():
@@ -1123,7 +1124,7 @@ TASKS = {t.name: t for t in [
     Task("lock", "의존성 재해석 - uv.lock + sim/requirements.txt 갱신", task_lock, cacheable=False),
     Task("compile", "파이썬 문법 체크", task_compile,
          inputs=["sim/**/*.py", "test_*.py", "ship.py", *DEPS_IN], uses_env=True),
-    Task("sanity", "환경이 살아 있는지 20스텝 확인 + reset 옵션 단위 검사 (#276)", task_sanity, inputs=SIM_IN,
+    Task("sanity", "환경이 살아 있는지 20스텝 확인 + reset 옵션·행동 구조 단위 검사 (#276, #230)", task_sanity, inputs=SIM_IN,
          uses_env=True),
     Task("gate", "RL 전 합격 기준 - 랜덤화 켠 PD 200 에피소드 (#27)", task_gate, inputs=SIM_IN,
          uses_env=True),
