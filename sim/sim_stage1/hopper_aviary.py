@@ -46,6 +46,12 @@ seed 재현 범위(#98): reset()은 gymnasium의 np_random에서 에피소드 se
 랜덤화하는 값은 이름마다 따로 난수 흐름을 쓴다(EPISODE_STREAMS). 그래서 값을 더하거나 빼거나 뽑는
 순서를 바꿔도 같은 seed의 다른 값과 초기 자세는 그대로다. 랜덤화를 꺼도 초기 자세는 같다.
 같은 numpy·gymnasium 버전(uv.lock)에서만 보장한다. #98 전 커밋의 로그는 그 커밋에서만 재현된다.
+
+초기 자세 옵션(#276): 기본 초기 자세는 세 축 각각 U(-0.3, 0.3) rad(약 ±17°)이고 학습은 이 분포를 쓴다.
+평가만 reset(seed=k, options={"initial_tilt_deg": 10.0})으로 기울기 hypot(phi, theta)를 10°로 고정한다.
+마스터 설계 §11 TC-3의 ±10° 초기 오프셋 조건이다. 기울기 방향은 흐름 "initial_tilt_dir"에서 균등하게 뽑고 요(psi)는 0으로 둔다.
+옵션을 줘도 같은 seed의 랜덤화 값은 그대로다. 그래서 seed k의 기체는 두 조건에서 같다.
+options를 쓰는 방식은 Gymnasium의 Env.reset 문서와 CartPole·Pendulum의 reset(options=...)을 따른다.
 """
 import hashlib
 import os
@@ -66,7 +72,12 @@ EPISODE_STREAMS = (
     "Kf",
     "cg_offset_x", "cg_offset_y",
     "rotor_inertia", "rotor_omega_max", "rotor_tau",   # #121
+    "initial_tilt_dir",   # reset 옵션 initial_tilt_deg를 줄 때만 쓴다(#276)
 )
+
+# reset(options=...)이 받는 키(#276). 다른 키를 주면 ValueError를 낸다. 오타가 조용히 기본 분포로 돌아가지 않게 한다.
+RESET_OPTION_KEYS = ("initial_tilt_deg",)
+CRASH_DEG = 60.0   # 롤이나 피치가 이 각도를 넘으면 에피소드가 끝난다(step()의 terminated)
 
 # 회전자 상수의 랜덤화 분포(#121). 범위는 params.yaml domain_rand의 <이름>_range([아래, 위])에 있다.
 # True = 로그 균등(ln 값이 균등. 비율마다 같은 확률), False = 균등.
@@ -245,19 +256,50 @@ class HopperAttitudeEnv(gym.Env):
         self.episode_seed = None  # reset()이 정한다. 이번 에피소드의 모든 난수 흐름이 여기서 나온다
 
     def reset(self, seed=None, options=None):
+        tilt_deg = self._parse_reset_options(options)   # 잘못된 옵션이면 상태를 바꾸기 전에 멈춘다
         super().reset(seed=seed)
         # np_random에서는 에피소드 seed 하나만 뽑는다(#98). seed 없이 reset()해도 다음 에피소드가
         # 결정적으로 이어지고, 값을 더하거나 빼도 np_random을 쓰는 횟수(1회)는 그대로다.
         self.episode_seed = int(self.np_random.integers(2**64, dtype=np.uint64))
         self._randomize_episode_params()
-        # 완전 수평에서 시작하면 학습할 게 없으므로 초기 교란을 줌
-        # (구속 스탠드 실험에서 손으로 살짝 기울여 놓고 시작하는 것과 같은 셋업)
-        phi, theta, psi = self._rng("initial_attitude").uniform(-0.3, 0.3, size=3)
+        if tilt_deg is None:
+            # 완전 수평에서 시작하면 학습할 게 없으므로 초기 교란을 줌
+            # (구속 스탠드 실험에서 손으로 살짝 기울여 놓고 시작하는 것과 같은 셋업)
+            phi, theta, psi = self._rng("initial_attitude").uniform(-0.3, 0.3, size=3)
+        else:
+            # TC-3 조건(#276): 기울기 크기는 고정하고 방향만 seed에서 뽑는다. 요 오프셋은 주지 않는다.
+            direction = self._rng("initial_tilt_dir").uniform(0.0, 2.0 * np.pi)
+            tilt = np.deg2rad(tilt_deg)
+            phi, theta, psi = tilt * np.cos(direction), tilt * np.sin(direction), 0.0
         self.state = np.array([phi, theta, psi, 0.0, 0.0, 0.0], dtype=np.float32)
         self.step_count = 0
         self.throttle_applied = None
         self.vane_alpha = np.zeros(4)
         return self._obs(), {}
+
+    @staticmethod
+    def _parse_reset_options(options):
+        """reset(options=...)를 읽고 검사한다(#276). 초기 기울기(°)를 돌려준다. 옵션이 없으면 None(기본 분포).
+
+        initial_tilt_deg는 0보다 크고 CRASH_DEG보다 작아야 한다. 기울기 방향이 한 축이면 그 축 각도가
+        initial_tilt_deg와 같으므로, CRASH_DEG 이상이면 첫 스텝에 넘어짐으로 끝난다.
+        """
+        if options is None:
+            return None
+        if not isinstance(options, dict):
+            raise ValueError(f"reset options는 dict여야 한다: {type(options).__name__}")
+        unknown = sorted(set(options) - set(RESET_OPTION_KEYS))
+        if unknown:
+            raise ValueError(f"reset options에 모르는 키 {unknown}가 있다. 받는 키: {list(RESET_OPTION_KEYS)}")
+        if "initial_tilt_deg" not in options:
+            return None
+        value = options["initial_tilt_deg"]
+        if isinstance(value, bool) or not isinstance(value, (int, float, np.integer, np.floating)):
+            raise ValueError(f"initial_tilt_deg = {value!r}: 숫자여야 한다.")
+        tilt_deg = float(value)
+        if not 0.0 < tilt_deg < CRASH_DEG:
+            raise ValueError(f"initial_tilt_deg = {tilt_deg}: 0보다 크고 {CRASH_DEG}보다 작아야 한다.")
+        return tilt_deg
 
     def _obs(self):
         """관측 벡터(OBS_NAMES 순서, float32). 물리 상태 self.state 뒤에 직전 스텝의 제한 뒤 스로틀을 붙인다(#186)."""
@@ -414,7 +456,7 @@ class HopperAttitudeEnv(gym.Env):
             - 0.001 * float(np.sum(np.square(action)))
         )
 
-        crashed = abs(phi) > np.deg2rad(60) or abs(theta) > np.deg2rad(60)
+        crashed = abs(phi) > np.deg2rad(CRASH_DEG) or abs(theta) > np.deg2rad(CRASH_DEG)
         terminated = bool(crashed)
         truncated = self.step_count >= self.max_steps
 

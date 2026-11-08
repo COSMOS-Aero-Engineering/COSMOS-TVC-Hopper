@@ -73,12 +73,15 @@ def episode_metrics(xy, dt: float) -> dict:
             "steady_err_deg": steady_err_deg, "settle_s": settle_s, "censored": censored}
 
 
-def run_episodes(policy, env, episodes: int = 30, seed_base: int = EVAL_SEED_BASE) -> dict:
+def run_episodes(policy, env, episodes: int = 30, seed_base: int = EVAL_SEED_BASE,
+                 reset_options: dict | None = None) -> dict:
+    """reset_options는 매 에피소드의 env.reset(options=...)에 그대로 넘긴다. None이면 학습과 같은 초기 분포다.
+    compare_metrics.py가 TC-3 조건(기울기 10° 고정)을 넘길 때 쓴다(#276)."""
     per_episode, rewards = [], []
     crashes = 0
 
     for k in range(episodes):
-        obs, _ = env.reset(seed=seed_base + k)
+        obs, _ = env.reset(seed=seed_base + k, options=reset_options)
         xy = [obs[:2]]
         total = 0.0
 

@@ -1,4 +1,4 @@
-"""PD와 PPO를 복원시간, 오버슈트, 정상오차, 넘어짐 비율로 비교한 표를 낸다(#266).
+"""PD와 PPO를 복원시간, 오버슈트, 정상오차, 넘어짐 비율로 비교한 표를 초기 자세 두 조건으로 낸다(#266, #276).
 
 실행(저장소 루트에서):
     python ship.py capped 8G -- uv run --frozen --project . python sim/sim_stage1/compare_metrics.py
@@ -7,6 +7,12 @@
 평가 조건은 pd_gate.py와 같다: 평가 seed 0-199, 도메인 랜덤화 켬, PD(kp=8, kd=2), PPO는 결정적 행동.
 에피소드 k는 두 정책 모두 env.reset(seed=k)로 시작하므로 초기 자세와 랜덤화된 기체가 같다.
 지표 계산은 새로 만들지 않고 커넥톰 트랙의 sim/connectome/evaluate.py run_episodes()를 쓴다.
+
+초기 자세 조건(CONDITIONS). 두 조건 모두 같은 seed 0-199를 쓰고 seed k의 랜덤화된 기체는 두 조건에서 같다.
+  학습 분포   세 축 각각 U(-0.3, 0.3) rad(약 ±17°). 학습 환경 그대로이고 pd_gate.py와 같다.
+  TC-3        마스터 설계 §11 TC-3의 ±10° 초기 오프셋. reset(options={"initial_tilt_deg": 10.0})으로
+              기울기 hypot(phi, theta)를 10°로 고정한다. 방향은 seed마다 균등하게 뽑고 요는 0이다.
+              학습 분포는 바꾸지 않는다. 이 옵션은 평가에서만 쓴다(hopper_aviary.py 머리 설명).
 
 지표 정의와 근거 (자세한 계산은 evaluate.py episode_metrics()):
   기울기       hypot(phi, theta). 목표값은 0(수평)이고 초기 기울기에서 0으로 돌아오는 응답을 본다.
@@ -26,8 +32,8 @@
 
 넘어진 에피소드도 복원시간, 오버슈트, 정상오차 평균에 들어간다(evaluate.py와 같다).
 
-TC-3과 다른 점: TC-3은 ±10° 초기 오프셋이다. 이 표는 학습 환경의 초기 자세(세 축 각각 U(-0.3, 0.3) rad,
-약 ±17°)를 그대로 쓴다. pd_gate.py와 같은 seed와 같은 초기 조건으로 재기 위해서다.
+TC-3 조건에서는 초기 기울기가 모든 에피소드에서 10°다. 그래서 복원 기준 2°는 늘 변화량의 20 %이고,
+오버슈트를 나누는 초기 기울기도 에피소드마다 같다. 학습 분포 조건에서는 초기 기울기가 에피소드마다 다르다.
 """
 import argparse
 import sys
@@ -42,6 +48,13 @@ from hopper_aviary import HopperAttitudeEnv  # noqa: E402
 from pd_gate import EVAL_SEEDS, model_policy, pd  # noqa: E402
 
 DEFAULT_MODEL = HERE / "hopper_attitude_ppo.zip"
+TC3_TILT_DEG = 10.0   # 마스터 설계 §11 TC-3의 초기 오프셋(°)
+
+# 초기 자세 조건 이름 -> env.reset(options=...). None은 학습 분포다.
+CONDITIONS = {
+    "학습 분포(세 축 각각 U(-0.3, 0.3) rad, 약 ±17°. pd_gate.py와 같다)": None,
+    f"TC-3(기울기 {TC3_TILT_DEG:g}° 고정, 방향은 seed마다 균등, 요 0)": {"initial_tilt_deg": TC3_TILT_DEG},
+}
 
 
 class Predictor:
@@ -54,14 +67,15 @@ class Predictor:
         return self.act(obs), None
 
 
-def evaluate(act):
+def evaluate(act, reset_options=None):
     env = HopperAttitudeEnv()
     if not env.dr.get("enabled", False):
         raise ValueError("params.yaml의 domain_rand.enabled가 false다. 이 표는 랜덤화를 켠 상태에서만 낸다.")
     seeds = list(EVAL_SEEDS)
     if seeds != list(range(seeds[0], seeds[0] + len(seeds))):
         raise ValueError("EVAL_SEEDS가 연속한 범위가 아니다. run_episodes()는 seed_base + k만 쓴다.")
-    return run_episodes(Predictor(act), env, episodes=len(seeds), seed_base=seeds[0])
+    return run_episodes(Predictor(act), env, episodes=len(seeds), seed_base=seeds[0],
+                        reset_options=reset_options)
 
 
 def row(name, m):
@@ -78,16 +92,18 @@ def main():
     from stable_baselines3 import PPO
     model = PPO.load(args.model, device="cpu")
 
-    results = {
-        "PD (kp=8, kd=2)": evaluate(pd),
-        f"PPO ({Path(args.model).name})": evaluate(model_policy(model)),
+    policies = {
+        "PD (kp=8, kd=2)": pd,
+        f"PPO ({Path(args.model).name})": model_policy(model),
     }
 
-    print(f"평가 seed {EVAL_SEEDS.start}-{EVAL_SEEDS.stop - 1}, 도메인 랜덤화 켬, 복원 기준 {SETTLE_DEG}°\n")
-    print("| 정책 | 넘어짐 | 복원시간 평균(s) | 미복원 | 오버슈트(0 넘음) | 초기값 초과 | 정상오차 | 평균 리턴 |")
-    print("|---|---:|---:|---:|---:|---:|---:|---:|")
-    for name, m in results.items():
-        print(row(name, m))
+    print(f"평가 seed {EVAL_SEEDS.start}-{EVAL_SEEDS.stop - 1}, 도메인 랜덤화 켬, 복원 기준 {SETTLE_DEG}°")
+    for condition, options in CONDITIONS.items():
+        print(f"\n초기 자세: {condition}\n")
+        print("| 정책 | 넘어짐 | 복원시간 평균(s) | 미복원 | 오버슈트(0 넘음) | 초기값 초과 | 정상오차 | 평균 리턴 |")
+        print("|---|---:|---:|---:|---:|---:|---:|---:|")
+        for name, act in policies.items():
+            print(row(name, evaluate(act, reset_options=options)))
     print("\n* 미복원: 끝까지 복원 기준 아래로 못 내려온 에피소드 수. 복원시간 평균에는 에피소드 길이(5 s)로 들어간다.")
     print("* 오버슈트(0 넘음): 0을 지나 반대쪽으로 넘어간 최대 크기 / 초기 기울기(MATLAB stepinfo 정의).")
     print("* 초기값 초과: (최대 기울기 - 초기 기울기) / 초기 기울기(evaluate.py의 overshoot).")
