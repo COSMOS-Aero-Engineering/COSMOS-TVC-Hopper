@@ -26,6 +26,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -42,6 +43,8 @@ REVIEW_PROMPT = ("Review the changes on this branch against {base}. Report concr
                  "with file and line. Do not edit files.")
 # 리뷰어에게 표준 입력으로 넘기는 GitHub 기록(#167). Codex 리뷰어는 read-only 샌드박스라 네트워크가
 # 막혀 gh로 PR·이슈를 읽지 못한다. 기록은 리뷰 요청 문장과 따로 넘기고, 요청 문장은 범위만 둔다.
+# Codex 리뷰어의 권한 프로필 이름(#283). codex_review_cmd()가 -c로 이 이름의 프로필을 만든다.
+CODEX_PROFILE = "cosmos_review"
 RECORD_FIELDS = "number,title,state,url,author,createdAt,body,comments"
 # PR이면 더 읽는 필드. `gh issue view`의 comments에는 PR 리뷰(승인·변경 요청)가 없다.
 PR_FIELDS = "mergedAt,commits,reviews"
@@ -502,6 +505,26 @@ def opencode_model(author, env=None):
     die("OpenCode 무료 모델 중 쓸 수 있는 리뷰어를 못 찾았다. `opencode models`로 목록을 본다.")
 
 
+def codex_review_cmd(prompt, tmp):
+    """Codex 리뷰 명령. 읽기 전용 샌드박스에서 임시 폴더 tmp 하나만 쓰기를 연다(#283).
+
+    `--sandbox read-only`에는 쓸 수 있는 폴더가 없다. 그래서 PyTorch(torch._dynamo)의
+    tempfile.gettempdir()가 FileNotFoundError로 멈추고, 리뷰어가 PPO.load를 돌리지 못했다.
+    Codex 권한 프로필(https://learn.chatgpt.com/docs/permissions)로 `:read-only`를 상속하고 tmp에만
+    write를 준다. 저장소와 다른 경로는 읽기만 되고 네트워크는 막힌다. `--sandbox`를 같이 주면 Codex가
+    권한 프로필을 쓰지 않으므로 `--sandbox`는 넣지 않는다. 경로는 json.dumps로 적는다. json.dumps가
+    쓰는 이스케이프(\\\\, \\", \\n 등)는 TOML 기본 문자열에서도 뜻이 같아서 Windows 역슬래시와 한글
+    경로도 그대로 읽힌다.
+    """
+    profile = f"permissions.{CODEX_PROFILE}"
+    path = json.dumps(str(tmp), ensure_ascii=False)
+    return ["codex", "exec",
+            "-c", f'default_permissions="{CODEX_PROFILE}"',
+            "-c", f'{profile}.extends=":read-only"',
+            "-c", f'{profile}.filesystem={{{path}="write"}}',
+            prompt]
+
+
 def gh_json(cmd):
     """gh 명령의 JSON 출력을 읽는다. 실패하면 None."""
     r = call(cmd, check=False, capture=True)
@@ -685,9 +708,15 @@ def cmd_review(a):
     else:
         print(f"리뷰어에게 표준 입력으로 넘기는 기록: {summary}", flush=True)
     # 리뷰 요청에는 범위만 넣는다(AGENTS.md §작업 순서 6). 힌트나 체크리스트를 넣지 않는다.
-    env = None
+    env, tmp = None, None
     if author != "openai" and logged_in(["codex", "login", "status"]):
-        reviewer, cmd = "codex", ["codex", "exec", "--sandbox", "read-only", prompt]
+        # 리뷰어가 쓸 수 있는 유일한 폴더다(#283). 리뷰가 끝나면 지운다. TMPDIR은 파이썬 tempfile이
+        # 모든 OS에서 가장 먼저 보는 변수다. macOS의 /var -> /private/var 같은 링크는 실제 경로로 푼다.
+        tmp = tempfile.TemporaryDirectory(prefix="cosmos-review-", ignore_cleanup_errors=True)
+        tmp_path = Path(tmp.name).resolve()
+        env = dict(os.environ, TMPDIR=str(tmp_path))
+        reviewer, cmd = "codex", codex_review_cmd(prompt, tmp_path)
+        print(f"리뷰어가 쓸 수 있는 폴더(TMPDIR, 리뷰 뒤에 지운다): {tmp_path}", flush=True)
     elif author != "claude" and logged_in(["claude", "auth", "status"]):
         reviewer, cmd = "claude", ["claude", "-p", "--permission-mode", "plan", prompt]
     else:
@@ -695,7 +724,11 @@ def cmd_review(a):
         model = opencode_model(author, env=env)
         reviewer, cmd = model, ["opencode", "run", "--agent", "plan", "-m", model, prompt]
     print(f"작성자 계열: {author} / 리뷰어: {reviewer}\n", flush=True)
-    r = call(cmd, check=False, input=records, env=env)
+    try:
+        r = call(cmd, check=False, input=records, env=env)
+    finally:
+        if tmp is not None:
+            tmp.cleanup()
     print(f"\nPR 템플릿 \"교차 리뷰\"에 적는다: `{reviewer}: 지적 N건, 고침 <커밋> / "
           "받아들이지 않음 <이유>`")
     sys.exit(r.returncode)

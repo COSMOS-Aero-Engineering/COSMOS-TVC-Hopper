@@ -485,12 +485,35 @@ class ReviewRecordsTest(unittest.TestCase):
         self.assertIn("JSON이 아닌 출력", why)
 
 
+def codex_config(cmd):
+    """codex 명령의 `-c 키=값`을 {키: 값 원문}으로 읽는다."""
+    return dict(cmd[i + 1].split("=", 1) for i, arg in enumerate(cmd) if arg == "-c")
+
+
+def parse_toml_value(text):
+    """`-c`의 값 원문을 Codex처럼 TOML 값으로 읽는다. tomllib(파이썬 3.11+)이 없으면 건너뛴다."""
+    try:
+        import tomllib
+    except ImportError:
+        raise unittest.SkipTest("tomllib가 없다 (파이썬 3.11 미만)")
+    return tomllib.loads(f"v = {text}")["v"]
+
+
 class CmdReviewTest(unittest.TestCase):
-    def run_review(self, records, logged):
+    def run_review(self, records, logged, fail=None):
+        """cmd_review를 가짜 call로 돌린다. 리뷰 명령을 부를 때의 환경과 TMPDIR 폴더 유무를 남긴다."""
         calls = []
+        self.env, self.tmp_existed = None, None
 
         def fake_call(cmd, check=True, capture=False, cwd=None, input=None, env=None):
             calls.append((cmd, input))
+            if cmd[0] == "git":  # 리뷰 전의 git fetch
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            self.env = env
+            tmp = (env or {}).get("TMPDIR")
+            self.tmp_existed = tmp is not None and Path(tmp).is_dir()
+            if fail:
+                raise fail
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
         out = io.StringIO()
@@ -504,7 +527,7 @@ class CmdReviewTest(unittest.TestCase):
 
     def test_prompt_stays_scope_only_and_records_go_to_stdin(self):
         prompt = ship.REVIEW_PROMPT.format(base="origin/main")
-        for logged, head in ((lambda c: c[0] == "codex", ["codex", "exec", "--sandbox", "read-only"]),
+        for logged, head in ((lambda c: c[0] == "codex", ["codex", "exec"]),
                              (lambda c: False, ["opencode", "run"])):
             with self.subTest(head=head):
                 (cmd, stdin), out = self.run_review(("# GitHub records", "PR #1"), logged)
@@ -512,6 +535,36 @@ class CmdReviewTest(unittest.TestCase):
                 self.assertEqual(cmd[-1], prompt)
                 self.assertEqual(stdin, "# GitHub records")
                 self.assertIn("PR #1", out)
+
+    def test_codex_writes_only_to_its_temp_folder(self):
+        # #283: :read-only를 상속한 권한 프로필이 TMPDIR 폴더 하나만 쓰기로 연다. --sandbox를 같이 주면
+        # Codex가 권한 프로필을 쓰지 않는다. 폴더는 리뷰하는 동안만 있고 부모 환경의 TMPDIR은 그대로다.
+        with mock.patch.dict(ship.os.environ, {"TMPDIR": "parent-tmp"}):
+            (cmd, _), out = self.run_review((None, "no PR"), lambda c: c[0] == "codex")
+            self.assertEqual(ship.os.environ["TMPDIR"], "parent-tmp")
+        tmp = self.env["TMPDIR"]
+        self.assertTrue(self.tmp_existed)
+        self.assertFalse(Path(tmp).exists())
+        self.assertIn(tmp, out)
+        self.assertNotIn("--sandbox", cmd)
+        profile = f"permissions.{ship.CODEX_PROFILE}"
+        config = codex_config(cmd)
+        self.assertEqual(config["default_permissions"], f'"{ship.CODEX_PROFILE}"')
+        self.assertEqual(config[f"{profile}.extends"], '":read-only"')
+        self.assertEqual(parse_toml_value(config[f"{profile}.filesystem"]), {tmp: "write"})
+
+    def test_codex_temp_folder_is_removed_when_review_stops(self):
+        self.run_review((None, "no PR"), lambda c: c[0] == "codex", fail=SystemExit(1))
+        self.assertTrue(self.tmp_existed)
+        self.assertFalse(Path(self.env["TMPDIR"]).exists())
+
+    def test_codex_profile_path_survives_toml_escaping(self):
+        profile = f"permissions.{ship.CODEX_PROFILE}"
+        for path in (r"C:\Users\김민지\AppData\Local\Temp\cosmos-review-x", '/tmp/a"b', "/tmp/a b"):
+            with self.subTest(path=path):
+                cmd = ship.codex_review_cmd("prompt", path)
+                self.assertEqual(parse_toml_value(codex_config(cmd)[f"{profile}.filesystem"]),
+                                 {path: "write"})
 
     def test_without_records_review_still_runs(self):
         (cmd, stdin), out = self.run_review((None, "gh가 없다"), lambda c: c[0] == "codex")
