@@ -1,0 +1,12 @@
+{
+  "condition": "crashcost",
+  "base": "fixed",
+  "changed": "종료 비용",
+  "action": "vanes4",
+  "vecnormalize": false,
+  "crash_cost": true,
+  "train_seed": 10001,
+  "timesteps": 200000,
+  "gamma": 0.99,
+  "hyperparameters": "SB3 PPO 기본값"
+}

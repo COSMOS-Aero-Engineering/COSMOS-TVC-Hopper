@@ -1,0 +1,12 @@
+{
+  "condition": "fixed",
+  "base": "learned",
+  "changed": "스로틀 100 % 고정",
+  "action": "vanes4",
+  "vecnormalize": false,
+  "crash_cost": false,
+  "train_seed": 10001,
+  "timesteps": 1000000,
+  "gamma": 0.99,
+  "hyperparameters": "SB3 PPO 기본값"
+}
