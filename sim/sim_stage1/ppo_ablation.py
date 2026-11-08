@@ -4,6 +4,8 @@
     python ../../ship.py capped 8G -- python ppo_ablation.py train --condition fixed --seed 0 --steps 200000
     python ppo_ablation.py table runs/230            결과 표(마크다운)
     python ppo_ablation.py curves runs/230           학습 곡선 표(마크다운)
+    python ppo_ablation.py select runs/230/crashcost_1000k/seed1 ...   선택용 seed로 모델 고르기
+결과와 판정은 ppo-ablation.md에 있다. 저장소 모델 hopper_attitude_ppo_230.zip은 crashcost, 1M, seed 1이다.
 
 조건(CONDITIONS). 각 조건은 "기준" 조건에서 한 가지만 바꾼다. 학습 하이퍼파라미터는 모두 SB3 PPO 기본값이다.
   learned     #230 전 train.py와 같다. 정책이 베인 4개와 스로틀을 낸다. 기준 없음(출발점)
@@ -41,6 +43,8 @@ HERE = Path(__file__).resolve().parent
 TRAIN_SEED = 10_000                      # train.py와 같은 기준. 실행 seed k는 TRAIN_SEED + k
 CURVE_SEEDS = range(100_000, 100_020)    # 학습 곡선용. 평가 seed 0-199와 겹치지 않는다
 CURVE_EVERY = 50_000
+# 저장소에 둘 모델 하나를 고를 때 쓰는 seed(select). 평가 seed 0-199로 고르면 표의 숫자가 고른 쪽으로 치우친다
+SELECT_SEEDS = range(1_000, 1_200)
 GAMMA = 0.99                             # SB3 PPO 기본값. CrashCost가 같은 값을 쓴다
 
 # 이름 -> (기준 조건, 바꾼 것, 설정)
@@ -209,6 +213,21 @@ def table(args):
     return 0
 
 
+def select(args):
+    """모델 여러 개를 SELECT_SEEDS로 평가해 평균 리턴 순으로 낸다. 저장소에 둘 모델 하나를 고를 때 쓴다."""
+    rows = []
+    for d in args.runs:
+        m = rollout_stats(load_policy(Path(d) / "model.zip"), SELECT_SEEDS)
+        rows.append((m["return"], d, m))
+    print(f"선택용 seed {SELECT_SEEDS.start}-{SELECT_SEEDS.stop - 1}(평가 seed 0-199와 겹치지 않음)\n")
+    print("| 실행 | 평균 리턴 | 넘어짐 | 최종 기울기 중앙값 |")
+    print("|---|---:|---:|---:|")
+    for _, d, m in sorted(rows, key=lambda r: -r[0]):
+        print(f"| {Path(d).parent.name}/{Path(d).name} | {m['return']:.2f} | {m['crash'] * 100:.1f} % | "
+              f"{m['median_tilt_deg']:.2f}° |")
+    return 0
+
+
 def curves(args):
     print(f"학습 곡선: 곡선용 seed {CURVE_SEEDS.start}-{CURVE_SEEDS.stop - 1}(20개) 평균 리턴 / 넘어짐 / 최종 기울기 중앙값\n")
     for path in sorted(Path(args.root).glob("*/seed*/curve.csv")):
@@ -228,11 +247,13 @@ def main():
     t.add_argument("--seed", type=int, default=0, help="학습 seed 번호 k. 실제 seed는 TRAIN_SEED + k")
     t.add_argument("--steps", type=int, default=200_000)
     t.add_argument("--out", help="결과 폴더. 기본 runs/230/<조건>_<스텝>k/seed<k>")
+    sel = sub.add_parser("select", help="실행 폴더 여러 개를 선택용 seed로 평가한다")
+    sel.add_argument("runs", nargs="+", help="model.zip이 든 실행 폴더")
     for name in ("table", "curves"):
         p = sub.add_parser(name)
         p.add_argument("root", nargs="?", default=str(HERE / "runs" / "230"))
     args = ap.parse_args()
-    return {"train": train, "table": table, "curves": curves}[args.cmd](args)
+    return {"train": train, "table": table, "curves": curves, "select": select}[args.cmd](args)
 
 
 if __name__ == "__main__":
