@@ -485,12 +485,38 @@ class ReviewRecordsTest(unittest.TestCase):
         self.assertIn("JSON이 아닌 출력", why)
 
 
+def codex_config(cmd):
+    """codex 명령의 `-c 키=값`을 {키: 값 원문}으로 읽는다."""
+    return dict(cmd[i + 1].split("=", 1) for i, arg in enumerate(cmd) if arg == "-c")
+
+
+def parse_toml_value(text):
+    """`-c`의 값 원문을 Codex처럼 TOML 값으로 읽는다. tomllib(파이썬 3.11+)이 없으면 건너뛴다."""
+    try:
+        import tomllib
+    except ImportError:
+        raise unittest.SkipTest("tomllib가 없다 (파이썬 3.11 미만)")
+    return tomllib.loads(f"v = {text}")["v"]
+
+
 class CmdReviewTest(unittest.TestCase):
-    def run_review(self, records, logged):
+    def run_review(self, records, logged, fail=None, conflict=None):
+        """cmd_review를 가짜 call로 돌린다. 리뷰 명령을 부를 때의 환경과 TMPDIR 폴더 유무를 남긴다.
+
+        conflict는 권한 프로필을 바꾸는 Codex 설정 파일이다. 이 PC의 실제 Codex 설정은 읽지 않는다.
+        """
         calls = []
+        self.env, self.tmp_existed = None, None
 
         def fake_call(cmd, check=True, capture=False, cwd=None, input=None, env=None):
             calls.append((cmd, input))
+            if cmd[0] == "git":  # 리뷰 전의 git fetch
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            self.env = env
+            tmp = (env or {}).get("TMPDIR")
+            self.tmp_existed = tmp is not None and Path(tmp).is_dir()
+            if fail:
+                raise fail
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
         out = io.StringIO()
@@ -498,13 +524,14 @@ class CmdReviewTest(unittest.TestCase):
                 mock.patch.object(ship, "review_records", return_value=records), \
                 mock.patch.object(ship, "logged_in", side_effect=logged), \
                 mock.patch.object(ship, "opencode_model", return_value="opencode/mimo-free"), \
+                mock.patch.object(ship, "codex_conflicting_config", return_value=conflict), \
                 redirect_stdout(out), self.assertRaises(SystemExit):
             ship.cmd_review(argparse.Namespace(author="claude", base="origin/main"))
         return calls[-1], out.getvalue()
 
     def test_prompt_stays_scope_only_and_records_go_to_stdin(self):
         prompt = ship.REVIEW_PROMPT.format(base="origin/main")
-        for logged, head in ((lambda c: c[0] == "codex", ["codex", "exec", "--sandbox", "read-only"]),
+        for logged, head in ((lambda c: c[0] == "codex", ["codex", "exec"]),
                              (lambda c: False, ["opencode", "run"])):
             with self.subTest(head=head):
                 (cmd, stdin), out = self.run_review(("# GitHub records", "PR #1"), logged)
@@ -513,11 +540,105 @@ class CmdReviewTest(unittest.TestCase):
                 self.assertEqual(stdin, "# GitHub records")
                 self.assertIn("PR #1", out)
 
+    def test_codex_writes_only_to_its_temp_folder(self):
+        # #283: :read-only를 상속한 권한 프로필이 TMPDIR 폴더 하나만 쓰기로 연다. --sandbox를 같이 주면
+        # Codex가 권한 프로필을 쓰지 않는다. 폴더는 리뷰하는 동안만 있고 부모 환경의 TMPDIR은 그대로다.
+        with mock.patch.dict(ship.os.environ, {"TMPDIR": "parent-tmp"}):
+            (cmd, _), out = self.run_review((None, "no PR"), lambda c: c[0] == "codex")
+            self.assertEqual(ship.os.environ["TMPDIR"], "parent-tmp")
+        tmp = self.env["TMPDIR"]
+        self.assertTrue(self.tmp_existed)
+        self.assertFalse(Path(tmp).exists())
+        self.assertIn(tmp, out)
+        self.assertNotIn("--sandbox", cmd)
+        profile = f"permissions.{ship.CODEX_PROFILE}"
+        config = codex_config(cmd)
+        self.assertEqual(config["default_permissions"], f'"{ship.CODEX_PROFILE}"')
+        self.assertEqual(config[f"{profile}.extends"], '":read-only"')
+        self.assertEqual(parse_toml_value(config[f"{profile}.filesystem"]), {tmp: "write"})
+        self.assertIs(parse_toml_value(config[f"{profile}.network.enabled"]), False)
+
+    def test_codex_keeps_read_only_sandbox_when_config_has_sandbox_mode(self):
+        # Codex 문서: 설정 파일에 sandbox_mode가 있으면 권한 프로필을 쓰지 않는다. 그때는 #283 이전 명령을
+        # 그대로 쓴다. 리뷰어 권한이 사용자의 sandbox_mode(예: workspace-write)로 넓어지지 않는다.
+        conflict = Path("home") / ".codex" / "config.toml"
+        (cmd, _), out = self.run_review((None, "no PR"), lambda c: c[0] == "codex", conflict=conflict)
+        prompt = ship.REVIEW_PROMPT.format(base="origin/main")
+        self.assertEqual(cmd, ["codex", "exec", "--sandbox", "read-only", prompt])
+        self.assertIsNone(self.env)
+        self.assertIn(f"[주의] {conflict}에서 sandbox_mode나 permissions.cosmos_review를 찾았거나", out)
+
+    def test_codex_temp_folder_is_removed_when_review_stops(self):
+        self.run_review((None, "no PR"), lambda c: c[0] == "codex", fail=SystemExit(1))
+        self.assertTrue(self.tmp_existed)
+        self.assertFalse(Path(self.env["TMPDIR"]).exists())
+
+    def test_codex_profile_path_survives_toml_escaping(self):
+        profile = f"permissions.{ship.CODEX_PROFILE}"
+        for path in (r"C:\Users\김민지\AppData\Local\Temp\cosmos-review-x", '/tmp/a"b', "/tmp/a b"):
+            with self.subTest(path=path):
+                cmd = ship.codex_review_cmd("prompt", path)
+                self.assertEqual(parse_toml_value(codex_config(cmd)[f"{profile}.filesystem"]),
+                                 {path: "write"})
+
     def test_without_records_review_still_runs(self):
         (cmd, stdin), out = self.run_review((None, "gh가 없다"), lambda c: c[0] == "codex")
         self.assertEqual(cmd[0], "codex")
         self.assertIsNone(stdin)
         self.assertIn("[주의]", out)
+
+
+class CodexConfigConflictTest(unittest.TestCase):
+    def find(self, text):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "config.toml"
+            f.write_text(text, encoding="utf-8")
+            return ship.codex_conflicting_config([Path(tmp) / "missing.toml", f]) == f
+
+    def test_finds_sandbox_mode_in_any_toml_spelling(self):
+        for text in ('sandbox_mode = "workspace-write"\n',
+                     "'sandbox_mode' = 'workspace-write'\n",
+                     '"sandbox\\u005fmode" = "workspace-write"\n',
+                     'model = "x"\n\n[profiles.fast]\nsandbox_mode = "danger-full-access"\n',
+                     'profiles.fast.sandbox_mode="read-only"\n',
+                     '[profiles]\nfast = { sandbox_mode = "workspace-write" }\n',
+                     '\ufeffsandbox_mode = "workspace-write"\n'):
+            with self.subTest(text=text):
+                self.assertTrue(self.find(text))
+
+    def test_finds_existing_review_profile(self):
+        # Codex는 설정 층을 합친다. 같은 이름의 프로필이 이미 있으면 -c가 정하지 않은 키가 남는다.
+        for text in ('[permissions.cosmos_review.network]\nenabled = true\n',
+                     '[permissions.cosmos_review.filesystem]\n"/" = "write"\n',
+                     'permissions.cosmos_review.workspace_roots."~/code" = true\n'):
+            with self.subTest(text=text):
+                self.assertTrue(self.find(text))
+
+    def test_ignores_comments_other_keys_and_missing_files(self):
+        if ship.tomllib is None:
+            self.skipTest("tomllib가 없다 (파이썬 3.11 미만)")
+        for text in ('# sandbox_mode = "workspace-write"\n',
+                     'model = "x"\n[sandbox_workspace_write]\nnetwork_access = true\n',
+                     'default_permissions = ":workspace"\n',
+                     '[permissions.other]\nextends = ":workspace"\n'):
+            with self.subTest(text=text):
+                self.assertFalse(self.find(text))
+        self.assertIsNone(ship.codex_conflicting_config([Path("no-such-dir") / "config.toml"]))
+
+    def test_unreadable_toml_or_no_tomllib_counts_as_found(self):
+        # 권한이 넓어지는 쪽으로 틀리지 않는다: 모르면 read-only로 리뷰한다.
+        self.assertTrue(self.find('sandbox_mode = \n'))
+        with mock.patch.object(ship, "tomllib", None):
+            self.assertTrue(self.find('"sandbox\\u005fmode" = "workspace-write"\n'))
+            self.assertTrue(self.find('model = "x"\n'))
+
+    def test_candidates_cover_codex_home_and_every_project_layer(self):
+        cwd = Path("repo") / "sim" / "sim_stage1"
+        with mock.patch.dict(ship.os.environ, {"CODEX_HOME": "custom-home"}):
+            files = ship.codex_config_files(cwd)
+        self.assertEqual(files[0], Path("custom-home") / "config.toml")
+        for d in (cwd, Path("repo") / "sim", Path("repo")):
+            self.assertIn(d / ".codex" / "config.toml", files)
 
 
 class OpenCodeIsolationTest(unittest.TestCase):
