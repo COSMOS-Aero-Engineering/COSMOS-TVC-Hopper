@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -525,8 +526,12 @@ class CmdReviewTest(unittest.TestCase):
                 raise fail
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
+        def fake_opencode(cmd, input, env):  # OpenCode 리뷰어는 run_opencode_review로 부른다(#327).
+            return fake_call(cmd, input=input, env=env).returncode
+
         self.venv_check = mock.Mock(return_value=venv)
         with mock.patch.object(ship, "call", fake_call), \
+                mock.patch.object(ship, "run_opencode_review", fake_opencode), \
                 mock.patch.object(ship, "review_records", return_value=records), \
                 mock.patch.object(ship, "logged_in", side_effect=logged), \
                 mock.patch.object(ship, "opencode_model", return_value="opencode/mimo-free"), \
@@ -785,7 +790,8 @@ class OpenCodeIsolationTest(unittest.TestCase):
 
     def test_fallback_discovery_and_review_use_same_environment(self):
         env = {"XDG_DATA_HOME": "isolated"}
-        with mock.patch.object(ship, "call", return_value=subprocess.CompletedProcess([], 0, "", "")) as call, \
+        with mock.patch.object(ship, "call", return_value=subprocess.CompletedProcess([], 0, "", "")), \
+                mock.patch.object(ship, "run_opencode_review", return_value=0) as review, \
                 mock.patch.object(ship, "logged_in", return_value=False), \
                 mock.patch.object(ship, "review_records", return_value=(None, "no PR")), \
                 mock.patch.object(ship, "opencode_env", return_value=env), \
@@ -794,7 +800,130 @@ class OpenCodeIsolationTest(unittest.TestCase):
             ship.cmd_review(argparse.Namespace(author="claude", base="origin/main"))
         self.assertEqual(stop.exception.code, 0)
         self.assertIs(model.call_args.kwargs["env"], env)
-        self.assertIs(call.call_args.kwargs["env"], env)
+        self.assertIs(review.call_args.args[2], env)
+
+
+# opencode 1.19.1 로그의 모델 오류 줄(2026-11-08 서버 로그에서 줄였다, #327).
+LOG_LINE = ('timestamp=2026-11-08T14:50:36.589Z level=ERROR run=06d3ea91 message="stream error" '
+            'providerID=opencode modelID=mimo-v2.6-flash-free session.id=ses_x small={small} '
+            'agent=plan mode=primary error.error={error}\n')
+QUOTA = "AI_APICallError: Free usage limit reached. Free models work in OpenCode (https://opencode.ai)"
+
+
+def log_line(error, small="false"):
+    return LOG_LINE.format(small=small, error=json.dumps(error))
+
+
+class OpenCodeReviewLimitTest(unittest.TestCase):
+    """run_opencode_review를 실제 프로세스로 본다(#327). 가짜 리뷰어는 opencode 대신 파이썬이다.
+
+    가짜 리뷰어는 opencode처럼 XDG_DATA_HOME/opencode/log/opencode.log에 줄을 더한다. 오래 기다리는
+    리뷰어도 60초 뒤에는 스스로 끝난다. 검사가 실패해도 프로세스가 남지 않게 하려는 것이다.
+    """
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+        self.env = dict(os.environ, XDG_DATA_HOME=str(self.dir / "data"))
+        self.log = self.dir / "data" / "opencode" / "log" / "opencode.log"
+        self.log.parent.mkdir(parents=True)
+
+    def review(self, script, limit=30, records=""):
+        """(exit 코드나 SystemExit 코드, stderr, 걸린 초)를 돌려준다."""
+        prelude = ("import json, os, sys, time; from pathlib import Path; "
+                   "LOG = Path(os.environ['XDG_DATA_HOME'], 'opencode', 'log', 'opencode.log')\n"
+                   "def log(text):\n"
+                   "    with open(LOG, 'a', encoding='utf-8') as f: f.write(text)\n")
+        err = io.StringIO()
+        start = time.monotonic()
+        with redirect_stdout(io.StringIO()), redirect_stderr(err):
+            try:
+                code = ship.run_opencode_review([sys.executable, "-c", prelude + script], records,
+                                                self.env, limit=limit, poll=0.2)
+            except SystemExit as stop:
+                code = stop.code
+        return code, err.getvalue(), time.monotonic() - start
+
+    def test_usage_limit_in_log_stops_review_at_once(self):
+        # 오류 줄을 두 번에 나눠 쓴다. ship.py는 줄이 끝난 뒤에 읽는다. 로그 파일은 리뷰어가 만든다.
+        line = log_line(QUOTA)
+        script = (f"log({line[:60]!r}); time.sleep(0.6); log({line[60:]!r}); time.sleep(60)")
+        code, err, took = self.review(script)
+        self.assertEqual(code, 1)
+        self.assertIn(f"사용 한도 오류를 받았다: {QUOTA}", err)
+        self.assertIn("Codex나 Claude Code에 로그인한 뒤", err)
+        self.assertLess(took, 20)
+
+    def test_old_lines_and_title_request_errors_do_not_stop_review(self):
+        # 리뷰 전에 쓴 줄과 세션 제목 요청(small=true)의 오류로는 멈추지 않는다.
+        self.log.write_text(log_line(QUOTA), encoding="utf-8")
+        script = f"log({log_line(QUOTA, small='true')!r}); time.sleep(1.5); sys.exit(0)"
+        code, err, _ = self.review(script)
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+
+    def test_time_limit_stops_review_and_shows_last_model_error(self):
+        script = f"log({log_line('AI_APICallError: Too Many Requests')!r}); time.sleep(60)"
+        code, err, took = self.review(script, limit=2)
+        self.assertEqual(code, 1)
+        self.assertIn("2초 안에 끝나지 않아서 멈췄다", err)
+        self.assertIn("마지막 모델 오류: AI_APICallError: Too Many Requests", err)
+        self.assertLess(took, 20)
+
+    def test_time_limit_without_log_lines_names_the_log(self):
+        code, err, _ = self.review("time.sleep(60)", limit=1)
+        self.assertEqual(code, 1)
+        self.assertIn(f"로그에 모델 오류가 없다({self.log})", err)
+
+    def test_large_records_reach_reviewer_and_exit_code_passes(self):
+        # 기록이 파이프 버퍼(수십 KB)보다 커도 끝까지 넘어간다. 리뷰어의 exit 코드를 그대로 돌려준다.
+        records = "# GitHub records\n" * 20000
+        out = self.dir / "stdin.txt"
+        script = (f"Path({str(out)!r}).write_text(str(len(sys.stdin.read())), encoding='utf-8'); "
+                  "sys.exit(3)")
+        code, _, _ = self.review(script, records=records)
+        self.assertEqual(code, 3)
+        self.assertEqual(out.read_text(encoding="utf-8"), str(len(records)))
+
+    def test_stop_also_ends_reviewer_child_process(self):
+        # npm의 opencode.cmd(Windows)처럼 리뷰어가 자식을 띄운다. 멈추면 자식도 심장박동 파일을 더 쓰지 않는다.
+        beat = self.dir / "beat.txt"
+        child = ("import time, pathlib\n"
+                 "for i in range(600):\n"
+                 f"    pathlib.Path({str(beat)!r}).write_text(str(i)); time.sleep(0.1)\n")
+        script = (f"import subprocess; subprocess.Popen([sys.executable, '-c', {child!r}]); "
+                  f"time.sleep(1); log({log_line(QUOTA)!r}); time.sleep(60)")
+        code, _, _ = self.review(script)
+        self.assertEqual(code, 1)
+        time.sleep(1)
+        first = beat.read_text()
+        time.sleep(1)
+        self.assertEqual(beat.read_text(), first)
+
+    @unittest.skipIf(os.name == "nt", "POSIX 프로세스 그룹 검사. Windows는 taskkill /F가 바로 멈춘다.")
+    def test_stop_kills_child_that_ignores_sigterm(self):
+        # 리뷰어가 SIGTERM에 먼저 끝나도 그룹에 남은 자식에게 STOP_GRACE 뒤 SIGKILL을 보낸다.
+        beat = self.dir / "beat.txt"
+        child = ("import signal, time, pathlib\n"
+                 "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                 "for i in range(600):\n"
+                 f"    pathlib.Path({str(beat)!r}).write_text(str(i)); time.sleep(0.1)\n")
+        script = (f"import subprocess; subprocess.Popen([sys.executable, '-c', {child!r}]); "
+                  f"time.sleep(1); log({log_line(QUOTA)!r}); time.sleep(60)")
+        with mock.patch.object(ship, "STOP_GRACE", 1):
+            code, _, took = self.review(script)
+        self.assertEqual(code, 1)
+        self.assertLess(took, 20)
+        time.sleep(1)
+        first = beat.read_text()
+        time.sleep(1)
+        self.assertEqual(beat.read_text(), first)
+
+    def test_log_parser_reads_escaped_error_text(self):
+        lines = (log_line('AI_APICallError: say "hi"') + log_line(QUOTA, small="true")
+                 + "timestamp=x level=INFO message=cleanup\n")
+        self.assertEqual(ship.opencode_log_errors(lines), ['AI_APICallError: say "hi"'])
 
 
 if __name__ == "__main__":
