@@ -7,7 +7,7 @@ RL 학습 전 합격 기준(#27): 도메인 랜덤화를 켠 상태에서 PD 기
 합격: 평가 seed 0~199에서 PD(kp=8, kd=2)의 넘어짐 ≤ 5%, 최종 기울기 중앙값 ≤ 5°.
 베인 측력 상한(축당 ≤ Ft·sin(alpha_max))은 HopperAttitudeEnv 생성 시 vane_lift_gain()이 검사한다.
 
-평가 seed(0~199)는 학습 seed(train.py의 TRAIN_SEED)와 겹치지 않게 둔다 — 학습 때 본 초기 조건으로
+평가 seed(0~199)는 학습 seed(ppo_ablation.py의 TRAIN_SEED)와 겹치지 않게 둔다 — 학습 때 본 초기 조건으로
 평가하면 일반화가 아니라 암기를 재는 것이 된다(SB3 RL Tips and Tricks, 자료실 R05).
 PD 게인과 정책 정의는 #21 재현 스크립트와 같다.
 """

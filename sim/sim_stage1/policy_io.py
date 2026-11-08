@@ -88,7 +88,7 @@ def load_policy(model_path):
     n_env = int(HopperAttitudeEnv().observation_space.shape[0])
     if n_model != n_env:
         raise ValueError(f"모델 관측 {n_model}차원, 환경 관측 {n_env}차원: 차원이 같아야 한다. "
-                         "python train.py로 다시 학습하거나 그 모델을 만든 커밋에서 평가할 것.")
+                         "python tasks.py train으로 다시 학습하거나 그 모델을 만든 커밋에서 평가할 것.")
     n_act = int(model.action_space.shape[0])
     if n_act != ActionAdapter.SIZES[kind]:
         raise ValueError(f"모델 행동 {n_act}차원인데 json의 행동 구조 {kind!r}는 {ActionAdapter.SIZES[kind]}차원이다.")

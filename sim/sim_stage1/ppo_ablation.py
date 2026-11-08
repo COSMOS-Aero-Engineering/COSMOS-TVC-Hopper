@@ -6,6 +6,7 @@
     python ppo_ablation.py curves runs/230           학습 곡선 표(마크다운)
     python ppo_ablation.py select runs/230/crashcost_1000k/seed1 ...   선택용 seed로 모델 고르기
 결과와 판정은 ppo-ablation.md에 있다. 저장소 모델 hopper_attitude_ppo_230.zip은 crashcost, 1M, seed 1이다.
+python tasks.py train도 이 파일로 같은 조건(crashcost, 1M, seed 1)을 학습한다. 결과는 sim/runs/train/(git 제외)이다(#345).
 
 조건(CONDITIONS). 각 조건은 "기준" 조건에서 한 가지만 바꾼다. 학습 하이퍼파라미터는 모두 SB3 PPO 기본값이다.
   learned     #230 전 train.py와 같다. 정책이 베인 4개와 스로틀을 낸다. 기준 없음(출발점)
@@ -40,7 +41,7 @@ from pd_gate import EVAL_SEEDS, pd
 from policy_io import ActionAdapter, load_policy, to_env_action
 
 HERE = Path(__file__).resolve().parent
-TRAIN_SEED = 10_000                      # train.py와 같은 기준. 실행 seed k는 TRAIN_SEED + k
+TRAIN_SEED = 10_000                      # #230 전 train.py와 같은 기준. 실행 seed k는 TRAIN_SEED + k
 CURVE_SEEDS = range(100_000, 100_020)    # 학습 곡선용. 평가 seed 0-199와 겹치지 않는다
 CURVE_EVERY = 50_000
 # 저장소에 둘 모델 하나를 고를 때 쓰는 seed(select). 평가 seed 0-199로 고르면 표의 숫자가 고른 쪽으로 치우친다
