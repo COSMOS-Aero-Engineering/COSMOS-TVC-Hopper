@@ -343,7 +343,14 @@ COMPONENTS = [
      {"1": "BATT_RAW", "2": "GND"}),
 ]
 
-STUB_LEN = 5.08  # mm, one grid unit beyond the pin's own length
+CONNECTION_GRID = 1.27  # mm, KiCad's 50 mil electrical connection grid
+STUB_LEN = 5.08  # mm, four connection-grid steps
+
+
+def snap_to_connection_grid(pos):
+    """Return an x/y position on KiCad's electrical connection grid."""
+    return tuple(round(round(value / CONNECTION_GRID) * CONNECTION_GRID, 2)
+                 for value in pos)
 
 
 def load_libs(sources):
@@ -461,6 +468,7 @@ def main():
     ncs = []
 
     for ref, lib_id, value, pos, pinmap in COMPONENTS:
+        pos = snap_to_connection_grid(pos)
         inst_text, _ = emit_component_instance(ref, lib_id, value, pos, pinmap)
         parts.append(inst_text)
         pin_geo = cache[lib_id]["pins"]
