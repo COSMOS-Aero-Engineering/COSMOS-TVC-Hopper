@@ -36,6 +36,7 @@ static constexpr float   P_GAIN_US_PER_DEG = 4.0f;     // 롤 1°당 µs (초기
 static constexpr float   D_GAIN_US_PER_DEGPERSEC = 2.0f; // 롤속도 1°/s당 µs (초기값)
 static constexpr float   OUTPUT_LIMIT_US   = 100.0f;   // 중립에서 최대 편차 µs (보수값)
 static constexpr uint16_t REPORT_PERIOD_MS = 50;       // IMU 리포트 주기 ms
+static constexpr uint32_t IMU_TIMEOUT_MS   = 500;      // 이 시간 동안 IMU 데이터가 없으면 서보 출력을 끈다
 
 // --- 상태 ---
 BNO080 imu(255, 255, 255, 255);
@@ -45,6 +46,7 @@ bool   imuReady = false;
 bool   servoAttached = false;
 
 unsigned long prevMillis = 0;
+unsigned long lastDataMs = 0;   // 마지막으로 IMU 데이터를 받은 시각
 float   prevRollDeg = 0.0f;
 bool   hasPrevRoll = false;
 
@@ -70,6 +72,13 @@ void releaseServo(const char* reason) {
   servoAttached = false;
   Serial.print("# OFF: ");
   Serial.println(reason);
+}
+
+// 롤 각도 차이를 -180도에서 180도 사이로 접는다. 롤이 180도를 넘어 감길 때 미분이 튀지 않게 한다.
+float wrapDeg(float d) {
+  while (d > 180.0f) d -= 360.0f;
+  while (d < -180.0f) d += 360.0f;
+  return d;
 }
 
 float clampUs(float us) {
@@ -135,14 +144,21 @@ void loop() {
   }
 
   // IMU 데이터가 있을 때만 제어 수행
+  // IMU가 멈추면(케이블이 빠지면) 마지막 명령을 유지하지 않고 서보 출력을 끈다. 데이터가 다시 오면 다시 출력한다.
+  if (servoAttached && now - lastDataMs > IMU_TIMEOUT_MS) {
+    releaseServo("IMU 데이터 없음");
+    hasPrevRoll = false;
+  }
+
   if (imu.dataAvailable() && (now - prevMillis >= REPORT_PERIOD_MS)) {
+    lastDataMs = now;
     float rollDeg = imu.getRoll() * 180.0 / PI;
 
     float rollRateDegPerS = 0.0f;
     if (hasPrevRoll) {
       float dt = (now - prevMillis) / 1000.0f;
       if (dt > 0.0f) {
-        rollRateDegPerS = (rollDeg - prevRollDeg) / dt;
+        rollRateDegPerS = wrapDeg(rollDeg - prevRollDeg) / dt;
       }
     }
 
