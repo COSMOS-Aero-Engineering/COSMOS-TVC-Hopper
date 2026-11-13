@@ -8,7 +8,8 @@
 //
 // 배선 (01-avionics-integration-final.md §2.2 핀맵):
 //        서보 1 신호선 → Teensy 핀 2
-//        서보 2 신호선 → Teensy 핀 3   (서보 3·4는 핀 4·5. 이 스케치는 1-2만 쓴다)
+//        서보 2 신호선 → Teensy 핀 3
+//        서보 3 신호선 → Teensy 핀 4,  서보 4 신호선 → Teensy 핀 5
 //        서보 GND ↔ Teensy GND (공통)
 //        서보 5V는 Teensy USB 5V(VUSB) 또는 UBEC 5V에서 준다. Teensy 3.3V 핀은 서보 전원으로 쓰지 않는다.
 //        서보를 둘 이상 동시에 돌리거나 베인 부하를 달 때는 UBEC를 쓴다. 서보가 움직일 때 Teensy가
@@ -17,7 +18,7 @@
 //
 // 명령 (시리얼 모니터에서 한 줄 입력 후 Enter):
 //   <µs>           지금 선택된 서보(처음엔 1번)에 펄스폭을 낸다.   예: 1500
-//   <번호> <µs>    서보 번호(1-2)를 고르고 펄스폭을 낸다.         예: 2 1600
+//   <번호> <µs>    서보 번호(1-4)를 고르고 펄스폭을 낸다.         예: 2 1600
 //   빈 줄/off/stop 모든 서보의 펄스 출력을 끈다(비상정지: 그냥 Enter만 쳐도 멈춘다)
 //   ?              지금 선택된 서보의 상태를 출력한다
 //
@@ -26,7 +27,7 @@
 //   - 펄스폭은 SERVO_MIN_US ~ SERVO_MAX_US 안으로 제한한다. 범위 밖 입력은 가장 가까운 한계값으로
 //     바꾸고 '# CLAMP'를 출력한다. 시작값은 1000-2000 µs이고, 기계 끝을 확인한 뒤 조정한다.
 //     Servo 라이브러리 기본 범위(544-2400 µs)는 서보를 기계 끝까지 보낼 수 있어서 쓰지 않는다.
-//   - 숫자가 아닌 입력, 서보 번호 밖(1-2 아님), 너무 긴 줄은 거부한다. 출력은 바뀌지 않는다.
+//   - 숫자가 아닌 입력, 서보 번호 밖(1-4 아님), 너무 긴 줄은 거부한다. 출력은 바뀌지 않는다.
 //   - 끄면 핀을 LOW로 내린다. Teensy 4.x Servo::detach()는 펄스를 멈추기만 하고 핀 레벨은 건드리지 않아서
 //     펄스 도중에 끄면 핀이 HIGH로 남을 수 있다.
 //
@@ -39,14 +40,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-constexpr uint8_t  SERVO_COUNT         = 2;
-constexpr uint8_t  SERVO_PIN[SERVO_COUNT] = {2, 3};  // 서보 1 = 핀 2, 서보 2 = 핀 3 (01 문서 §2.2)
+constexpr uint8_t  SERVO_COUNT         = 4;
+constexpr uint8_t  SERVO_PIN[SERVO_COUNT] = {2, 3, 4, 5};  // 서보 1-4 = 핀 2-5 (01 문서 §2.2)
 constexpr int      SERVO_MIN_US        = 1000;       // 하한 (기계 끝 확인 후 조정)
 constexpr int      SERVO_MAX_US        = 2000;       // 상한 (기계 끝 확인 후 조정)
 
 Servo servos[SERVO_COUNT];
-int   servoUs[SERVO_COUNT]  = {0, 0};   // 마지막으로 낸 펄스폭. 0 = 출력 없음
-uint8_t currentServo = 1;                // 사람이 쓰는 번호(1-2)
+int   servoUs[SERVO_COUNT]  = {0, 0, 0, 0};   // 마지막으로 낸 펄스폭. 0 = 출력 없음
+uint8_t currentServo = 1;                // 사람이 쓰는 번호(1-4)
 
 char   lineBuf[32];
 size_t lineLen = 0;
@@ -200,10 +201,12 @@ void setup() {
 
   Serial.println("# COSMOS servo bench");
   Serial.println("# 혼을 끼우지 않은 서보로 시작. EDF·ESC 연결 금지. 명령: <us> / <번호> <us> / 빈 줄=끔 / ?");
-  Serial.print("# 서보 1 = 핀 ");
-  Serial.print(SERVO_PIN[0]);
-  Serial.print(", 서보 2 = 핀 ");
-  Serial.println(SERVO_PIN[1]);
+  for (uint8_t i = 0; i < SERVO_COUNT; i++) {
+    Serial.print("# 서보 ");
+    Serial.print(i + 1);
+    Serial.print(" = 핀 ");
+    Serial.println(SERVO_PIN[i]);
+  }
   Serial.print("# 펄스폭 범위 ");
   Serial.print(SERVO_MIN_US);
   Serial.print("-");
