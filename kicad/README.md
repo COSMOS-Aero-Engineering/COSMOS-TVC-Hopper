@@ -70,7 +70,7 @@ KiCad 10.0.6으로 저장하면 `.kicad_pro`가 2줄 바뀐다. 아래 "KiCad 10
    `cosmos-avionics.kicad_prl`과 `.history/`도 만든다. 둘 다 `.gitignore`가 무시한다.
 6. PCB 편집기를 열어 저장했으면 아래 "PCB를 저장하면 바뀌는 `.kicad_pro`" 절을 따른다.
 
-## KiCad 10.0.7로 저장한다 (#196)
+## KiCad 10.0.7 이상으로 저장한다 (#196, #211)
 
 **결론: 회로도나 PCB를 KiCad에서 저장해 커밋할 때는 KiCad 10.0.7 이상을 쓴다.** 커밋된 `.kicad_pro`는
 KiCad 10.0.7이 쓴 파일이다. KiCad 10.0.6은 같은 파일을 다르게 쓴다.
@@ -103,7 +103,15 @@ KiCad 10.0.6 PC에서 저장했으면 커밋하기 전에 둘 중 하나를 한�
   저장할 때 두 `null`을 `{}`로 되돌렸다.
 
 `python tasks.py check`의 `kicadver` 작업은 커밋된 `.kicad_pro`에서 두 값이 `null`이면 실패한다.
-KiCad 10.0.8 이후 버전이 이 파일을 어떻게 쓰는지는 아직 확인하지 못했다(#211).
+
+**KiCad 10.0.8도 10.0.7과 같은 형식으로 쓴다** (2026-11-13, Windows, 이민우 PC, #211).
+
+- 회로도 편집기에서 편집 없이 저장하면 `git diff`가 빈다. 생성기로 회로도를 다시 만들어도 커밋본과 같다.
+- PCB를 저장하면 `.kicad_pro`가 9375 B에서 17187 B가 된다(235줄 추가, 1줄 삭제, `board.design_settings`만).
+  이 값은 10.0.7과 같다. 10.0.6은 17098 B이고 `td_enabled`를 쓰지 않는다.
+- 소스에서 `pcbnew/board_design_settings.cpp`는 10.0.7 태그와 10.0.8 태그가 바이트 단위로 같다.
+  `common/project/net_settings.cpp`의 `net_colors`·`netclass_assignments` 직렬화 코드도 같다.
+
 부원 PC의 KiCad 버전은 #210에서 확인한다.
 
 ## PCB를 저장하면 바뀌는 `.kicad_pro` (#197)
