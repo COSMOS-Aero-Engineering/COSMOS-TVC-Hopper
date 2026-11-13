@@ -141,6 +141,7 @@ boolean BNO080::beginSPI(uint32_t spiPortSpeed, SPIClass &spiPort)
 	if (receivePacket() == true)
 	{
 		if (shtpData[0] == SHTP_REPORT_PRODUCT_ID_RESPONSE)
+		{
 			if (_printDebug == true)
 			{
 				_debugPort->print(F("SW Version Major: 0x"));
@@ -158,6 +159,7 @@ boolean BNO080::beginSPI(uint32_t spiPortSpeed, SPIClass &spiPort)
 				_debugPort->println(SW_Version_Patch, HEX);
 			}
 			return (true);
+		}
 	}
 
 	return (false); //Something went wrong
