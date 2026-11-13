@@ -70,7 +70,7 @@ KiCad 10.0.6으로 저장하면 `.kicad_pro`가 2줄 바뀐다. 아래 "KiCad 10
    `cosmos-avionics.kicad_prl`과 `.history/`도 만든다. 둘 다 `.gitignore`가 무시한다.
 6. PCB 편집기를 열어 저장했으면 아래 "PCB를 저장하면 바뀌는 `.kicad_pro`" 절을 따른다.
 
-## KiCad 10.0.7로 저장한다 (#196)
+## KiCad 10.0.7 이상으로 저장한다 (#196, #211)
 
 **결론: 회로도나 PCB를 KiCad에서 저장해 커밋할 때는 KiCad 10.0.7 이상을 쓴다.** 커밋된 `.kicad_pro`는
 KiCad 10.0.7이 쓴 파일이다. KiCad 10.0.6은 같은 파일을 다르게 쓴다.
