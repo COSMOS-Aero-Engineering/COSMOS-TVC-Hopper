@@ -275,7 +275,8 @@ def summarize(records, final_obs, info, trajectory, env, seed, feedback):
         "seed": seed, "feedback": feedback, "outcome": info["outcome"], "airborne": info["airborne"],
         "time_s": info["time_s"], "steps": len(records), "impact_m_s": info["impact_m_s"],
         "pad_count": info["pad_count"],
-        "touchdown_xy_error_m": float(touchdown),
+        # Only a landing has a touchdown point.
+        "touchdown_xy_error_m": float(touchdown) if info["outcome"] == "landed" else None,
         "max_tilt_deg": float(max(tilt)),
         "thrust_sat_fraction": float(np.mean([r["thrust_sat"] for r in records])),
         "vane_sat_fraction": float(np.mean([r["vane_sat"] for r in records])),

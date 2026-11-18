@@ -164,10 +164,14 @@ def sync_to_lock(verbose=False):
     이미 맞는 환경이면 0.1초로 끝나므로 조건을 걸지 않고 늘 부른다 — "환경이 lock과
     같다"를 실행 시작 시점에 참으로 만들어 두는 게, 어떤 작업이 먼저 도느냐에 따라
     캐시 판정이 달라지는 것보다 낫다.
+
+    --all-extras 인 이유(#289): check의 stage2 작업이 선택 의존성 stage2(mujoco)를 쓴다.
+    extras 없이 맞추면 매 실행 시작에 mujoco를 지우고 stage2가 다시 설치해서, 캐시 키가
+    읽을 때와 쓸 때 달라지고 stage2·check 캐시가 한 번도 맞지 않는다.
     """
     if verbose:
         print("[준비] .venv 를 uv.lock 기준으로 맞춘다.")
-    result = subprocess.run([str(uv()), "sync", "--locked"], cwd=ROOT, env=child_env(),
+    result = subprocess.run([str(uv()), "sync", "--locked", "--all-extras"], cwd=ROOT, env=child_env(),
                             capture_output=not verbose, text=True, encoding="utf-8",
                             errors="replace")
     if result.returncode != 0:
@@ -479,7 +483,8 @@ def task_lock():
     out = SIM / "requirements.txt"
     # -o 에 넘긴 경로가 생성 파일 주석에 그대로 박히므로 상대경로로 준다.
     # 절대경로를 주면 사람마다 다른 경로가 커밋되어 매번 diff가 생긴다.
-    run([uv(), "export", "--frozen", "--no-hashes", "--package", "cosmos-sim",
+    # --all-extras: pip 경로로 설치해도 check의 stage2 작업(mujoco)이 돌게 한다(#289).
+    run([uv(), "export", "--frozen", "--no-hashes", "--package", "cosmos-sim", "--all-extras",
          "-o", "sim/requirements.txt"], cwd=ROOT)
     banner = (
         "# 이 파일은 생성물이다. 손으로 고치지 마라.\n"

@@ -76,7 +76,10 @@ class ModelTest(unittest.TestCase):
 
 class ParamsTest(unittest.TestCase):
     def test_constants_match_stage1_params(self):
-        """Stage 2 copies these placeholders from sim/sim_stage1/params.yaml. Keep them equal."""
+        """Stage 2 copies these placeholders from sim/sim_stage1/params.yaml. Keep them equal.
+
+        Mass, inertia and the roll/pitch arm are not copied: Stage 2 computes them from the CAD
+        parts table (README table), while params.yaml keeps Stage 1 placeholders until #306."""
         import yaml
         p = yaml.safe_load((Path(__file__).resolve().parents[1] / "sim_stage1" / "params.yaml")
                            .read_text(encoding="utf-8"))

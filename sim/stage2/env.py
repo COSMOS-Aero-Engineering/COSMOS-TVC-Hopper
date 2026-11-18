@@ -135,6 +135,6 @@ class LandingEnv(gym.Env):
             outcome = "time_limit"
             reward -= 5.
         self.done = terminated or truncated
-        info = {"outcome": outcome, "pad_count": len(self.touching), "airborne": self.airborne,
+        info = {"outcome": outcome, "pad_count": len(self.touching & self.pad_ids), "airborne": self.airborne,
                 "impact_m_s": self.max_impact, "time_s": d.time}
         return obs, float(reward), terminated, truncated, info
