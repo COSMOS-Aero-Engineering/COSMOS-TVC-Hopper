@@ -88,7 +88,7 @@ class LandingEnv(gym.Env):
         if rot[2, 2] < np.cos(np.deg2rad(45)):
             return "tipped"
         pos = d.qpos[:3]
-        if np.linalg.norm(pos[:2]) > 1.5 or pos[2] > 2.5:
+        if np.linalg.norm(pos[:2] - self.pad_xy) > 1.5 or pos[2] > 2.5:
             return "out_of_bounds"
         stable = (self.airborne and len(touching) >= 3 and self.motor <= 0.10 and np.linalg.norm(pos[:2] - self.pad_xy) < 0.20
                   and rot[2, 2] > np.cos(np.deg2rad(8))
@@ -125,7 +125,7 @@ class LandingEnv(gym.Env):
         obs = self.observation()
         height = max(0., obs[2] - self.airframe.rest_height)
         tilt_cost = 1 - d.xmat[self.body, 8]
-        reward = -CONTROL_DT * (0.2 + height + np.linalg.norm(obs[:2]) + tilt_cost
+        reward = -CONTROL_DT * (0.2 + height + np.linalg.norm(obs[:2] - self.pad_xy) + tilt_cost
                                 + 0.1 * np.dot(obs[3:6], obs[3:6]))
         terminated = outcome != "flying"
         truncated = self.steps >= self.max_steps and not terminated
