@@ -274,5 +274,48 @@ class MissionTest(unittest.TestCase):
         self.assertGreater(top, rest + 0.4)
 
 
+class PpoBudgetTest(unittest.TestCase):
+    def test_tiny_train_saves_and_reloads_vecnorm(self):
+        import subprocess
+        import sys
+        import tempfile
+        from .ppo_budget import load_ppo
+        with tempfile.TemporaryDirectory() as tmp:
+            cmd = [sys.executable, "-m", "sim.stage2.ppo_budget", "train", "--condition", "vecnorm",
+                   "--envs", "2", "--threads", "1", "--n-steps", "64", "--batch", "64",
+                   "--budgets", "128", "--out", tmp]
+            subprocess.run(cmd, check=True, cwd=Path(__file__).resolve().parents[2], capture_output=True)
+            stem = Path(tmp) / "ppo-vecnorm-s41-128"
+            meta = json.loads(Path(str(stem) + ".json").read_text(encoding="utf-8"))
+            self.assertEqual((meta["vecnormalize"], meta["budget"]), (True, 128))
+            obs, _ = LandingEnv().reset(seed=1000)
+            with_zip = load_ppo(str(stem) + ".zip")(obs)
+            without = load_ppo(stem)(obs)
+            np.testing.assert_array_equal(with_zip, without)
+            Path(str(stem) + ".vecnormalize.pkl").unlink()
+            with self.assertRaisesRegex(FileNotFoundError, "says VecNormalize"):
+                load_ppo(stem)
+            bad = subprocess.run([*cmd[:-2], "--seed", "995", "--envs", "8", "--out", tmp],
+                                 cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
+            self.assertNotEqual(bad.returncode, 0)
+            self.assertIn("overlap", bad.stderr)
+
+    def test_timeout_variant_and_outcome_counts(self):
+        from .ppo_budget import EVAL_SEEDS, OUTCOMES, evaluate_policy, make_env
+        env = make_env("timeout10")
+        env.unwrapped.max_steps = 1
+        env.reset(seed=3)
+        _, reward, _, truncated, info = env.step(np.zeros(5))
+        base = LandingEnv(max_steps=1)
+        base.reset(seed=3)
+        _, base_reward, *_ = base.step(np.zeros(5))
+        self.assertTrue(truncated)
+        self.assertEqual(info["outcome"], "time_limit")
+        self.assertAlmostEqual(reward, base_reward - 5.)
+        row = evaluate_policy(LandingPD(base.airframe), list(EVAL_SEEDS)[:2])
+        self.assertEqual(row["landed"], 2)
+        self.assertEqual(sum(row[k] for k in OUTCOMES), row["episodes"])
+
+
 if __name__ == "__main__":
     unittest.main()
