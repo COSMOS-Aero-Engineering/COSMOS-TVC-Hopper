@@ -49,6 +49,33 @@ EDF 추력 T를 원주 방향으로 4등분한다. 한 베인의 측력은 `T ×
 - 하우징 접촉, 45° 초과 기울기, 수평거리 1.5 m 또는 CG 높이 2.5 m 초과는 실패로 종료한다. 8 s가 지나면 시간 제한으로 중단한다.
 - 매 제어 스텝에 경과 시간, 남은 높이, 수평 오차, 기울기와 속도에 비용을 준다. 착륙 보상은 +10, 실패는 −10, 시간 초과는 −5다. 모든 문턱은 이 시나리오의 비교 조건이다.
 
+## PPO 착륙률 (#296)
+
+[ppo_budget.py](ppo_budget.py)는 PPO를 학습 예산별로 저장하고, PD와 같은 평가 seed로 종료 원인을 센다. **2026-11-18 결과: 세 조건 모두 1M 스텝까지 착륙 0/100이다. PD는 100/100이다.**
+
+```powershell
+python ship.py capped 6G -- uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_budget train --condition vecnorm --reward env --envs 4 --threads 1 --budgets 250000 500000 1000000 --out runs/stage2/296
+uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_budget evaluate sim/stage2/checkpoints/ppo-vecnorm-s41-1000000.zip
+```
+
+- 학습 seed: `make_vec_env(seed=41)`이 환경 4개에 seed 41-44를 준다. 평가 seed는 1000-1099다. 두 범위가 겹치면 `train`이 멈춘다.
+- PPO: SB3 기본값에서 `n_steps=512`, `batch_size=256`만 바꿨다. 환경 4개, 1M 스텝에 서버에서 약 30-33분 걸렸다(다른 학습과 함께 돌렸다).
+- 조건: `raw`(원시 관측), `vecnorm`(관측·보상 VecNormalize), `vecnorm` + `timeout10`(학습 래퍼가 시간 초과 벌점을 −5에서 −10으로 바꾼다. 환경은 그대로다).
+- 1M 체크포인트는 [checkpoints/](checkpoints/)에 있다. `vecnorm` 조건은 같은 이름의 `.vecnormalize.pkl`을 함께 읽는다.
+
+평가 seed 1000-1099, 100회:
+
+| 정책 | 250k | 500k | 1M | 1M 종료 상태(seed 1000-1019) |
+|---|---|---|---|---|
+| PD | 착륙 100 | | | 착륙 하강 속도 최대 0.304 m/s |
+| `raw` | 시간 초과 97, 이탈 3 | 시간 초과 100 | 시간 초과 100 | 높이 0.88-0.96 m에서 계속 오른다 |
+| `vecnorm` | 시간 초과 100 | 시간 초과 100 | 시간 초과 100 | 높이 0.29-0.33 m, 수평 0.43-0.47 m에서 떠 있다 |
+| `vecnorm` + `timeout10` | 시간 초과 100 | 시간 초과 100 | 시간 초과 100 | 높이 0.40-0.69 m, 수평 0.00-0.10 m에서 떠 있다 |
+
+- 확인한 사실: 세 조건 모두 강한 접촉, 기울기 초과, 하우징 접촉이 0이다. 정책은 넘어지지 않고 떠 있다. 바닥에 내려가지 않는다.
+- 추론: 착륙 판정은 패드 3개 접촉, EDF 속도 비율 0.10 이하, 정지 상태를 0.15 s 유지해야 한다. 무작위 탐색으로 이 상태에 닿기 어려워서, 정책이 떠 있는 국소해에 머문 것으로 보인다. 시간 초과 벌점을 키워도 1M 안에서는 바뀌지 않았다.
+- 한계: 학습 seed는 41 하나다. 1M보다 큰 예산, 보상 모양 바꾸기(접지 접근 보상), 커리큘럼(낮은 높이에서 시작), PD 잔차 학습은 시험하지 않았다. 후속 이슈 #413에서 다룬다.
+
 ## 지상 출발 임무
 
 [mission.py](mission.py)는 발 패드가 바닥에 닿고 EDF가 멈춘 상태에서 시작한다(`reset(options={"start": "ground"})`). 기체는 아래 구간을 이어서 실행하고 착지점 (0.50, 0) m에 내린다. 착륙 판정은 §관측과 착륙 판정과 같다. 다만 기준점이 착지점이고, 패드가 바닥에서 한 번 떨어진 뒤에만 착륙을 센다.
