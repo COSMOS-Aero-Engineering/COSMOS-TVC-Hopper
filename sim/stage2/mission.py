@@ -175,7 +175,9 @@ class Estimator:
             noise = self.rng.normal(0, FLOW_SIGMA, 2) * distance
             rate_error = (rates - obs[10:13])[[1, 0]] * [1, -1] * distance
             v_xy = v_body[:2] + noise + rate_error
-            world = rot @ np.r_[v_xy, v_body[2]]
+            # No sensor measures body-Z velocity; use the estimated world vz instead.
+            vz_body = (rot.T @ np.r_[self.velocity[:2], self.velocity[2]])[2]
+            world = rot @ np.r_[v_xy, vz_body]
             self.velocity[:2] = 0.7 * self.velocity[:2] + 0.3 * world[:2]
         elif not self.range_valid or distance < FLOW_MIN_RANGE:
             # On or near the floor: assume the pads hold the vehicle still.
@@ -227,7 +229,7 @@ def run(env, seed, feedback="truth"):
     estimator = Estimator(env.airframe, np.random.default_rng([seed % 2**32, 2]), obs[:2])
     controller = TrackingPD(env.airframe)
     records = []
-    landing_started = False
+    landing_started = cut = False
     while True:
         t = env.data.time
         ref_pos, ref_vel, ref_acc = trajectory(t)
@@ -237,8 +239,9 @@ def run(env, seed, feedback="truth"):
         # Cut at the 3 mm height, or once the landing reference has ended below the floor.
         # The env lands only with the EDF ratio <= 0.10, and the PD thrust floor (0.1 N) is
         # a ratio of 0.1005, so a missed height cut (range noise) must not hold thrust forever.
-        cut = landing_started and (state.position[2] - env.airframe.rest_height < TOUCHDOWN_CUT
-                                   or phase == "settle")
+        # The cut latches: range noise must not switch the EDF back on after touchdown.
+        cut = cut or (landing_started and (state.position[2] - env.airframe.rest_height < TOUCHDOWN_CUT
+                                           or phase == "settle"))
         action, limits = controller.command(state, ref_pos, ref_vel, ref_acc, cut)
         next_obs, reward, terminated, truncated, info = env.step(action)
         records.append({
