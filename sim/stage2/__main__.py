@@ -13,6 +13,11 @@ COLUMNS = ("t_ms source mode phi theta psi qw qx qy qz wx wy wz "
            "px py pz vx vy vz motor vane1_rad vane2_rad vane3_rad vane4_rad").split()
 
 
+# Mission CSVs add these analysis columns. The web viewer reads columns by header
+# name and ignores them. ref_* and est_* are world CG positions (m), Z up.
+MISSION_COLUMNS = COLUMNS + "phase ref_px ref_py ref_pz est_px est_py est_pz".split()
+
+
 def row(time_s, mode, obs, action=None, reward=None):
     commands = list(action[:4]) if action is not None else [None] * 4
     throttle = (action[4] + 1) / 2 if action is not None else None
@@ -37,6 +42,21 @@ def episode(env, policy, seed, mode):
     return rows, {**info, "seed": seed, "steps": len(rows) - 1, "return": total}
 
 
+def mission_rows(records, final_obs, final_time):
+    rows = [row(r["t"], "PID", r["obs"], r["action"], r["reward"])
+            + [r["phase"], *r["ref_pos"], *r["est_pos"]] for r in records]
+    rows.append(row(final_time, "PID", final_obs) + [None] * 7)
+    return rows
+
+
+def write_csv(path, columns, rows):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(columns)
+        writer.writerows(rows)
+
+
 def positive(value):
     n = int(value)
     if n < 1:
@@ -55,11 +75,30 @@ def main():
     evaluate.add_argument("--model", type=Path)
     evaluate.add_argument("--episodes", type=positive, default=1)
     evaluate.add_argument("--out", type=Path, help="Write one web CSV per seed.")
-    for command in (train, evaluate):
+    mission = commands.add_parser("mission", help="ground take-off, hover, move, hover, land with PD")
+    mission.add_argument("--feedback", choices=["truth", "estimated"], default="truth")
+    mission.add_argument("--episodes", type=positive, default=1)
+    mission.add_argument("--out", type=Path, help="Write one web CSV per seed.")
+    for command in (train, evaluate, mission):
         command.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
     if args.command == "evaluate" and args.policy == "ppo" and args.model is None:
         parser.error("--policy ppo requires --model")
+
+    if args.command == "mission":
+        from .mission import MISSION_STEPS, run
+        env = LandingEnv(max_steps=MISSION_STEPS)
+        try:
+            for seed in range(args.seed, args.seed + args.episodes):
+                records, result = run(env, seed, args.feedback)
+                print(json.dumps(result))
+                if args.out:
+                    final_obs = env.observation()
+                    rows = mission_rows(records, final_obs, result["time_s"])
+                    write_csv(args.out / f"stage2-mission-{args.feedback}-s{seed}.csv", MISSION_COLUMNS, rows)
+        finally:
+            env.close()
+        return
 
     env = LandingEnv()
     try:
@@ -85,12 +124,7 @@ def main():
             rows, result = episode(env, policy, seed, mode)
             print(json.dumps(result))
             if args.out:
-                args.out.mkdir(parents=True, exist_ok=True)
-                path = args.out / f"stage2-{args.policy}-s{seed}.csv"
-                with path.open("w", newline="", encoding="utf-8") as stream:
-                    writer = csv.writer(stream)
-                    writer.writerow(COLUMNS)
-                    writer.writerows(rows)
+                write_csv(args.out / f"stage2-{args.policy}-s{seed}.csv", COLUMNS, rows)
     finally:
         env.close()
 

@@ -35,16 +35,33 @@ class LandingEnv(gym.Env):
                                self.angles, [self.motor])).astype(np.float32)
 
     def reset(self, *, seed=None, options=None):
+        """options={"start": "ground"} puts the pads on the floor with the EDF stopped.
+        Landing then counts only after the pads have left the floor once.
+        options={"pad_xy": (x, y)} moves the landing pad center (world m, default origin)."""
         super().reset(seed=seed)
+        options = options or {}
+        start = options.get("start", "air")
+        if start not in ("air", "ground"):
+            raise ValueError("options['start'] must be 'air' or 'ground'.")
+        self.pad_xy = np.asarray(options.get("pad_xy", (0., 0.)), dtype=float)
+        if self.pad_xy.shape != (2,) or not np.isfinite(self.pad_xy).all():
+            raise ValueError("options['pad_xy'] must be two finite numbers.")
         mujoco.mj_resetData(self.model, self.data)
         rng = self.np_random
         pos = self.data.qpos
         pos[:2] = rng.uniform(-0.05, 0.05, 2)
-        pos[2] = self.airframe.rest_height + rng.uniform(0.45, 0.65)
-        rotation = rng.uniform(-0.055, 0.055, 3)
+        if start == "ground":
+            pos[2] = self.airframe.rest_height
+            rotation = np.array([0., 0., rng.uniform(-0.055, 0.055)])
+        else:
+            pos[2] = self.airframe.rest_height + rng.uniform(0.45, 0.65)
+            rotation = rng.uniform(-0.055, 0.055, 3)
         mujoco.mju_euler2Quat(pos[3:7], rotation, "xyz")
         self.angles = np.zeros(4)
-        self.motor = np.sqrt(self.airframe.mass * GRAVITY / MAX_THRUST)
+        hover = np.sqrt(self.airframe.mass * GRAVITY / MAX_THRUST)
+        self.motor = 0. if start == "ground" else hover
+        self.ground_start = start == "ground"
+        self.airborne = not self.ground_start
         self.steps = self.stable_steps = 0
         self.max_impact = 0.
         self.touching = set()
@@ -61,6 +78,8 @@ class LandingEnv(gym.Env):
         rot = d.xmat[self.body].reshape(3, 3)
         new_contacts = touching - self.touching
         self.touching = touching
+        if not touching:
+            self.airborne = True
         for pad in new_contacts:
             arm = d.geom_xpos[pad] - d.xpos[self.body]
             velocity = d.qvel[:3] + np.cross(rot @ d.qvel[3:], arm)
@@ -72,7 +91,7 @@ class LandingEnv(gym.Env):
         pos = d.qpos[:3]
         if np.linalg.norm(pos[:2]) > 1.5 or pos[2] > 2.5:
             return "out_of_bounds"
-        stable = (len(touching) >= 3 and self.motor <= 0.10 and np.linalg.norm(pos[:2]) < 0.20
+        stable = (self.airborne and len(touching) >= 3 and self.motor <= 0.10 and np.linalg.norm(pos[:2] - self.pad_xy) < 0.20
                   and rot[2, 2] > np.cos(np.deg2rad(8))
                   and np.linalg.norm(d.qvel[:3]) < 0.10 and np.linalg.norm(d.qvel[3:]) < 0.25)
         self.stable_steps = self.stable_steps + 1 if stable else 0
@@ -117,6 +136,6 @@ class LandingEnv(gym.Env):
             outcome = "time_limit"
             reward -= 5.
         self.done = terminated or truncated
-        info = {"outcome": outcome, "pad_count": len(self.touching),
+        info = {"outcome": outcome, "pad_count": len(self.touching), "airborne": self.airborne,
                 "impact_m_s": self.max_impact, "time_s": d.time}
         return obs, float(reward), terminated, truncated, info

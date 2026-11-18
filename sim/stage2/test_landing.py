@@ -1,5 +1,8 @@
 """Model invariants and nominal landing gates, run by python tasks.py stage2."""
 import csv
+import json
+from pathlib import Path
+import re
 import unittest
 
 import mujoco
@@ -7,10 +10,16 @@ import numpy as np
 from gymnasium.utils.env_checker import check_env
 
 from cad.cg import cg_estimate
-from .__main__ import COLUMNS, episode
+from .__main__ import COLUMNS, MISSION_COLUMNS, episode, mission_rows
 from .control import LandingPD
 from .env import CONTROL_DT, LandingEnv
-from .model import Airframe, GRAVITY, MAX_ANGLE, MAX_THRUST, PARTS, PRESSURE_RADIUS, SIDE_GAIN
+from .mission import (
+    MAX_REF_ACCEL, MAX_REF_SPEED, MISSION_STEPS, PAD_XY, Trajectory, reference_limits, run,
+    tilt_limit_deg, zyx_quat,
+)
+from .model import Airframe, GRAVITY, MAX_ANGLE, MAX_THRUST, PARTS, PRESSURE_RADIUS, SIDE_GAIN, euler
+
+WEB_CSV = Path(__file__).resolve().parents[2] / "web" / "src" / "csv.js"
 
 
 class ModelTest(unittest.TestCase):
@@ -110,6 +119,102 @@ class LandingTest(unittest.TestCase):
         self.assertFalse(terminated)
         self.assertTrue(truncated)
         self.assertEqual(info["outcome"], "time_limit")
+
+
+def web_columns(name):
+    """Column list `name` from web/src/csv.js, so the test follows the viewer's parser."""
+    match = re.search(rf"{name} = \[([^\]]*)\]", WEB_CSV.read_text(encoding="utf-8"))
+    return re.findall(r"'([^']+)'", match.group(1))
+
+
+class MissionTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.env = LandingEnv(max_steps=MISSION_STEPS)
+        cls.truth = [run(cls.env, seed, "truth") for seed in (0, 1)]
+        cls.estimated = [run(cls.env, seed, "estimated") for seed in (0, 1)]
+
+    def test_reference_is_smooth_and_inside_limits(self):
+        rest = self.env.airframe.rest_height
+        trajectory = Trajectory([0.01, -0.02], rest)
+        speed, accel = reference_limits(trajectory)
+        self.assertLessEqual(speed, MAX_REF_SPEED)
+        self.assertLessEqual(accel, MAX_REF_ACCEL)
+        np.testing.assert_allclose(trajectory(0.)[0], [0.01, -0.02, rest])
+        end, end_vel, _ = trajectory(trajectory.end_time)
+        np.testing.assert_allclose(end[:2], PAD_XY)
+        self.assertLess(end[2], rest)
+        np.testing.assert_allclose(end_vel, 0., atol=1e-12)
+        times = np.arange(0., trajectory.end_time, 0.001)
+        jumps = np.abs(np.diff([trajectory(t)[0] for t in times], axis=0))
+        self.assertLess(jumps.max(), MAX_REF_SPEED * 0.001 + 1e-9)
+
+    def test_ground_start_is_not_a_landing(self):
+        env = LandingEnv(max_steps=20)
+        obs, _ = env.reset(seed=4, options={"start": "ground"})
+        self.assertEqual(env.motor, 0.)
+        self.assertAlmostEqual(obs[2], env.airframe.rest_height)
+        for _ in range(20):
+            _, _, terminated, truncated, info = env.step([0, 0, 0, 0, -1])
+            self.assertFalse(terminated)
+        self.assertTrue(truncated)
+        self.assertFalse(info["airborne"])
+        self.assertGreaterEqual(info["pad_count"], 3)
+        with self.assertRaises(ValueError):
+            env.reset(seed=0, options={"start": "orbit"})
+
+    def test_truth_feedback_mission(self):
+        for _, result in self.truth:
+            self.assertEqual(result["outcome"], "landed", result)
+            self.assertTrue(result["airborne"])
+            self.assertLess(result["touchdown_xy_error_m"], 0.05)
+            self.assertLessEqual(result["impact_m_s"], 0.45)
+            self.assertLess(result["max_tilt_deg"], tilt_limit_deg() + 2)
+            self.assertEqual(result["thrust_sat_fraction"], 0.)
+            for name, phase in result["phases"].items():
+                self.assertLess(phase["pos_rms_m"], 0.06, name)
+                self.assertEqual(phase["est_pos_rms_m"], 0.)
+
+    def test_estimated_feedback_mission(self):
+        for (_, truth), (_, result) in zip(self.truth, self.estimated):
+            self.assertEqual(result["outcome"], "landed", result)
+            self.assertLess(result["touchdown_xy_error_m"], 0.20)
+            # The flow-integrated position drifts, so tracking is worse than with truth.
+            self.assertGreater(result["phases"]["hover2"]["est_pos_rms_m"], 0.)
+            self.assertGreater(result["touchdown_xy_error_m"], truth["touchdown_xy_error_m"])
+            # The range sensor sits on the exhaust plane, 148 mm above the floor at rest.
+            # That is above RANGE_MIN and FLOW_MIN_RANGE, so both stay valid on the floor too.
+            self.assertEqual(result["range_valid_fraction"], 1.)
+            self.assertEqual(result["flow_valid_fraction"], 1.)
+            json.dumps(result)
+
+    def test_mission_csv_matches_web_contract(self):
+        records, result = self.truth[0]
+        final = records[-1]["obs"]  # the CSV only needs a finite final state here
+        rows = mission_rows(records, final, result["time_s"])
+        self.assertEqual(MISSION_COLUMNS[:len(COLUMNS)], COLUMNS)
+        required, numeric = web_columns("REQUIRED"), web_columns("NUMERIC")
+        self.assertTrue(set(required) <= set(numeric) <= set(MISSION_COLUMNS))
+        at = {name: i for i, name in enumerate(MISSION_COLUMNS)}
+        rest = self.env.airframe.rest_height
+        for r in rows:
+            self.assertEqual(len(r), len(MISSION_COLUMNS))
+            for name in required:
+                self.assertTrue(np.isfinite(float(r[at[name]])), name)
+            q = np.array([r[at[c]] for c in ("qw", "qx", "qy", "qz")], dtype=float)
+            angles = np.array([r[at[c]] for c in ("phi", "theta", "psi")], dtype=float)
+            # phi/theta/psi are the ZYX Euler angles of the same body-to-world quaternion.
+            # The observation stores float32 quaternions, so compare to 1e-6.
+            np.testing.assert_allclose(angles, euler(q), atol=1e-6)
+            rebuilt = zyx_quat(*angles)
+            self.assertGreater(abs(np.dot(rebuilt, q)), 1 - 1e-6)
+        # World frame: Z up from the floor, CG position. Start on the floor, end on the pad.
+        first = rows[0]
+        self.assertAlmostEqual(first[at["pz"]], rest, places=6)
+        self.assertEqual(first[at["phase"]], "takeoff")
+        np.testing.assert_allclose([rows[-2][at["px"]], rows[-2][at["py"]]], PAD_XY, atol=0.05)
+        top = max(r[at["pz"]] for r in rows[:-1])
+        self.assertGreater(top, rest + 0.4)
 
 
 if __name__ == "__main__":
