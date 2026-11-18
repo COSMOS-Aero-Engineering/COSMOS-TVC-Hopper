@@ -164,10 +164,14 @@ def sync_to_lock(verbose=False):
     이미 맞는 환경이면 0.1초로 끝나므로 조건을 걸지 않고 늘 부른다 — "환경이 lock과
     같다"를 실행 시작 시점에 참으로 만들어 두는 게, 어떤 작업이 먼저 도느냐에 따라
     캐시 판정이 달라지는 것보다 낫다.
+
+    --all-extras 인 이유(#289): check의 stage2 작업이 선택 의존성 stage2(mujoco)를 쓴다.
+    extras 없이 맞추면 매 실행 시작에 mujoco를 지우고 stage2가 다시 설치해서, 캐시 키가
+    읽을 때와 쓸 때 달라지고 stage2·check 캐시가 한 번도 맞지 않는다.
     """
     if verbose:
         print("[준비] .venv 를 uv.lock 기준으로 맞춘다.")
-    result = subprocess.run([str(uv()), "sync", "--locked"], cwd=ROOT, env=child_env(),
+    result = subprocess.run([str(uv()), "sync", "--locked", "--all-extras"], cwd=ROOT, env=child_env(),
                             capture_output=not verbose, text=True, encoding="utf-8",
                             errors="replace")
     if result.returncode != 0:
@@ -479,7 +483,8 @@ def task_lock():
     out = SIM / "requirements.txt"
     # -o 에 넘긴 경로가 생성 파일 주석에 그대로 박히므로 상대경로로 준다.
     # 절대경로를 주면 사람마다 다른 경로가 커밋되어 매번 diff가 생긴다.
-    run([uv(), "export", "--frozen", "--no-hashes", "--package", "cosmos-sim",
+    # --all-extras: pip 경로로 설치해도 check의 stage2 작업(mujoco)이 돌게 한다(#289).
+    run([uv(), "export", "--frozen", "--no-hashes", "--package", "cosmos-sim", "--all-extras",
          "-o", "sim/requirements.txt"], cwd=ROOT)
     banner = (
         "# 이 파일은 생성물이다. 손으로 고치지 마라.\n"
@@ -519,6 +524,11 @@ def task_compile():
         # 인자가 비면 compileall이 sys.path 전체를 컴파일한다. 조용히 엉뚱한 일을 하느니 멈춘다.
         die("컴파일할 파이썬 파일을 찾지 못했다. compile 작업의 inputs 패턴을 확인할 것.")
     uv_run(["python", "-m", "compileall", "-q", *files], cwd=ROOT)
+
+
+def task_stage2():
+    uv_run(["--package", "cosmos-sim", "--extra", "stage2", "python", "-m",
+            "unittest", "sim.stage2.test_landing"], cwd=ROOT)
 
 
 def task_sanity():
@@ -1152,6 +1162,10 @@ TASKS = {t.name: t for t in [
          inputs=["sim/**/*.py", "test_*.py", "ship.py", *DEPS_IN], uses_env=True),
     Task("sanity", "환경이 살아 있는지 20스텝 확인 + reset 옵션·행동 구조 단위 검사 (#276, #230)", task_sanity, inputs=SIM_IN,
          uses_env=True),
+    Task("stage2", "6자유도 강체, 제트 베인, 착륙과 CSV 확인", task_stage2,
+         inputs=["sim/stage2/*.py", "cad/cg/parts.csv", "cad/cg/cg_estimate.py", "web/src/csv.js",
+                 "sim/sim_stage1/params.yaml", *DEPS_IN],
+         uses_env=True),
     Task("gate", "RL 전 합격 기준 - 랜덤화 켠 PD 200 에피소드 (#27)", task_gate, inputs=SIM_IN,
          uses_env=True),
     Task("yaw", "요 축 검사 - 토크·회전자 항·스로틀 변화율·서보 손계산 + 요 PD 200 seed × 6조건(스로틀 고정·계단, 회전자 항 끔·켬) (#65, #86, #120, #161)",
@@ -1197,7 +1211,7 @@ TASKS = {t.name: t for t in [
          " 단계 목록은 graph)", task_check,
          deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "agentsref", "cad",
                "vcruntime", "compile", "ledger", "sanity", "gate", "yaw", "smoke", "conncheck",
-               "trainargs"]),
+               "trainargs", "stage2"]),
     Task("trainargs", "train 작업의 인자를 ppo_ablation.py가 받는지 확인 (학습 안 함, #351)", task_trainargs,
          inputs=SIM_IN, uses_env=True),
     Task("train", "PPO 본 학습 (#230 crashcost 조건 1M 스텝, 오래 걸림. PD 합격 기준 gate를 먼저 본다)",

@@ -29,6 +29,9 @@ dependencies = [
     "torch>=2.14,<3",
 ]
 
+[project.optional-dependencies]
+stage2 = ["mujoco==3.10.0"]
+
 [tool.uv.sources]
 # 리눅스(= CI 러너, 리눅스 부원 PC)에서만 PyTorch CPU 인덱스를 쓴다.
 # Windows/macOS 기본 휠은 원래 CPU 전용이라 PyPI 그대로 두는 게 맞다.
