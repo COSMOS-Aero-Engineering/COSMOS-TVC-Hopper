@@ -217,5 +217,23 @@ class MissionTest(unittest.TestCase):
         self.assertGreater(top, rest + 0.4)
 
 
+class PpoBudgetTest(unittest.TestCase):
+    def test_timeout_variant_and_outcome_counts(self):
+        from .ppo_budget import EVAL_SEEDS, OUTCOMES, evaluate_policy, make_env
+        env = make_env("timeout10")
+        env.unwrapped.max_steps = 1
+        env.reset(seed=3)
+        _, reward, _, truncated, info = env.step(np.zeros(5))
+        base = LandingEnv(max_steps=1)
+        base.reset(seed=3)
+        _, base_reward, *_ = base.step(np.zeros(5))
+        self.assertTrue(truncated)
+        self.assertEqual(info["outcome"], "time_limit")
+        self.assertAlmostEqual(reward, base_reward - 5.)
+        row = evaluate_policy(LandingPD(base.airframe), list(EVAL_SEEDS)[:2])
+        self.assertEqual(row["landed"], 2)
+        self.assertEqual(sum(row[k] for k in OUTCOMES), row["episodes"])
+
+
 if __name__ == "__main__":
     unittest.main()
