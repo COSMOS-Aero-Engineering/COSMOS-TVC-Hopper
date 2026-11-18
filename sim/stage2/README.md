@@ -8,11 +8,11 @@
 
 ```powershell
 python tasks.py stage2
-uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2 evaluate --policy pd --episodes 12 --seed 0 --out runs/stage2/pd
-python ship.py capped 8G -- uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2 train --seed 41 --steps 4096 --model runs/stage2/ppo.zip
-uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2 evaluate --policy ppo --model runs/stage2/ppo.zip --episodes 12 --seed 0 --out runs/stage2/ppo
-uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2 mission --feedback truth --episodes 12 --seed 0 --out runs/stage2/mission
-uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2 mission --feedback estimated --episodes 12 --seed 0 --out runs/stage2/mission
+uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2 evaluate --policy pd --episodes 12 --seed 0 --out sim/runs/stage2/pd
+python ship.py capped 8G -- uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2 train --seed 41 --steps 4096 --model sim/runs/stage2/ppo.zip
+uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2 evaluate --policy ppo --model sim/runs/stage2/ppo.zip --episodes 12 --seed 0 --out sim/runs/stage2/ppo
+uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2 mission --feedback truth --episodes 12 --seed 0 --out sim/runs/stage2/mission
+uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2 mission --feedback estimated --episodes 12 --seed 0 --out sim/runs/stage2/mission
 ```
 
 `mission`은 아래 §지상 출발 임무를 실행한다.
@@ -36,7 +36,7 @@ uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2 mission
 
 PyFlyt의 양력면은 링크의 속도에서 바람을 뺀다. 기본 모델에는 정지 호버 중에도 베인에 작용하는 제트 속도가 없다. PyFlyt 0.29는 NumPy <2를 요구하고 저장소는 2.5.3을 고정한다. 여기서는 헤드리스 MuJoCo가 6자유도 운동과 충돌을 적분하고 자체 제트 모델이 외력을 공급한다. [저장소 조사 §3](../../docs/design/rl-open-source-survey.md) · [PyFlyt 소스](https://github.com/jjshoots/PyFlyt/blob/master/PyFlyt/core/abstractions/lifting_surfaces.py) · [배포 의존성](https://pypi.org/pypi/PyFlyt/0.29.0/json) · [MuJoCo 관성 정의](https://mujoco.readthedocs.io/en/stable/XMLreference.html#body-inertial)
 
-EDF 추력 T를 원주 방향으로 4등분한다. 한 베인의 측력은 `T × CLalpha × A_fin / (2 × A_duct) × angle_rad`이다. 절댓값의 상한은 `(T/4) × sin(10°)`다. 각 구간의 축력은 `sqrt((T/4)² − 측력²)`이다. 작용점마다 힘과 CG 기준 모멘트 `r × F`를 합산한 뒤 세계 좌표로 회전한다. 양의 명령에서 1·3번 측력은 +Y, 2·4번은 +X다. 서보의 실물 장착 부호는 별도 보정 대상이다.
+EDF 추력 T를 원주 방향으로 4등분한다. 한 베인의 측력은 `T × CLalpha × A_fin / (2 × A_duct) × angle_rad`이다. 절댓값의 상한은 `(T/4) × sin(10°)`다. 명령 한계 ±10°에서 측력은 최대 0.0311·T라 이 상한(0.0434·T)에 닿지 않는다. 상한은 상수를 바꿀 때의 안전장치다. 각 구간의 축력은 `sqrt((T/4)² − 측력²)`이다. 작용점마다 힘과 CG 기준 모멘트 `r × F`를 합산한 뒤 세계 좌표로 회전한다. 양의 명령에서 1·3번 측력은 +Y, 2·4번은 +X다. 서보의 실물 장착 부호는 별도 보정 대상이다.
 
 ## 관측과 착륙 판정
 
@@ -94,6 +94,7 @@ seed 0-11 결과(2026-11-18, `mission --episodes 12 --seed 0`):
 - 참상태에서도 호버 중 수평 정상 오차 약 (0.007, −0.016) m가 남는다(seed 0, 3의 `hover1`). PD에 적분항이 없어서 이 오차를 없애지 못한다. 원인은 확인하지 않았다. CG 수평 오프셋 (0.17, −0.40) mm의 모멘트를 상쇄하는 베인 측력으로 추정한다.
 - 추정 피드백의 하강 속도 0.423 m/s는 강한 접촉 문턱 0.45 m/s에 가깝다.
 - 추정 위치 오차는 구간이 지날수록 커진다. 광류 적분의 표류다.
+- 높이 3 mm 차단이 거리 센서 잡음으로 늦으면 `settle` 구간 시작(14 s)에 스로틀을 끈다. 착륙 판정은 EDF 속도 비율 0.10 이하를 요구하는데, PD의 최소 추력 0.1 N은 비율 0.1005라서 끄지 않으면 착륙하지 못한다. seed 0-11 중 seed 4가 이 경로로 착륙했다(14.15 s).
 
 ## 검증 범위
 

@@ -60,8 +60,7 @@ class LandingEnv(gym.Env):
         self.angles = np.zeros(4)
         hover = np.sqrt(self.airframe.mass * GRAVITY / MAX_THRUST)
         self.motor = 0. if start == "ground" else hover
-        self.ground_start = start == "ground"
-        self.airborne = not self.ground_start
+        self.airborne = start != "ground"
         self.steps = self.stable_steps = 0
         self.max_impact = 0.
         self.touching = set()
@@ -73,11 +72,11 @@ class LandingEnv(gym.Env):
         d = self.data
         # Only ground-to-body collisions are enabled in this single-body world.
         touching = {max(c.geom1, c.geom2) for c in d.contact if c.dist <= 0}
+        new_contacts = touching - self.touching
+        self.touching = touching
         if touching - self.pad_ids:
             return "body_contact"
         rot = d.xmat[self.body].reshape(3, 3)
-        new_contacts = touching - self.touching
-        self.touching = touching
         if not touching:
             self.airborne = True
         for pad in new_contacts:

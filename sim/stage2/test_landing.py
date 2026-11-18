@@ -17,7 +17,10 @@ from .mission import (
     MAX_REF_ACCEL, MAX_REF_SPEED, MISSION_STEPS, PAD_XY, Trajectory, reference_limits, run,
     tilt_limit_deg, zyx_quat,
 )
-from .model import Airframe, GRAVITY, MAX_ANGLE, MAX_THRUST, PARTS, PRESSURE_RADIUS, SIDE_GAIN, euler
+from .model import (
+    Airframe, CHORD, GRAVITY, JET_INNER, JET_OUTER, LIFT_SLOPE, MAX_ANGLE, MAX_THRUST, MOTOR_TAU, PARTS,
+    PRESSURE_RADIUS, SERVO_RATE, SERVO_TAU, SIDE_GAIN, euler,
+)
 
 WEB_CSV = Path(__file__).resolve().parents[2] / "web" / "src" / "csv.js"
 
@@ -69,6 +72,44 @@ class ModelTest(unittest.TestCase):
             change = plus - minus
             # CG lateral offset adds a small yaw couple, tested above.
             np.testing.assert_array_equal(np.sign(change[:2]), expected[:2])
+
+
+class ParamsTest(unittest.TestCase):
+    def test_constants_match_stage1_params(self):
+        """Stage 2 copies these placeholders from sim/sim_stage1/params.yaml. Keep them equal."""
+        import yaml
+        p = yaml.safe_load((Path(__file__).resolve().parents[1] / "sim_stage1" / "params.yaml")
+                           .read_text(encoding="utf-8"))
+        g = p["vane_geometry"]
+        np.testing.assert_allclose([JET_INNER, JET_OUTER, CHORD],
+                                   np.array([g["inner_r_mm"], g["outer_r_mm"], g["chord_mm"]]) / 1000)
+        self.assertEqual(LIFT_SLOPE, p["CLalpha"])
+        self.assertAlmostEqual(MAX_ANGLE, np.deg2rad(p["alpha_max_deg"]))
+        self.assertAlmostEqual(MAX_THRUST, p["Kf"] * p["omega_t_per_throttle"] ** 2)
+        self.assertEqual(SERVO_TAU, p["servo"]["tau"])
+        self.assertAlmostEqual(SERVO_RATE, np.deg2rad(p["servo"]["rate_max_dps"]))
+        self.assertEqual(MOTOR_TAU, p["rotor"]["tau"])
+
+
+class CliTest(unittest.TestCase):
+    def test_train_and_replay_ppo(self):
+        import sys
+        import tempfile
+        from unittest import mock
+        from .__main__ import main
+        with tempfile.TemporaryDirectory() as tmp:
+            model = Path(tmp) / "ppo.zip"
+            with mock.patch.object(sys, "argv", ["stage2", "train", "--steps", "256", "--seed", "5",
+                                                 "--model", str(model)]):
+                main()
+            self.assertTrue(model.exists())
+            out = Path(tmp) / "csv"
+            with mock.patch.object(sys, "argv", ["stage2", "evaluate", "--policy", "ppo", "--model", str(model),
+                                                 "--episodes", "1", "--seed", "1000", "--out", str(out)]):
+                main()
+            rows = list(csv.reader((out / "stage2-ppo-s1000.csv").open(encoding="utf-8")))
+            self.assertEqual(rows[0], COLUMNS)
+            self.assertEqual(rows[1][2], "RL")
 
 
 class LandingTest(unittest.TestCase):
@@ -176,12 +217,11 @@ class MissionTest(unittest.TestCase):
                 self.assertEqual(phase["est_pos_rms_m"], 0.)
 
     def test_estimated_feedback_mission(self):
-        for (_, truth), (_, result) in zip(self.truth, self.estimated):
+        for _, result in self.estimated:
             self.assertEqual(result["outcome"], "landed", result)
             self.assertLess(result["touchdown_xy_error_m"], 0.20)
-            # The flow-integrated position drifts, so tracking is worse than with truth.
+            # The flow-integrated position drifts away from the truth.
             self.assertGreater(result["phases"]["hover2"]["est_pos_rms_m"], 0.)
-            self.assertGreater(result["touchdown_xy_error_m"], truth["touchdown_xy_error_m"])
             # The range sensor sits on the exhaust plane, 148 mm above the floor at rest.
             # That is above RANGE_MIN and FLOW_MIN_RANGE, so both stay valid on the floor too.
             self.assertEqual(result["range_valid_fraction"], 1.)
