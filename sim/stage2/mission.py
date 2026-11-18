@@ -13,7 +13,7 @@ import numpy as np
 
 from .control import LandingPD
 from .env import CONTROL_DT
-from .model import GRAVITY, MAX_ANGLE, MAX_THRUST, euler
+from .model import GRAVITY, MAX_THRUST, euler
 
 # Mission shape. Heights are CG heights above the resting CG height.
 HOVER_HEIGHT = 0.50     # m
@@ -223,7 +223,8 @@ def run(env, seed, feedback="truth"):
         raise ValueError(f"LandingEnv(max_steps>={MISSION_STEPS}) is needed for the mission.")
     obs, _ = env.reset(seed=seed, options={"start": "ground", "pad_xy": PAD_XY})
     trajectory = Trajectory(obs[:2], env.airframe.rest_height)
-    estimator = Estimator(env.airframe, np.random.default_rng([seed, 2]), obs[:2])
+    # A separate sensor-noise stream, so truth and estimated runs share the same env draws.
+    estimator = Estimator(env.airframe, np.random.default_rng([seed % 2**32, 2]), obs[:2])
     controller = TrackingPD(env.airframe)
     records = []
     landing_started = False
@@ -233,7 +234,11 @@ def run(env, seed, feedback="truth"):
         phase = trajectory.phase(t)
         state = truth_state(obs) if feedback == "truth" else estimator(obs)
         landing_started |= phase in ("land", "settle")
-        cut = landing_started and state.position[2] - env.airframe.rest_height < TOUCHDOWN_CUT
+        # Cut at the 3 mm height, or once the landing reference has ended below the floor.
+        # The env lands only with the EDF ratio <= 0.10, and the PD thrust floor (0.1 N) is
+        # a ratio of 0.1005, so a missed height cut (range noise) must not hold thrust forever.
+        cut = landing_started and (state.position[2] - env.airframe.rest_height < TOUCHDOWN_CUT
+                                   or phase == "settle")
         action, limits = controller.command(state, ref_pos, ref_vel, ref_acc, cut)
         next_obs, reward, terminated, truncated, info = env.step(action)
         records.append({
@@ -270,7 +275,8 @@ def summarize(records, final_obs, info, trajectory, env, seed, feedback):
         "seed": seed, "feedback": feedback, "outcome": info["outcome"], "airborne": info["airborne"],
         "time_s": info["time_s"], "steps": len(records), "impact_m_s": info["impact_m_s"],
         "pad_count": info["pad_count"],
-        "touchdown_xy_error_m": float(touchdown),
+        # Only a landing has a touchdown point.
+        "touchdown_xy_error_m": float(touchdown) if info["outcome"] == "landed" else None,
         "max_tilt_deg": float(max(tilt)),
         "thrust_sat_fraction": float(np.mean([r["thrust_sat"] for r in records])),
         "vane_sat_fraction": float(np.mean([r["vane_sat"] for r in records])),
@@ -295,4 +301,4 @@ def tilt_limit_deg():
 
 
 __all__ = ["MISSION_STEPS", "PHASES", "Trajectory", "TrackingPD", "Estimator", "run",
-           "reference_limits", "tilt_limit_deg", "MAX_ANGLE"]
+           "reference_limits", "tilt_limit_deg"]

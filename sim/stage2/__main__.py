@@ -57,6 +57,13 @@ def write_csv(path, columns, rows):
         writer.writerows(rows)
 
 
+def non_negative(value):
+    n = int(value)
+    if n < 0:
+        raise argparse.ArgumentTypeError("Expected a seed >= 0 (Gymnasium rejects negative seeds).")
+    return n
+
+
 def positive(value):
     n = int(value)
     if n < 1:
@@ -80,7 +87,7 @@ def main():
     mission.add_argument("--episodes", type=positive, default=1)
     mission.add_argument("--out", type=Path, help="Write one web CSV per seed.")
     for command in (train, evaluate, mission):
-        command.add_argument("--seed", type=int, default=0)
+        command.add_argument("--seed", type=non_negative, default=0)
     args = parser.parse_args()
     if args.command == "evaluate" and args.policy == "ppo" and args.model is None:
         parser.error("--policy ppo requires --model")
