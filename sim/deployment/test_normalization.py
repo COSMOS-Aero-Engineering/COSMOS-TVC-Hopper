@@ -87,8 +87,9 @@ class ActionLayoutTest(unittest.TestCase):
             # --raw-obs on a VecNormalize model would make both sides skip normalization and pass.
             with self.assertRaisesRegex(ValueError, "supply its --vecnormalize"):
                 load_normalization(None, True, digest, env.observation_space, declared)
+            # The json check runs before the file is read, so no statistics file is needed.
             with self.assertRaisesRegex(ValueError, "drop --vecnormalize"):
-                load_normalization(directory / "stats.pkl", False, digest, env.observation_space, False)
+                load_normalization(directory / "never-read.pkl", False, digest, env.observation_space, False)
 
     def test_rejects_unsupported_or_mismatched_layout(self):
         with tempfile.TemporaryDirectory() as tmp, HopperAttitudeEnv() as env:

@@ -122,6 +122,8 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=args.output.parent, delete=False) as staged:
         staged.write(header.encode("ascii"))
+    # NamedTemporaryFile creates 0600; os.replace would keep it. Use a normal source-file mode.
+    os.chmod(staged.name, 0o644)
     try:
         os.replace(staged.name, args.output)
     finally:

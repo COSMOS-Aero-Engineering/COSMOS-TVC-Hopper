@@ -96,7 +96,6 @@ def cpp_float(value):
 
 
 def cpp_array(name, values):
-
     if values.ndim == 1:
         body = ", ".join(map(cpp_float, values))
     else:
