@@ -7,7 +7,7 @@ RL 학습 전 합격 기준(#27): 도메인 랜덤화를 켠 상태에서 PD 기
 합격: 평가 seed 0~199에서 PD(kp=8, kd=2)의 넘어짐 ≤ 5%, 최종 기울기 중앙값 ≤ 5°.
 베인 측력 상한(축당 ≤ Ft·sin(alpha_max))은 HopperAttitudeEnv 생성 시 vane_lift_gain()이 검사한다.
 
-평가 seed(0~199)는 학습 seed(train.py의 TRAIN_SEED)와 겹치지 않게 둔다 — 학습 때 본 초기 조건으로
+평가 seed(0~199)는 학습 seed(ppo_ablation.py의 TRAIN_SEED)와 겹치지 않게 둔다 — 학습 때 본 초기 조건으로
 평가하면 일반화가 아니라 암기를 재는 것이 된다(SB3 RL Tips and Tricks, 자료실 R05).
 PD 게인과 정책 정의는 #21 재현 스크립트와 같다.
 """
@@ -28,21 +28,6 @@ def pd(obs, kp=8.0, kd=2.0):
     ux = np.clip(-kp * phi - kd * wx, -1, 1)   # tau_x = (F1+F3)*l
     uy = np.clip(kp * theta + kd * wy, -1, 1)  # tau_y = -(F2+F4)*l
     return np.array([ux, uy, ux, uy, 1.0], dtype=np.float32)
-
-
-def model_policy(model):
-    """SB3 모델을 관측 → 행동 함수로 바꾼다.
-
-    모델의 관측 차원은 환경 관측 차원(7, OBS_NAMES)과 같아야 한다. 저장소의 hopper_attitude_ppo.zip은
-    7차원 관측으로 다시 학습했다(#201). #186 전 6차원 모델은 obs[6](제한 뒤 스로틀)을 보지 못하므로
-    앞 6개만 잘라 넘기지 않고 멈춘다. 그런 모델은 그 모델을 만든 커밋에서 평가한다(6차원 zip의 마지막 커밋은 c611188).
-    """
-    n_model = int(model.observation_space.shape[0])
-    n_env = int(HopperAttitudeEnv().observation_space.shape[0])
-    if n_model != n_env:
-        raise ValueError(f"모델 관측 {n_model}차원, 환경 관측 {n_env}차원: 차원이 같아야 한다. "
-                         "python train.py로 다시 학습하거나 그 모델을 만든 커밋에서 평가할 것.")
-    return lambda o: model.predict(o, deterministic=True)[0]
 
 
 def evaluate(policy, seeds=EVAL_SEEDS):
@@ -87,9 +72,8 @@ def main():
 
     results = {"PD (kp=8, kd=2)": evaluate(pd)}
     if args.model:
-        from stable_baselines3 import PPO
-        model = PPO.load(args.model, device="cpu")
-        results[f"PPO ({args.model})"] = evaluate(model_policy(model))
+        from policy_io import load_policy   # 모델 옆 json·정규화 통계도 읽는다(#230)
+        results[f"PPO ({args.model})"] = evaluate(load_policy(args.model))
 
     print(f"평가 seed {EVAL_SEEDS.start}~{EVAL_SEEDS.stop - 1}, 도메인 랜덤화 켬\n")
     print("| 정책 | 평균 리턴 | 평균 길이(step) | 넘어짐 | 최종 기울기 중앙값 |")

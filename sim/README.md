@@ -17,14 +17,18 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 | `hopper_aviary.py` | **`HopperAttitudeEnv`** — 위치 구속(만능조인트) 상태에서 자세만 제어하는 Stage 1 환경. 뉴턴-오일러 강체 회전방정식(자이로스코픽 교차항 포함) + ZYX 오일러각 운동학을 numpy로 직접 적분. `docs/design/references/`의 논문 3장(Modelling)을 그대로 코드화한 것 |
 | `params.yaml` | 물리 상수. **CLalpha/vane_geometry/CD0/Kf/omega_t_per_throttle/mass/Jxx·Jyy·Jzz/vane_arm_l/rotor.\*(inertia·omega_max·tau·spin_dir)는 PLACEHOLDER** — 실험 A(EDF 추력곡선)·TC-0·TC-2·조립 후 실측 전까지는 추정값. 각 값의 계산 근거는 파일 주석에 있다(#27). 요 팔 r, 베인 잠긴 면적 A_fin, 배기 단면적 A_duct는 `vane_geometry`(잠김 구간 반경·시위) 하나에서 계산한다(#98, #117). 키마다 출처 상태와 실측 이슈 번호는 [`params-ledger.md`](sim_stage1/params-ledger.md)(#255) |
 | `pd_gate.py` | **RL 학습 전 합격 기준**(#27): 도메인 랜덤화 켠 상태에서 PD(kp=8, kd=2)가 평가 seed 0~199에서 넘어짐 ≤ 5 %, 최종 기울기 중앙값 ≤ 5°인지. `--model`로 PPO도 같은 seed로 비교. `tasks.py check`가 매번 돌린다 |
+| `pid_tune.py` | `compare_metrics.py` PID 행의 게인 `PID_GAINS`를 고른 격자 탐색(#349). 튜닝 seed 1000-1199(평가·학습 seed와 겹치지 않음)에서 평균 리턴이 가장 큰 점을 고른다. 고른 점이 `PID_GAINS`와 다르면 exit 1. 약 35분(프로세스 하나), `--jobs`로 나눈다 |
 | `yaw_check.py` | **요 축 검사**(#65): `pd_gate.py`의 PD는 요 토크가 늘 0이라 요 경로를 못 본다. ① 베인 위치·힘 방향의 외적으로 손계산한 토크와 환경의 한 스텝 Δω를 비교한다(부호, 크기, 롤·피치 누설, 상수는 `params.yaml`에서 읽음). ② 회전자 항(#86) 손계산: 스로틀 계단에서 z축 각운동량 보존, 자유 세차와 추력 지연(#122)을 해석해와 비교. 스로틀 변화율 제한(#120)이 명령 계단을 경사로 바꾸는지도 본다. 서보 모델(#161)의 1차 지연·데드밴드·속도 제한도 손계산과 비교한다. ③ 요 PD를 섞으면 평가 seed 0-199에서 마지막 \|ψ\| ≤ 1°인지 본다. 스로틀 고정(A)과 명령 계단 1.0 → 호버 스로틀(B, 명목 0.853. `hopper_aviary.hover_throttle()`이 `params.yaml`의 mass·Kf·omega_t_per_throttle에서 계산, #204)을 회전자 항 끔·켬으로 같은 seed에서 비교하고, 판정은 `rotor.enabled`를 따른다. `tasks.py check`가 매번 돌린다 |
 | `altitude_check.py` | **고도 검사**(#185, 참고용이라 합격 판정과 `tasks.py check` 단계가 없다): 환경에 없는 세로 운동방정식을 옆에서 적분해 스로틀 변화율 제한(`throttle_slew_rate`)으로 호버 고도 유지(H)와 0.5 m/s 착지 하강(L)이 되는지 잰다. 고도 제어기는 ArduPilot Copter 기본 게인 꼴이다. 변화율 제한 없음·2·1·0.5·0.25·0.125/s를 같은 seed 0-199에서 비교한다. `--rotor`로 회전자 항을 켠다 |
 | `ledger_check.py` | [`params-ledger.md`](sim_stage1/params-ledger.md)의 대장 표가 `params.yaml`의 잎 키(예: `servo.tau`)를 모두 담는지 본다(#267). 빠진 키와 표에만 있는 키를 `파일:줄`로 출력한다. 단위 검사는 `test_ledger_check.py`. `tasks.py check`가 매번 돌린다(작업 이름 `ledger`) |
 | `sanity_check.py` | 환경이 안 깨졌는지 빠르게 확인(무작위 액션 20스텝) |
-| `train.py` | PPO(stable-baselines3) 학습 스크립트. 학습 seed 10000(평가 seed 0~199와 분리) |
 | `ppo_diagnosis.py` | #90 원인 분리: PPO·PD의 베인과 스로틀 출력을 교차 평가하고 고정 스로틀 4행동 PPO를 진단 학습한다. 결과와 판정은 [`ppo-diagnosis.md`](sim_stage1/ppo-diagnosis.md) |
+| `ppo_ablation.py` | PPO(stable-baselines3) 학습 스크립트. `python tasks.py train`이 이 파일로 `crashcost` 조건 1M 스텝, 학습 seed 1(seed 10001, 평가 seed 0-199와 분리)을 학습한다(#345). #230: 스로틀 0 지름길을 막은 뒤 PPO 학습 조건(고정 스로틀, 3축 믹서, 관측 `VecNormalize`, 종료 비용)을 하나씩 바꿔 학습하고 평가 seed 0-199로 비교한다. 결과와 판정은 [`ppo-ablation.md`](sim_stage1/ppo-ablation.md), 실행별 결과와 학습 곡선은 `runs/230/` |
+| `steady_error_check.py` | #357: #230 모델의 정상오차 0.64°가 어디에서 나오는지 seed별로 본다. 무게중심 오프셋을 0으로 두거나 랜덤화를 끈 조건, 초기 기울기 10°·40°, PD를 같은 seed로 비교한다. 결과는 [`ppo-ablation.md`](sim_stage1/ppo-ablation.md) "정상오차 0.64°의 출처" |
+| `policy_io.py` | PPO 행동 구조(`learned`, `vanes4`, `mixer3`)와 모델 읽기 `load_policy()`(#230). 모델 옆 `<이름>.json`·`<이름>.vecnormalize.pkl`을 같이 읽는다. json이 없으면 #230 전 모델로 읽는다 |
 | `export_episode.py` | 에피소드 1회를 웹 대시보드 CSV 형식(`docs/design/02-web-dashboard-design.md` §4)으로 `episode_logs/`에 저장. 정책 `pd`(기준 PD)·`zero`·`ppo`, 옆에 시드·물리 상수·결과를 담은 `.meta.json`. 실물 시험 로그와 같은 3D 뷰어로 재생하기 위한 것 |
-| `hopper_attitude_ppo.zip` | 학습된 모델 1회분 — PLACEHOLDER 물리값 기준이라 **성능 숫자 자체는 의미 없음**, 파이프라인이 도는지 확인용. 7차원 관측(제한 뒤 스로틀 포함)으로 다시 학습했다(#201, `python tasks.py train`, 200k 스텝, seed 10000). 평가 seed 0-199에서 PD 2.5°보다 못한 13.8°이고 스로틀을 거의 0으로 낸다(원인은 #90). `pd_gate.py --model`과 `export_episode.py`는 모델 관측 차원이 환경과 다르면 멈춘다 |
+| `hopper_attitude_ppo.zip` | 학습된 모델 1회분 — PLACEHOLDER 물리값 기준이라 **성능 숫자 자체는 의미 없음**, 파이프라인이 도는지 확인용. 7차원 관측(제한 뒤 스로틀 포함)으로 다시 학습했다(#201, #230 전 `train.py`, 200k 스텝, seed 10000. `train.py`는 #345에서 지웠다). 평가 seed 0-199에서 PD 2.5°보다 못한 13.8°이고 스로틀을 거의 0으로 낸다(원인은 #90). `pd_gate.py --model`과 `export_episode.py`는 모델 관측 차원이 환경과 다르면 멈춘다 |
+| `hopper_attitude_ppo_230.zip` | #230 모델(`hopper_attitude_ppo_230.json`과 한 쌍). 스로틀 100 % 고정, 베인 4개, 종료 비용, 1M 스텝, 학습 seed 10001. 평가 seed 0-199에서 넘어짐 0 %, 최종 기울기 중앙값 0.6°(PD 2.5°). PLACEHOLDER 물리값 기준이다. #277·#318이 `compare_metrics.py --model`로 쓴다 |
 
 ## 관측 / 행동 (실제 구현 기준 — 이전 계획의 12/4차원 문서와 다름, 이게 현재 정답)
 
@@ -64,8 +68,14 @@ Stage 1 환경 구현 완료 (2026-09-14), PPO 1회 학습 성공. **더 이상 
 ```bash
 python tasks.py sanity   # 환경 정상 동작 확인 (20스텝)
 python tasks.py check    # CI sim job의 check 단계와 같은 검사 — PR 올리기 전에
-python tasks.py train    # PPO 학습 (200k 스텝)
+python tasks.py train    # PPO 학습 (crashcost 조건 1M 스텝, 서버 약 23분, Windows 러너 약 18분)
 ```
+
+`train`은 #230에서 가장 좋았던 조건(스로틀 100 % 고정 + 종료 비용, 1M 스텝)을 `ppo_ablation.py`로 학습한다(#345).
+학습 seed 1은 저장소 모델 `hopper_attitude_ppo_230.zip`과 같다. 먼저 `gate`(PD 합격 기준)를 보고, 불합격이면 학습하지 않는다.
+결과는 `sim/runs/train/`(git 제외)에 쌓이고 저장소 모델은 덮어쓰지 않는다. 조건·seed·스텝을 바꾸려면 `ppo_ablation.py train`을 직접 쓴다([`ppo-ablation.md`](sim_stage1/ppo-ablation.md) §재현).
+CI와 `check`는 학습하지 않는다.
+학습 시간은 에이전트 서버(Linux, CPU 코어 1개)에서 약 23분, GitHub `windows-latest` 러너(Windows Server 2025, AMD EPYC 7763)에서 약 18분이었다(#352). 학습은 코어 하나만 쓴다(`torch.set_num_threads(1)`). 그래서 부원 PC의 시간은 CPU 코어 하나의 속도에 따라 다르다. 부원 PC에서는 아직 재지 않았다.
 
 `check`는 CI 전체가 아니다. CI는 `check` 말고도 학습 자료 목록·내부 링크 검사와 펌웨어 PlatformIO 빌드를 따로 돌린다.
 이 둘은 `check`에 없다. 명령은 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)의 각 단계에 있다.
