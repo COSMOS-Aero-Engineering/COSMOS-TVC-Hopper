@@ -112,7 +112,10 @@ def main():
         obs, actions, lengths = evaluation_rows(env, model, norm, seeds, kind)
         max_abs = compare(directory, exe, obs, actions, lengths, seeds)
     # Record what this header passed, so a quick --episodes 2 export is visible on the bench.
-    header = header.replace("}  // namespace actor", "\n".join([
+    footer = "}  // namespace actor"
+    if header.count(footer) != 1:
+        raise ValueError("render_header footer changed; cannot record parity constants")
+    header = header.replace(footer, "\n".join([
         f"constexpr unsigned kParityEpisodes = {len(seeds)};",
         f"constexpr float kParityMaxAbs = {max_abs:.8e}f;",
         "}  // namespace actor"]))

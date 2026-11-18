@@ -96,12 +96,11 @@ def cpp_float(value):
 
 
 def cpp_array(name, values):
-    literal = cpp_float
 
     if values.ndim == 1:
-        body = ", ".join(map(literal, values))
+        body = ", ".join(map(cpp_float, values))
     else:
-        body = ",\n".join("    {" + ", ".join(map(literal, row)) + "}" for row in values)
+        body = ",\n".join("    {" + ", ".join(map(cpp_float, row)) + "}" for row in values)
     dims = "".join(f"[{n}]" for n in values.shape)
     return f"constexpr float {name}{dims} = {{\n{body}\n}};"
 

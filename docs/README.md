@@ -35,7 +35,7 @@
 | `firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 원본(MIT). 통합 펌웨어의 출발점 | 손대지 않음 |
 | `firmware/singlecopter.param.md` | ArduPilot SingleCopter 대안 경로 | 보존 |
 | `sim/sim_stage1/` | Stage 1 환경(`hopper_aviary.py`, 관측 7·행동 5), `params.yaml`, 학습 `ppo_ablation.py`(`tasks.py train`, #345), `export_episode.py`, PD, PID, PPO 네 지표 비교표 `compare_metrics.py`(학습 분포와 TC-3 기울기 10° 두 조건, #266 #276. `--tilt-deg`로 학습 분포 밖 기울기 고정 조건, #312), PID 게인 격자 탐색 `pid_tune.py`(#349) | #21 베인 제어력 정정(CL 기하 인자·`vane_arm_l`, PR #35). 값은 아직 추정값 |
-| `sim/deployment/` | PPO Actor를 C++ 헤더로 내보내고 Python 예측과 비교하는 `check_parity.py` (#291) | PC 비교 통과(Linux GCC, Windows MSVC) |
+| `sim/deployment/` | PPO Actor를 C++ 헤더로 내보내고 Python 예측과 비교하는 `check_parity.py` (#291) | PC 비교 통과: #230 모델 Linux GCC, #230 전 모델 Linux GCC·Windows MSVC |
 | `sim/connectome/` | 확장 트랙 A: 커넥톰 제약 정책망 | 파이프라인 검증 |
 | `kicad/` | 회로도(생성물)와 생성·검증 스크립트(`_tools/`) | ERC 실행(10/17, 오류 4·경고 129). Y축 반전 결함 #66 — 배선에 쓰지 말 것(극성 반대) |
 | `web/` | CSV 재생 3D 뷰어(W-A 뼈대) | 신규, 10/16 |
