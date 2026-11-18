@@ -4,8 +4,12 @@ train     PPO on LandingEnv with N parallel envs; saves checkpoints at the given
 evaluate  Counts episode outcomes for PD and for each checkpoint on the same evaluation seeds.
 
 Training seeds: make_vec_env(seed=S) seeds env i with S+i on the first reset; later resets
-continue those generators. Evaluation uses reset(seed=s) for s in EVAL_SEEDS, which never
-appears as a training seed for the default S=41 and N<=16.
+continue those generators. Evaluation uses reset(seed=s) for s in EVAL_SEEDS. train refuses
+any S..S+N-1 that overlaps EVAL_SEEDS.
+
+Each checkpoint <stem>.zip has <stem>.json (condition, reward, vecnormalize, timesteps) and,
+for vecnorm, <stem>.vecnormalize.pkl. A checkpoint is saved at the first callback step at or
+past each budget, so its weights come from the last PPO update before that step.
 """
 import argparse
 import json
@@ -26,7 +30,12 @@ REWARDS = ("env", "timeout10")
 
 
 class TimeoutAsFailure(gym.Wrapper):
-    """timeout10: the time limit costs -10 like a failure instead of -5 (LandingEnv.step)."""
+    """timeout10: the time-limit penalty is -10, the same number as a failure, instead of -5.
+
+    It is not the same signal for PPO. SB3 treats truncation as non-terminal and bootstraps
+    gamma * V(terminal_obs) (TimeLimit.truncated), while a failure is terminal. The observation
+    has no elapsed time, so the value function cannot see the step-400 penalty coming.
+    """
 
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
@@ -71,6 +80,10 @@ def train(args):
                 self.model.save(stem.with_suffix(".zip"))
                 if args.condition == "vecnorm":
                     self.model.get_env().save(str(stem) + ".vecnormalize.pkl")
+                Path(str(stem) + ".json").write_text(json.dumps({
+                    "condition": args.condition, "reward": args.reward, "seed": args.seed,
+                    "envs": args.envs, "vecnormalize": args.condition == "vecnorm",
+                    "budget": budget, "timesteps": self.num_timesteps}), encoding="utf-8")
                 print(json.dumps({"saved": str(stem) + ".zip", "timesteps": self.num_timesteps}), flush=True)
             return True
 
@@ -82,8 +95,16 @@ def load_ppo(path):
     from stable_baselines3 import PPO
     from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
-    model = PPO.load(path, device="cpu")
-    stats = Path(str(path)[:-len(".zip")] + ".vecnormalize.pkl")
+    path = Path(path)
+    stem = path.with_suffix("") if path.suffix == ".zip" else path
+    model = PPO.load(stem.with_suffix(".zip"), device="cpu")
+    stats = Path(str(stem) + ".vecnormalize.pkl")
+    meta_path = Path(str(stem) + ".json")
+    declared = json.loads(meta_path.read_text(encoding="utf-8")).get("vecnormalize") if meta_path.exists() else None
+    if declared and not stats.exists():
+        raise FileNotFoundError(f"{meta_path.name} says VecNormalize but {stats.name} is missing")
+    if declared is False and stats.exists():
+        raise ValueError(f"{meta_path.name} says raw observations but {stats.name} exists")
     normalize = None
     if stats.exists():
         vn = VecNormalize.load(str(stats), DummyVecEnv([LandingEnv]))

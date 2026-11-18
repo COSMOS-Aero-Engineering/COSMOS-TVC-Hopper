@@ -55,27 +55,32 @@ EDF 추력 T를 원주 방향으로 4등분한다. 한 베인의 측력은 `T ×
 [ppo_budget.py](ppo_budget.py)는 PPO를 학습 예산별로 저장하고, PD와 같은 평가 seed로 종료 원인을 센다. **2026-11-18 결과: 세 조건 모두 1M 스텝까지 착륙 0/100이다. PD는 100/100이다.**
 
 ```powershell
+python ship.py capped 6G -- uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_budget train --condition raw --reward env --envs 4 --threads 1 --budgets 250000 500000 1000000 --out sim/runs/stage2/296
 python ship.py capped 6G -- uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_budget train --condition vecnorm --reward env --envs 4 --threads 1 --budgets 250000 500000 1000000 --out sim/runs/stage2/296
-uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_budget evaluate sim/stage2/checkpoints/ppo-vecnorm-s41-1000000.zip
+python ship.py capped 6G -- uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_budget train --condition vecnorm --reward timeout10 --envs 4 --threads 1 --budgets 250000 500000 1000000 --out sim/runs/stage2/296
+uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_budget evaluate sim/stage2/checkpoints/ppo-raw-s41-1000000.zip sim/stage2/checkpoints/ppo-vecnorm-s41-1000000.zip sim/stage2/checkpoints/ppo-vecnorm-timeout10-s41-1000000.zip
 ```
 
 - 학습 seed: `make_vec_env(seed=41)`이 환경 4개에 seed 41-44를 준다. 평가 seed는 1000-1099다. 두 범위가 겹치면 `train`이 멈춘다.
 - PPO: SB3 기본값에서 `n_steps=512`, `batch_size=256`만 바꿨다. 환경 4개, 1M 스텝에 서버에서 약 30-33분 걸렸다(다른 학습과 함께 돌렸다).
 - 조건: `raw`(원시 관측), `vecnorm`(관측·보상 VecNormalize), `vecnorm` + `timeout10`(학습 래퍼가 시간 초과 벌점을 −5에서 −10으로 바꾼다. 환경은 그대로다).
-- 1M 체크포인트는 [checkpoints/](checkpoints/)에 있다. `vecnorm` 조건은 같은 이름의 `.vecnormalize.pkl`을 함께 읽는다.
+- 1M 체크포인트는 [checkpoints/](checkpoints/)에 있다. 같은 이름의 `.json`이 조건을 적는다. `vecnorm` 조건은 `.vecnormalize.pkl`을 함께 읽고, `.json`이 VecNormalize라는데 통계 파일이 없으면 `evaluate`가 멈춘다.
+- 250k·500k 체크포인트는 커밋하지 않았다(`sim/runs/`, Git 제외). 그 두 열은 위 학습 명령을 다시 돌려야 확인할 수 있다(조건마다 약 30분).
+- 체크포인트는 예산에 처음 닿은 콜백 스텝에서 저장한다. 가중치는 그 직전 PPO 업데이트의 것이다(1M은 999,424 스텝까지 학습한 가중치).
 
 평가 seed 1000-1099, 100회:
 
 | 정책 | 250k | 500k | 1M | 1M 종료 상태(seed 1000-1019) |
 |---|---|---|---|---|
-| PD | 착륙 100 | | | 착륙 하강 속도 최대 0.304 m/s |
+| PD | 착륙 100 (학습 없음) | | | (100회 전체) 착륙 하강 속도 최대 0.304 m/s |
 | `raw` | 시간 초과 97, 이탈 3 | 시간 초과 100 | 시간 초과 100 | 높이 0.88-0.96 m에서 계속 오른다 |
 | `vecnorm` | 시간 초과 100 | 시간 초과 100 | 시간 초과 100 | 높이 0.29-0.33 m, 수평 0.43-0.47 m에서 떠 있다 |
 | `vecnorm` + `timeout10` | 시간 초과 100 | 시간 초과 100 | 시간 초과 100 | 높이 0.40-0.69 m, 수평 0.00-0.10 m에서 떠 있다 |
 
 - 확인한 사실: 세 조건 모두 강한 접촉, 기울기 초과, 하우징 접촉이 0이다. 정책은 넘어지지 않고 떠 있다. 바닥에 내려가지 않는다.
 - 확인한 사실: 착륙 판정은 EDF 속도 비율 0.10 이하를 요구한다. 바닥에 닿은 채 스로틀을 0.10보다 높게 유지하면 `time_limit`가 된다. 이번 1M 정책들은 seed 1000-1019에서 바닥 위 0.29-0.96 m에 떠서 끝났다. 그래서 이 조건이 결과를 바꾸지 않았다. 나머지 seed의 종료 높이는 재지 않았다.
-- 추론: 착륙 판정은 패드 3개 접촉, EDF 속도 비율 0.10 이하, 정지 상태를 0.15 s 유지해야 한다. 무작위 탐색으로 이 상태에 닿기 어려워서, 정책이 떠 있는 국소해에 머문 것으로 보인다. 시간 초과 벌점을 키워도 1M 안에서는 바뀌지 않았다.
+- 추론: 착륙 판정은 패드 3개 접촉, EDF 속도 비율 0.10 이하, 정지 상태를 0.15 s 유지해야 한다. 무작위 탐색으로 이 상태에 닿기 어려워서, 정책이 떠 있는 국소해에 머문 것으로 보인다.
+- `timeout10`은 "시간 초과가 실패보다 싸다"는 가설을 제대로 검사하지 못한다. SB3는 시간 초과(truncation)를 종료로 보지 않고 `gamma·V(마지막 관측)`을 더한다. 관측에 경과 시간이 없어서 가치 함수가 400스텝째 벌점을 예상하지 못한다. 그래서 벌점 값을 바꿔도 학습 신호가 거의 바뀌지 않는 것이 예상되는 결과다. 경과 시간을 관측에 넣거나 시간 초과를 종료로 다루는 방법은 #413에서 본다.
 - 한계: 학습 seed는 41 하나다. 1M보다 큰 예산, 보상 모양 바꾸기(접지 접근 보상), 커리큘럼(낮은 높이에서 시작), PD 잔차 학습은 시험하지 않았다. 후속 이슈 #413에서 다룬다.
 
 ## 지상 출발 임무
