@@ -7,9 +7,12 @@
 import argparse
 import io
 import json
+import os
 import re
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -485,26 +488,63 @@ class ReviewRecordsTest(unittest.TestCase):
         self.assertIn("JSON이 아닌 출력", why)
 
 
+def codex_config(cmd):
+    """codex 명령의 `-c 키=값`을 {키: 값 원문}으로 읽는다."""
+    return dict(cmd[i + 1].split("=", 1) for i, arg in enumerate(cmd) if arg == "-c")
+
+
+def parse_toml_value(text):
+    """`-c`의 값 원문을 Codex처럼 TOML 값으로 읽는다. tomllib(파이썬 3.11+)이 없으면 건너뛴다."""
+    try:
+        import tomllib
+    except ImportError:
+        raise unittest.SkipTest("tomllib가 없다 (파이썬 3.11 미만)")
+    return tomllib.loads(f"v = {text}")["v"]
+
+
 class CmdReviewTest(unittest.TestCase):
-    def run_review(self, records, logged):
+    def run_review(self, records, logged, fail=None, conflict=None, venv=None):
+        """cmd_review를 가짜 call로 돌린다. 리뷰 명령을 부를 때의 환경과 TMPDIR 폴더 유무를 남긴다.
+
+        conflict는 권한 프로필을 바꾸는 Codex 설정 파일이다. 이 PC의 실제 Codex 설정은 읽지 않는다.
+        venv는 venv_problem()의 결과다. 이 PC의 .venv와 uv는 보지 않는다. 리뷰 명령을 부르기 전까지의
+        출력은 self.out_before_review에 남는다.
+        """
         calls = []
+        self.env, self.tmp_existed, self.out_before_review = None, None, None
+        out = io.StringIO()
 
         def fake_call(cmd, check=True, capture=False, cwd=None, input=None, env=None):
             calls.append((cmd, input))
+            if cmd[0] == "git":  # 리뷰 전의 git fetch
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            self.env = env
+            self.out_before_review = out.getvalue()
+            tmp = (env or {}).get("TMPDIR")
+            self.tmp_existed = tmp is not None and Path(tmp).is_dir()
+            if fail:
+                raise fail
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
-        out = io.StringIO()
+        def fake_opencode(cmd, input, env):  # OpenCode 리뷰어는 run_opencode_review로 부른다(#327).
+            return fake_call(cmd, input=input, env=env).returncode
+
+        self.venv_check = mock.Mock(return_value=venv)
         with mock.patch.object(ship, "call", fake_call), \
+                mock.patch.object(ship, "run_opencode_review", fake_opencode), \
                 mock.patch.object(ship, "review_records", return_value=records), \
                 mock.patch.object(ship, "logged_in", side_effect=logged), \
                 mock.patch.object(ship, "opencode_model", return_value="opencode/mimo-free"), \
+                mock.patch.object(ship, "opencode_flags", return_value=[]), \
+                mock.patch.object(ship, "codex_conflicting_config", return_value=conflict), \
+                mock.patch.object(ship, "venv_problem", self.venv_check), \
                 redirect_stdout(out), self.assertRaises(SystemExit):
             ship.cmd_review(argparse.Namespace(author="claude", base="origin/main"))
         return calls[-1], out.getvalue()
 
     def test_prompt_stays_scope_only_and_records_go_to_stdin(self):
         prompt = ship.REVIEW_PROMPT.format(base="origin/main")
-        for logged, head in ((lambda c: c[0] == "codex", ["codex", "exec", "--sandbox", "read-only"]),
+        for logged, head in ((lambda c: c[0] == "codex", ["codex", "exec"]),
                              (lambda c: False, ["opencode", "run"])):
             with self.subTest(head=head):
                 (cmd, stdin), out = self.run_review(("# GitHub records", "PR #1"), logged)
@@ -513,11 +553,214 @@ class CmdReviewTest(unittest.TestCase):
                 self.assertEqual(stdin, "# GitHub records")
                 self.assertIn("PR #1", out)
 
-    def test_without_records_review_still_runs(self):
-        (cmd, stdin), out = self.run_review((None, "gh가 없다"), lambda c: c[0] == "codex")
-        self.assertEqual(cmd[0], "codex")
-        self.assertIsNone(stdin)
-        self.assertIn("[주의]", out)
+    def test_codex_writes_only_to_its_temp_folder(self):
+        # #283: :read-only를 상속한 권한 프로필이 TMPDIR 폴더 하나만 쓰기로 연다. --sandbox를 같이 주면
+        # Codex가 권한 프로필을 쓰지 않는다. 폴더는 리뷰하는 동안만 있고 부모 환경의 TMPDIR은 그대로다.
+        # #314: uv 캐시도 이 폴더 안에 둔다. 부모 환경의 UV_CACHE_DIR(공유 캐시)은 리뷰어에게 넘기지 않는다.
+        with mock.patch.dict(ship.os.environ, {"TMPDIR": "parent-tmp", "UV_CACHE_DIR": "parent-cache"}):
+            (cmd, _), out = self.run_review((None, "no PR"), lambda c: c[0] == "codex")
+            self.assertEqual(ship.os.environ["TMPDIR"], "parent-tmp")
+            self.assertEqual(ship.os.environ["UV_CACHE_DIR"], "parent-cache")
+        tmp = self.env["TMPDIR"]
+        self.assertTrue(self.tmp_existed)
+        self.assertFalse(Path(tmp).exists())
+        self.assertIn(tmp, out)
+        self.assertEqual(Path(self.env["UV_CACHE_DIR"]).parent, Path(tmp))
+        self.assertNotIn("--sandbox", cmd)
+        profile = f"permissions.{ship.CODEX_PROFILE}"
+        config = codex_config(cmd)
+        self.assertEqual(config["default_permissions"], f'"{ship.CODEX_PROFILE}"')
+        self.assertEqual(config[f"{profile}.extends"], '":read-only"')
+        self.assertEqual(parse_toml_value(config[f"{profile}.filesystem"]), {tmp: "write"})
+        self.assertIs(parse_toml_value(config[f"{profile}.network.enabled"]), False)
+
+    def test_codex_keeps_read_only_sandbox_when_config_has_sandbox_mode(self):
+        # Codex 문서: 설정 파일에 sandbox_mode가 있으면 권한 프로필을 쓰지 않는다. 그때는 #283 이전 명령을
+        # 그대로 쓴다. 리뷰어 권한이 사용자의 sandbox_mode(예: workspace-write)로 넓어지지 않는다.
+        conflict = Path("home") / ".codex" / "config.toml"
+        (cmd, _), out = self.run_review((None, "no PR"), lambda c: c[0] == "codex", conflict=conflict)
+        prompt = ship.REVIEW_PROMPT.format(base="origin/main")
+        self.assertEqual(cmd, ["codex", "exec", "--sandbox", "read-only", prompt])
+        self.assertIsNone(self.env)
+        self.assertIn(f"[주의] {conflict}에서 sandbox_mode나 permissions.cosmos_review를 찾았거나", out)
+        self.assertIn("리뷰어는 uv run과 임시 파일이 필요한 스크립트(PyTorch 등)를 돌리지 못한다", out)
+
+    def test_codex_temp_folder_is_removed_when_review_stops(self):
+        self.run_review((None, "no PR"), lambda c: c[0] == "codex", fail=SystemExit(1))
+        self.assertTrue(self.tmp_existed)
+        self.assertFalse(Path(self.env["TMPDIR"]).exists())
+
+    def test_codex_profile_path_survives_toml_escaping(self):
+        profile = f"permissions.{ship.CODEX_PROFILE}"
+        for path in (r"C:\Users\김민지\AppData\Local\Temp\cosmos-review-x", '/tmp/a"b', "/tmp/a b"):
+            with self.subTest(path=path):
+                cmd = ship.codex_review_cmd("prompt", path)
+                self.assertEqual(parse_toml_value(codex_config(cmd)[f"{profile}.filesystem"]),
+                                 {path: "write"})
+
+    def test_windows_temp_folder_inherits_temp_acl(self):
+        # #315: Windows에서 mkdtemp(mode 0o700)의 ACL 폴더는 Codex unelevated 샌드박스가 쓰지 못했다.
+        # Windows 분기는 mkdtemp를 부르지 않고 mode 0o700 없이 %TEMP% 아래에 만든다.
+        with tempfile.TemporaryDirectory() as base, \
+                mock.patch.object(ship.tempfile, "gettempdir", return_value=base), \
+                mock.patch.object(ship.tempfile, "mkdtemp", side_effect=AssertionError("mkdtemp")), \
+                mock.patch("os.mkdir", wraps=os.mkdir) as mkdir:
+            path, cleanup = ship.codex_review_tmp(windows=True)
+            self.assertTrue(path.is_dir())
+            self.assertEqual(path.parent, Path(base).resolve())
+            self.assertTrue(path.name.startswith("cosmos-review-"))
+            args = mkdir.call_args
+            self.assertNotEqual((args.args[1:] or (args.kwargs.get("mode", 0o777),))[0], 0o700)
+            (path / "uv-cache").mkdir()
+            (path / "uv-cache" / "f").write_text("x")
+            cleanup()
+            self.assertFalse(path.exists())
+
+    def test_without_records_review_gets_empty_stdin(self):
+        # #322: 기록이 없어도 빈 입력을 넘긴다. None이면 리뷰어가 ship.py의 표준 입력을 물려받는다. 그 입력이
+        # 닫히지 않으면 리뷰어가 입력의 끝을 기다리며 멈춘다.
+        for logged, head in ((lambda c: c[0] == "codex", "codex"), (lambda c: False, "opencode")):
+            with self.subTest(head=head):
+                (cmd, stdin), out = self.run_review((None, "gh가 없다"), logged)
+                self.assertEqual(cmd[0], head)
+                self.assertEqual(stdin, "")
+                self.assertIn("[주의]", out)
+
+    def test_empty_input_ends_child_stdin_while_parent_stdin_stays_open(self):
+        # #322: 실제 프로세스로 본다. 부모(ship.call을 부르는 파이썬)의 표준 입력은 닫지 않는 파이프다.
+        # input=""이면 자식이 바로 입력의 끝을 받고 끝난다. 대조군 input=None은 자식이 그 파이프를 물려받아
+        # 기다린다. 대조군은 1초 뒤 파이프를 닫아서 끝낸다.
+        reader = "import sys; sys.stdin.read()"
+        for value, ends in (("", True), (None, False)):
+            with self.subTest(input=value):
+                script = (f"import sys; sys.path.insert(0, {str(ship.ROOT)!r}); import ship; "
+                          f"ship.call([sys.executable, '-c', {reader!r}], input={value!r})")
+                proc = subprocess.Popen([sys.executable, "-c", script], stdin=subprocess.PIPE,
+                                        stdout=subprocess.DEVNULL)
+                try:
+                    proc.wait(timeout=30 if ends else 1)
+                    ended = True
+                except subprocess.TimeoutExpired:
+                    ended = False
+                finally:
+                    proc.stdin.close()
+                    proc.wait(timeout=30)
+                self.assertEqual(ended, ends)
+                self.assertEqual(proc.returncode, 0)
+
+    def test_codex_warns_before_review_when_venv_does_not_match_lock(self):
+        # #321: .venv가 없거나 uv.lock과 다르면 샌드박스의 uv run이 exit 2다. 리뷰 전에 알리고 맞추는
+        # 명령을 보인다. sim과 상관없는 PR도 있으므로 리뷰는 그대로 돈다.
+        problem = "uv sync --check exit 1: error: The environment is outdated"
+        (cmd, _), out = self.run_review((None, "no PR"), lambda c: c[0] == "codex", venv=problem)
+        self.assertEqual(cmd[:2], ["codex", "exec"])
+        self.assertNotIn("--sandbox", cmd)
+        self.assertIn(f"[주의] .venv가 uv.lock과 맞지 않거나 확인하지 못했다 ({problem})",
+                      self.out_before_review)
+        self.assertIn("맞추는 명령: python tasks.py setup", self.out_before_review)
+        self.venv_check.assert_called_once_with()
+
+    def test_matching_venv_prints_no_venv_warning(self):
+        self.run_review((None, "no PR"), lambda c: c[0] == "codex")
+        self.venv_check.assert_called_once_with()
+        self.assertNotIn(".venv", self.out_before_review)
+
+    def test_venv_is_checked_only_for_codex_with_temp_folder(self):
+        # read-only 샌드박스는 이미 uv run을 돌리지 못한다고 알린다. Claude·OpenCode 리뷰어는 이 샌드박스를
+        # 쓰지 않는다. 두 경우는 .venv를 보지 않는다.
+        conflict = Path("home") / ".codex" / "config.toml"
+        for logged, conflict_file in ((lambda c: c[0] == "codex", conflict), (lambda c: False, None)):
+            with self.subTest(conflict=conflict_file):
+                _, out = self.run_review((None, "no PR"), logged, conflict=conflict_file, venv="x")
+                self.venv_check.assert_not_called()
+                self.assertNotIn(".venv가 uv.lock과", out)
+
+
+class VenvProblemTest(unittest.TestCase):
+    def check(self, uv_path, result=None):
+        calls = []
+
+        def fake_call(cmd, check=True, capture=False, cwd=None, input=None, env=None):
+            calls.append((cmd, check, capture, cwd))
+            return result
+
+        with mock.patch.object(ship.shutil, "which", return_value=uv_path), \
+                mock.patch.object(ship, "call", fake_call), redirect_stdout(io.StringIO()):
+            return ship.venv_problem(), calls
+
+    def test_matching_venv_is_no_problem(self):
+        ok = subprocess.CompletedProcess([], 0, "", "Would make no changes\n")
+        problem, calls = self.check("/usr/bin/uv", ok)
+        self.assertIsNone(problem)
+        # 샌드박스 밖에서 확인만 한다: .venv를 바꾸지 않고(--check) 네트워크를 쓰지 않는다(--offline).
+        # uv run처럼 uv.lock에 없는 패키지는 문제로 보지 않는다(--inexact). 워크스페이스 루트에서 돈다.
+        self.assertEqual(calls, [(["uv", "sync", "--frozen", "--inexact", "--check", "--offline"],
+                                  False, True, ship.ROOT)])
+
+    def test_outdated_venv_reports_exit_code_and_last_uv_line(self):
+        stderr = ("Would create project environment at: .venv\n + numpy==2.5.3\n"
+                  "error: The environment is outdated; run `uv sync` to update the environment\n\n")
+        problem, _ = self.check("/usr/bin/uv", subprocess.CompletedProcess([], 1, "", stderr))
+        self.assertEqual(problem, "uv sync --check exit 1: error: The environment is outdated; "
+                                  "run `uv sync` to update the environment")
+
+    def test_missing_uv_is_a_problem_without_running_it(self):
+        problem, calls = self.check(None)
+        self.assertEqual(problem, "uv가 없다")
+        self.assertEqual(calls, [])
+
+
+class CodexConfigConflictTest(unittest.TestCase):
+    def find(self, text):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "config.toml"
+            f.write_text(text, encoding="utf-8")
+            return ship.codex_conflicting_config([Path(tmp) / "missing.toml", f]) == f
+
+    def test_finds_sandbox_mode_in_any_toml_spelling(self):
+        for text in ('sandbox_mode = "workspace-write"\n',
+                     "'sandbox_mode' = 'workspace-write'\n",
+                     '"sandbox\\u005fmode" = "workspace-write"\n',
+                     'model = "x"\n\n[profiles.fast]\nsandbox_mode = "danger-full-access"\n',
+                     'profiles.fast.sandbox_mode="read-only"\n',
+                     '[profiles]\nfast = { sandbox_mode = "workspace-write" }\n',
+                     '\ufeffsandbox_mode = "workspace-write"\n'):
+            with self.subTest(text=text):
+                self.assertTrue(self.find(text))
+
+    def test_finds_existing_review_profile(self):
+        # Codex는 설정 층을 합친다. 같은 이름의 프로필이 이미 있으면 -c가 정하지 않은 키가 남는다.
+        for text in ('[permissions.cosmos_review.network]\nenabled = true\n',
+                     '[permissions.cosmos_review.filesystem]\n"/" = "write"\n',
+                     'permissions.cosmos_review.workspace_roots."~/code" = true\n'):
+            with self.subTest(text=text):
+                self.assertTrue(self.find(text))
+
+    def test_ignores_comments_other_keys_and_missing_files(self):
+        if ship.tomllib is None:
+            self.skipTest("tomllib가 없다 (파이썬 3.11 미만)")
+        for text in ('# sandbox_mode = "workspace-write"\n',
+                     'model = "x"\n[sandbox_workspace_write]\nnetwork_access = true\n',
+                     'default_permissions = ":workspace"\n',
+                     '[permissions.other]\nextends = ":workspace"\n'):
+            with self.subTest(text=text):
+                self.assertFalse(self.find(text))
+        self.assertIsNone(ship.codex_conflicting_config([Path("no-such-dir") / "config.toml"]))
+
+    def test_unreadable_toml_or_no_tomllib_counts_as_found(self):
+        # 권한이 넓어지는 쪽으로 틀리지 않는다: 모르면 read-only로 리뷰한다.
+        self.assertTrue(self.find('sandbox_mode = \n'))
+        with mock.patch.object(ship, "tomllib", None):
+            self.assertTrue(self.find('"sandbox\\u005fmode" = "workspace-write"\n'))
+            self.assertTrue(self.find('model = "x"\n'))
+
+    def test_candidates_cover_codex_home_and_every_project_layer(self):
+        cwd = Path("repo") / "sim" / "sim_stage1"
+        with mock.patch.dict(ship.os.environ, {"CODEX_HOME": "custom-home"}):
+            files = ship.codex_config_files(cwd)
+        self.assertEqual(files[0], Path("custom-home") / "config.toml")
+        for d in (cwd, Path("repo") / "sim", Path("repo")):
+            self.assertIn(d / ".codex" / "config.toml", files)
 
 
 class OpenCodeIsolationTest(unittest.TestCase):
@@ -548,16 +791,176 @@ class OpenCodeIsolationTest(unittest.TestCase):
 
     def test_fallback_discovery_and_review_use_same_environment(self):
         env = {"XDG_DATA_HOME": "isolated"}
-        with mock.patch.object(ship, "call", return_value=subprocess.CompletedProcess([], 0, "", "")) as call, \
+        with mock.patch.object(ship, "call", return_value=subprocess.CompletedProcess([], 0, "", "")), \
+                mock.patch.object(ship, "run_opencode_review", return_value=0) as review, \
                 mock.patch.object(ship, "logged_in", return_value=False), \
                 mock.patch.object(ship, "review_records", return_value=(None, "no PR")), \
                 mock.patch.object(ship, "opencode_env", return_value=env), \
                 mock.patch.object(ship, "opencode_model", return_value="opencode/mimo-free") as model, \
+                mock.patch.object(ship, "opencode_flags", return_value=[]) as flags, \
                 redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as stop:
             ship.cmd_review(argparse.Namespace(author="claude", base="origin/main"))
         self.assertEqual(stop.exception.code, 0)
+        self.assertIs(flags.call_args.args[0], env)
         self.assertIs(model.call_args.kwargs["env"], env)
-        self.assertIs(call.call_args.kwargs["env"], env)
+        self.assertIs(review.call_args.args[2], env)
+
+    def flags_for(self, version_output):
+        with mock.patch.object(ship, "ensure_opencode"), \
+                mock.patch.object(ship, "call",
+                                  return_value=subprocess.CompletedProcess([], 0, version_output, "")) as call:
+            flags = ship.opencode_flags({"XDG_DATA_HOME": "isolated"})
+        self.assertEqual(call.call_args.args[0], ["opencode", "--version"])
+        return flags
+
+    def test_v2_runs_without_background_service(self):
+        # #341: 2.x는 개인 백그라운드 서비스를 쓰거나 새로 띄워 남긴다. --standalone이 막는다.
+        # 출력 형식: 1.19.1은 `1.19.1`, 2.2.6은 `opencode v2.2.6`(2026-11-09 서버에서 확인).
+        self.assertEqual(self.flags_for("opencode v2.2.6\n"), ["--standalone"])
+        self.assertEqual(self.flags_for("10.0.0\n"), ["--standalone"])
+        self.assertEqual(self.flags_for("1.19.1\n"), [])
+
+    def test_unreadable_version_stops(self):
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            self.flags_for("")
+
+    def test_v2_flags_reach_models_and_run(self):
+        env = {"XDG_DATA_HOME": "isolated"}
+        models = subprocess.CompletedProcess([], 0, "opencode/mimo-free", "")
+        with mock.patch.object(ship, "call", return_value=models) as call, \
+                mock.patch.object(ship, "ensure_opencode"), \
+                mock.patch.object(ship, "run_opencode_review", return_value=0) as review, \
+                mock.patch.object(ship, "logged_in", return_value=False), \
+                mock.patch.object(ship, "review_records", return_value=(None, "no PR")), \
+                mock.patch.object(ship, "opencode_env", return_value=env), \
+                mock.patch.object(ship, "opencode_flags", return_value=["--standalone"]), \
+                redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+            ship.cmd_review(argparse.Namespace(author="claude", base="origin/main"))
+        self.assertIn(mock.call(["opencode", "models", "--standalone"], capture=True, env=env), call.mock_calls)
+        self.assertEqual(review.call_args.args[0][:3], ["opencode", "run", "--standalone"])
+
+
+# opencode 1.19.1 로그의 모델 오류 줄(2026-11-08 서버 로그에서 줄였다, #327).
+LOG_LINE = ('timestamp=2026-11-08T14:50:36.589Z level=ERROR run=06d3ea91 message="stream error" '
+            'providerID=opencode modelID=mimo-v2.6-flash-free session.id=ses_x small={small} '
+            'agent=plan mode=primary error.error={error}\n')
+QUOTA = "AI_APICallError: Free usage limit reached. Free models work in OpenCode (https://opencode.ai)"
+
+
+def log_line(error, small="false"):
+    return LOG_LINE.format(small=small, error=json.dumps(error))
+
+
+class OpenCodeReviewLimitTest(unittest.TestCase):
+    """run_opencode_review를 실제 프로세스로 본다(#327). 가짜 리뷰어는 opencode 대신 파이썬이다.
+
+    가짜 리뷰어는 opencode처럼 XDG_DATA_HOME/opencode/log/opencode.log에 줄을 더한다. 오래 기다리는
+    리뷰어도 60초 뒤에는 스스로 끝난다. 검사가 실패해도 프로세스가 남지 않게 하려는 것이다.
+    """
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+        self.env = dict(os.environ, XDG_DATA_HOME=str(self.dir / "data"))
+        self.log = self.dir / "data" / "opencode" / "log" / "opencode.log"
+        self.log.parent.mkdir(parents=True)
+
+    def review(self, script, limit=30, records=""):
+        """(exit 코드나 SystemExit 코드, stderr, 걸린 초)를 돌려준다."""
+        prelude = ("import json, os, sys, time; from pathlib import Path; "
+                   "LOG = Path(os.environ['XDG_DATA_HOME'], 'opencode', 'log', 'opencode.log')\n"
+                   "def log(text):\n"
+                   "    with open(LOG, 'a', encoding='utf-8') as f: f.write(text)\n")
+        err = io.StringIO()
+        start = time.monotonic()
+        with redirect_stdout(io.StringIO()), redirect_stderr(err):
+            try:
+                code = ship.run_opencode_review([sys.executable, "-c", prelude + script], records,
+                                                self.env, limit=limit, poll=0.2)
+            except SystemExit as stop:
+                code = stop.code
+        return code, err.getvalue(), time.monotonic() - start
+
+    def test_usage_limit_in_log_stops_review_at_once(self):
+        # 오류 줄을 두 번에 나눠 쓴다. ship.py는 줄이 끝난 뒤에 읽는다. 로그 파일은 리뷰어가 만든다.
+        line = log_line(QUOTA)
+        script = (f"log({line[:60]!r}); time.sleep(0.6); log({line[60:]!r}); time.sleep(60)")
+        code, err, took = self.review(script)
+        self.assertEqual(code, 1)
+        self.assertIn(f"사용 한도 오류를 받았다: {QUOTA}", err)
+        self.assertIn("Codex나 Claude Code에 로그인한 뒤", err)
+        self.assertLess(took, 20)
+
+    def test_old_lines_and_title_request_errors_do_not_stop_review(self):
+        # 리뷰 전에 쓴 줄과 세션 제목 요청(small=true)의 오류로는 멈추지 않는다.
+        self.log.write_text(log_line(QUOTA), encoding="utf-8")
+        script = f"log({log_line(QUOTA, small='true')!r}); time.sleep(1.5); sys.exit(0)"
+        code, err, _ = self.review(script)
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+
+    def test_time_limit_stops_review_and_shows_last_model_error(self):
+        script = f"log({log_line('AI_APICallError: Too Many Requests')!r}); time.sleep(60)"
+        code, err, took = self.review(script, limit=2)
+        self.assertEqual(code, 1)
+        self.assertIn("2초 안에 끝나지 않아서 멈췄다", err)
+        self.assertIn("마지막 모델 오류: AI_APICallError: Too Many Requests", err)
+        self.assertLess(took, 20)
+
+    def test_time_limit_without_log_lines_names_the_log(self):
+        code, err, _ = self.review("time.sleep(60)", limit=1)
+        self.assertEqual(code, 1)
+        self.assertIn(f"로그에 모델 오류가 없다({self.log})", err)
+
+    def test_large_records_reach_reviewer_and_exit_code_passes(self):
+        # 기록이 파이프 버퍼(수십 KB)보다 커도 끝까지 넘어간다. 리뷰어의 exit 코드를 그대로 돌려준다.
+        records = "# GitHub records\n" * 20000
+        out = self.dir / "stdin.txt"
+        script = (f"Path({str(out)!r}).write_text(str(len(sys.stdin.read())), encoding='utf-8'); "
+                  "sys.exit(3)")
+        code, _, _ = self.review(script, records=records)
+        self.assertEqual(code, 3)
+        self.assertEqual(out.read_text(encoding="utf-8"), str(len(records)))
+
+    def test_stop_also_ends_reviewer_child_process(self):
+        # npm의 opencode.cmd(Windows)처럼 리뷰어가 자식을 띄운다. 멈추면 자식도 심장박동 파일을 더 쓰지 않는다.
+        beat = self.dir / "beat.txt"
+        child = ("import time, pathlib\n"
+                 "for i in range(600):\n"
+                 f"    pathlib.Path({str(beat)!r}).write_text(str(i)); time.sleep(0.1)\n")
+        script = (f"import subprocess; subprocess.Popen([sys.executable, '-c', {child!r}]); "
+                  f"time.sleep(1); log({log_line(QUOTA)!r}); time.sleep(60)")
+        code, _, _ = self.review(script)
+        self.assertEqual(code, 1)
+        time.sleep(1)
+        first = beat.read_text()
+        time.sleep(1)
+        self.assertEqual(beat.read_text(), first)
+
+    @unittest.skipIf(os.name == "nt", "POSIX 프로세스 그룹 검사. Windows는 taskkill /F가 바로 멈춘다.")
+    def test_stop_kills_child_that_ignores_sigterm(self):
+        # 리뷰어가 SIGTERM에 먼저 끝나도 그룹에 남은 자식에게 STOP_GRACE 뒤 SIGKILL을 보낸다.
+        beat = self.dir / "beat.txt"
+        child = ("import signal, time, pathlib\n"
+                 "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                 "for i in range(600):\n"
+                 f"    pathlib.Path({str(beat)!r}).write_text(str(i)); time.sleep(0.1)\n")
+        script = (f"import subprocess; subprocess.Popen([sys.executable, '-c', {child!r}]); "
+                  f"time.sleep(1); log({log_line(QUOTA)!r}); time.sleep(60)")
+        with mock.patch.object(ship, "STOP_GRACE", 1):
+            code, _, took = self.review(script)
+        self.assertEqual(code, 1)
+        self.assertLess(took, 20)
+        time.sleep(1)
+        first = beat.read_text()
+        time.sleep(1)
+        self.assertEqual(beat.read_text(), first)
+
+    def test_log_parser_reads_escaped_error_text(self):
+        lines = (log_line('AI_APICallError: say "hi"') + log_line(QUOTA, small="true")
+                 + "timestamp=x level=INFO message=cleanup\n")
+        self.assertEqual(ship.opencode_log_errors(lines), ['AI_APICallError: say "hi"'])
 
 
 if __name__ == "__main__":

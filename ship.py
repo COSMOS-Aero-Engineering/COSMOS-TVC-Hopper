@@ -24,9 +24,18 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
+import threading
+import time
 from pathlib import Path
+
+try:
+    import tomllib
+except ImportError:  # 파이썬 3.10 이하. codex_config_has_conflict()가 True로 본다.
+    tomllib = None
 
 ROOT = Path(__file__).resolve().parent
 TAGS = ("cad", "fw", "sim", "web", "kicad", "data", "docs", "infra")
@@ -35,6 +44,13 @@ LABEL_TAGS = {"fw": "fw", "sim": "sim", "web": "web", "cad": "cad", "kicad": "ki
               "documentation": "docs"}
 # 리뷰 모델 계열. 작성자와 같은 계열은 리뷰어로 고르지 않는다.
 OPENCODE_REVIEWERS = ("mimo", "muse-spark", "deepseek", "nemotron")
+# OpenCode 리뷰어의 시간 제한(초, #327). opencode 1.x의 `run`은 모델 오류를 다시 시도하는 동안 끝나지
+# 않는다. 이 시간이 지나면 ship.py가 리뷰어를 멈춘다. 로그에서 사용 한도 오류를 찾으면 바로 멈춘다.
+OPENCODE_REVIEW_LIMIT = 30 * 60
+# 바로 멈출 모델 오류. 무료 모델은 `Free usage limit reached`, OpenCode Go는 `Monthly usage limit reached` 등.
+OPENCODE_QUOTA = re.compile(r"usage limit reached", re.IGNORECASE)
+# 리뷰어를 멈출 때 SIGTERM 뒤에 기다리는 시간(초). 지나면 SIGKILL을 보낸다(stop_tree).
+STOP_GRACE = 10
 # 스킬 정본과 Codex용 복사본. Claude Code는 .claude/skills만, Codex는 .agents/skills만 읽는다(#39).
 SKILLS_SRC = ROOT / ".claude" / "skills"
 SKILLS_DST = ROOT / ".agents" / "skills"
@@ -42,6 +58,8 @@ REVIEW_PROMPT = ("Review the changes on this branch against {base}. Report concr
                  "with file and line. Do not edit files.")
 # 리뷰어에게 표준 입력으로 넘기는 GitHub 기록(#167). Codex 리뷰어는 read-only 샌드박스라 네트워크가
 # 막혀 gh로 PR·이슈를 읽지 못한다. 기록은 리뷰 요청 문장과 따로 넘기고, 요청 문장은 범위만 둔다.
+# Codex 리뷰어의 권한 프로필 이름(#283). codex_review_cmd()가 -c로 이 이름의 프로필을 만든다.
+CODEX_PROFILE = "cosmos_review"
 RECORD_FIELDS = "number,title,state,url,author,createdAt,body,comments"
 # PR이면 더 읽는 필드. `gh issue view`의 comments에는 PR 리뷰(승인·변경 요청)가 없다.
 PR_FIELDS = "mergedAt,commits,reviews"
@@ -490,9 +508,27 @@ def opencode_env():
     return env
 
 
-def opencode_model(author, env=None):
+def opencode_flags(env=None):
+    """opencode 2.x이면 백그라운드 서비스를 쓰지 않게 하는 인자를 돌려준다(#341).
+
+    2.x `models`는 백그라운드 서비스(`opencode serve --service`)를 띄우고 끝난 뒤에도 남긴다. `run`은
+    떠 있는 서비스가 있으면 그것을 쓴다. 서비스는 XDG_STATE_HOME/opencode/service.json으로 찾는다.
+    opencode_env()는 XDG_DATA_HOME만 바꾸므로, 개인 서비스가 떠 있으면 리뷰가 개인 데이터 폴더에 쌓인다
+    (2026-11-09 2.2.6으로 확인). `--standalone`은 명령마다 자기 서버를 자식으로 띄우고, 명령이 끝나면
+    그 서버도 끝난다. 1.x에는 백그라운드 서비스가 없으므로 인자를 붙이지 않는다.
+    """
     ensure_opencode()
-    models = call(["opencode", "models"], capture=True, env=env).stdout.split()
+    out = call(["opencode", "--version"], capture=True, env=env).stdout
+    m = re.search(r"(\d+)\.\d+", out)  # 1.x는 `1.19.1`, 2.x는 `opencode v2.2.6`을 출력한다.
+    if not m:
+        die(f"opencode 버전을 읽지 못했다: {out.strip()!r}\n"
+            "     `opencode --version`이 버전을 출력하는지 확인한다.")
+    return ["--standalone"] if int(m.group(1)) >= 2 else []
+
+
+def opencode_model(author, env=None, flags=()):
+    ensure_opencode()
+    models = call(["opencode", "models", *flags], capture=True, env=env).stdout.split()
     for f in OPENCODE_REVIEWERS:
         if f == author:
             continue
@@ -500,6 +536,258 @@ def opencode_model(author, env=None):
             if m.startswith("opencode/") and f in m and m.endswith("-free"):
                 return m
     die("OpenCode 무료 모델 중 쓸 수 있는 리뷰어를 못 찾았다. `opencode models`로 목록을 본다.")
+
+
+def opencode_log_errors(text):
+    """opencode 로그 글에서 리뷰 요청의 모델 오류 글을 순서대로 돌려준다(#327).
+
+    opencode 1.19는 모델 요청이 실패할 때마다 XDG_DATA_HOME/opencode/log/opencode.log에 한 줄을 쓴다:
+    `level=ERROR ... message="stream error" ... small=false ... error.error="AI_APICallError: ..."`.
+    small=true 줄은 세션 제목을 만드는 요청이라 빼고 본다. 이 형식은 opencode 내부 로그라서 바뀔 수
+    있다. 바뀌면 이 함수는 오류를 찾지 못하고, OPENCODE_REVIEW_LIMIT이 리뷰어를 멈춘다.
+    """
+    errors = []
+    for line in text.splitlines():
+        if "level=ERROR" not in line or 'message="stream error"' not in line or " small=true" in line:
+            continue
+        m = re.search(r'error\.error=("(?:[^"\\]|\\.)*")', line)
+        try:
+            errors.append(json.loads(m.group(1)) if m else line)
+        except ValueError:
+            errors.append(m.group(1))
+    return errors
+
+
+def stop_tree(proc):
+    """proc와 그 자식 프로세스를 멈춘다(#327).
+
+    Windows의 npm `opencode.cmd`는 cmd.exe가 opencode.exe를 자식으로 띄운다. proc.kill()은 cmd.exe만
+    멈추므로 `taskkill /T /F`로 자식까지 멈춘다. POSIX에서는 리뷰어를 새 세션(start_new_session)으로
+    띄웠으므로 그 프로세스 그룹 전체에 SIGTERM을 보낸다. 그룹에 프로세스가 남아 있는 동안
+    STOP_GRACE초까지 기다리고, 그 뒤에도 남으면 그룹에 SIGKILL을 보낸다. SIGTERM을 무시하는 자식도
+    멈추려는 것이다. 그룹이 비면 더 보내지 않는다. 빈 그룹의 번호는 다른 프로세스가 받을 수 있다.
+    """
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True)
+        try:
+            proc.wait(timeout=STOP_GRACE)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except OSError:
+        pass
+    deadline = time.monotonic() + STOP_GRACE
+    while True:
+        proc.poll()  # 끝난 리뷰어를 거둔다. 거두지 않은 리뷰어는 그룹에 남은 것으로 보인다.
+        try:
+            os.killpg(proc.pid, 0)  # 신호 0: 그룹에 프로세스가 남았는지만 본다.
+        except OSError:
+            break
+        if time.monotonic() >= deadline:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            break
+        time.sleep(0.1)
+    proc.wait()
+
+
+def run_opencode_review(cmd, input, env, limit=None, poll=1.0):
+    """OpenCode 리뷰어를 돌리고 exit 코드를 돌려준다. 끝나지 않으면 멈추고 die한다(#327).
+
+    opencode 1.19의 `run`은 세션이 idle이 될 때만 끝난다. 무료 모델의 `Free usage limit reached`는
+    다시 시도할 오류로 분류되고, 다시 시도하기 전에 응답 헤더의 Retry-After만큼 기다린다. 2026-11-08 서버에서는
+    약 10시간이었다. 그동안 세션은 idle이 아니라서 `run`이 오류를 출력하지 않고 기다린다. 그래서 리뷰어가
+    도는 동안 로그를 읽는다. 사용 한도 오류가 나오면 바로, limit 초가 지나면 그때 리뷰어를 멈춘다.
+    """
+    limit = OPENCODE_REVIEW_LIMIT if limit is None else limit
+    log = Path(env["XDG_DATA_HOME"]) / "opencode" / "log" / "opencode.log"
+    try:
+        offset = log.stat().st_size  # 이 실행 전에 쓴 줄은 읽지 않는다.
+    except OSError:
+        offset = 0
+    say(cmd)
+    proc = subprocess.Popen([exe_of(cmd[0]), *map(str, cmd[1:])], stdin=subprocess.PIPE, text=True,
+                            encoding="utf-8", errors="replace", env=env,
+                            start_new_session=os.name != "nt")
+
+    def feed():
+        # 기록이 파이프 버퍼보다 크면 write가 막힌다. 그래서 스레드에서 쓰고 닫는다.
+        try:
+            proc.stdin.write(input or "")
+        except OSError:  # 리뷰어가 입력을 다 읽기 전에 끝났다.
+            pass
+        finally:
+            try:
+                proc.stdin.close()
+            except OSError:
+                pass
+
+    threading.Thread(target=feed, daemon=True).start()
+    deadline = time.monotonic() + limit
+    errors, rest, reason = [], b"", None
+    try:
+        while True:
+            try:
+                return proc.wait(timeout=poll)
+            except subprocess.TimeoutExpired:
+                pass
+            try:
+                with open(log, "rb") as f:
+                    if f.seek(0, os.SEEK_END) < offset:  # 로그 파일이 줄었다(새로 만들어졌다).
+                        offset, rest = 0, b""
+                    f.seek(offset)
+                    data = f.read()
+            except OSError:
+                data = b""
+            offset += len(data)
+            *lines, rest = (rest + data).split(b"\n")
+            errors += opencode_log_errors(b"\n".join(lines).decode("utf-8", "replace"))
+            quota = next((e for e in errors if OPENCODE_QUOTA.search(e)), None)
+            if quota is not None:
+                reason = (f"OpenCode 리뷰어가 사용 한도 오류를 받았다: {quota}\n"
+                          "     opencode 1.x는 한도가 풀릴 때까지 기다렸다가 다시 시도한다. 그래서 리뷰어를"
+                          " 멈췄다.\n"
+                          "     한도가 풀린 뒤 다시 실행하거나, Codex나 Claude Code에 로그인한 뒤 다시"
+                          " 실행한다.")
+                break
+            if time.monotonic() >= deadline:
+                last = f"마지막 모델 오류: {errors[-1]}" if errors else f"로그에 모델 오류가 없다({log})."
+                span = f"{limit // 60}분" if limit % 60 == 0 else f"{limit}초"
+                reason = f"OpenCode 리뷰어가 {span} 안에 끝나지 않아서 멈췄다.\n     {last}"
+                break
+    finally:
+        if proc.poll() is None:
+            stop_tree(proc)
+    die(reason)
+
+
+def codex_config_files(cwd=None):
+    """Codex가 읽을 수 있는 설정 파일 후보. 실제로 읽는 파일보다 넓게 잡는다.
+
+    Codex 설정 순서(https://learn.chatgpt.com/docs/config-file/config-basic): 사용자 설정
+    `$CODEX_HOME/config.toml`, 프로젝트 루트에서 현재 폴더까지의 모든 `.codex/config.toml`(신뢰한 프로젝트만),
+    시스템 설정 `/etc/codex/config.toml`. 여기서는 프로젝트 루트를 찾지 않고 현재 폴더의 모든 상위 폴더를 본다.
+    신뢰 여부도 보지 않는다. 후보가 많으면 read-only로 도는 경우만 늘어난다.
+    """
+    cwd = Path.cwd() if cwd is None else Path(cwd)
+    home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    files = [home / "config.toml"]
+    files += [d / ".codex" / "config.toml" for d in (cwd, *cwd.parents)]
+    if os.name != "nt":
+        files.append(Path("/etc/codex/config.toml"))
+    return list(dict.fromkeys(files))  # 현재 폴더가 홈 아래면 사용자 설정이 두 번 나온다.
+
+
+def codex_config_has_conflict(text):
+    """TOML 글이 리뷰 권한 프로필을 바꿀 수 있으면 True.
+
+    두 경우다. (1) sandbox_mode 키가 어느 깊이에든 있다. Codex 문서는 이때 권한 프로필 대신 옛 sandbox
+    설정을 쓴다고 쓴다. (2) `permissions.cosmos_review` 표가 이미 있다. Codex는 설정 층을 합치므로
+    codex_review_cmd()의 -c가 정하지 않은 키(예: network.enabled, 다른 경로의 write)가 남는다.
+
+    키 이름의 따옴표와 이스케이프는 tomllib이 푼다. tomllib이 없거나(파이썬 3.10 이하) 글을 읽지 못하면
+    True로 본다. 그러면 리뷰는 read-only로 돈다. 권한이 넓어지는 쪽으로 틀리지 않게 하려는 것이다.
+    글자로 찾지 않는 이유: TOML은 따옴표 키 안의 유니코드 이스케이프를 푼다. 글자 검색은 그런 키를
+    놓친다.
+    """
+    if tomllib is None:
+        return True
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return True
+    profiles = data.get("permissions")
+    if isinstance(profiles, dict) and CODEX_PROFILE in profiles:
+        return True
+    stack = [data]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if "sandbox_mode" in node:
+                return True
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return False
+
+
+def codex_conflicting_config(files=None):
+    """리뷰 권한 프로필을 바꿀 수 있는 첫 Codex 설정 파일. 없으면 None.
+
+    무엇이 충돌인지는 codex_config_has_conflict()에 있다. 파일 내용은 출력하지 않는다.
+    """
+    for f in codex_config_files() if files is None else files:
+        try:
+            text = f.read_text(encoding="utf-8-sig", errors="replace")
+        except OSError:
+            continue
+        if codex_config_has_conflict(text):
+            return f
+    return None
+
+
+def codex_review_cmd(prompt, tmp):
+    """Codex 리뷰 명령. 읽기 전용 샌드박스에서 임시 폴더 tmp 하나만 쓰기를 연다(#283).
+
+    `--sandbox read-only`에는 쓸 수 있는 폴더가 없다. 그래서 PyTorch(torch._dynamo)의
+    tempfile.gettempdir()가 FileNotFoundError로 멈추고, 리뷰어가 PPO.load를 돌리지 못했다.
+    Codex 권한 프로필(https://learn.chatgpt.com/docs/permissions)로 `:read-only`를 상속하고 tmp에만
+    write를 준다. 저장소와 다른 경로는 읽기만 되고 네트워크는 막힌다. `--sandbox`를 같이 주면 Codex가
+    권한 프로필을 쓰지 않으므로 `--sandbox`는 넣지 않는다. 경로는 json.dumps로 적는다. json.dumps가
+    쓰는 이스케이프(역슬래시, 큰따옴표, 제어 문자)는 TOML 기본 문자열에서도 뜻이 같다. 그래서
+    Windows 역슬래시와 한글 경로도 그대로 읽힌다.
+    """
+    profile = f"permissions.{CODEX_PROFILE}"
+    path = json.dumps(str(tmp), ensure_ascii=False)
+    return ["codex", "exec",
+            "-c", f'default_permissions="{CODEX_PROFILE}"',
+            "-c", f'{profile}.extends=":read-only"',
+            "-c", f'{profile}.filesystem={{{path}="write"}}',
+            "-c", f"{profile}.network.enabled=false",
+            prompt]
+
+
+def codex_review_tmp(windows=None):
+    """Codex 리뷰어가 쓸 수 있는 임시 폴더를 만든다(#283). (실제 경로, 지우는 함수)를 돌려준다.
+
+    windows는 검사용이다. None이면 이 PC가 Windows인지 본다.
+
+    macOS의 /var -> /private/var 같은 링크는 실제 경로로 푼다. Windows에서는 tempfile.mkdtemp를 쓰지
+    않는다(#315). 파이썬 3.12.4부터 mkdtemp는 Windows 폴더에 SYSTEM, Administrators, OWNER RIGHTS만
+    든 ACL을 붙이고 상속을 끊는다(https://docs.python.org/3/library/os.html#os.mkdir). 이 폴더는 Codex
+    Windows 샌드박스(unelevated)가 쓰기 권한을 더해도 쓰지 못했다(windows-latest 러너, codex-cli
+    0.166.0과 0.167.0). os.mkdir로 만든 폴더는 %TEMP%의 ACL을 물려받아서 쓸 수 있었다. %TEMP%는
+    사용자 전용 폴더라서 ACL을 따로 좁히지 않는다.
+    """
+    if not (os.name == "nt" if windows is None else windows):
+        tmp = tempfile.TemporaryDirectory(prefix="cosmos-review-", ignore_cleanup_errors=True)
+        return Path(tmp.name).resolve(), tmp.cleanup
+    path = Path(tempfile.gettempdir()) / f"cosmos-review-{secrets.token_hex(8)}"
+    path.mkdir()
+    return path.resolve(), lambda: shutil.rmtree(path, ignore_errors=True)
+
+
+def venv_problem():
+    """.venv가 uv.lock과 맞지 않으면 그 이유를 돌려준다. 맞으면 None(#321).
+
+    샌드박스는 worktree 쓰기와 네트워크를 막는다. 그래서 .venv가 없거나 uv.lock과 다르면 리뷰어의
+    `uv run --frozen`이 .venv를 만들거나 패키지를 받지 못하고 exit 2로 멈춘다. 여기서는 샌드박스 밖에서
+    확인만 한다. `--check`는 .venv를 바꾸지 않고, `--offline`은 네트워크를 쓰지 않는다. `--inexact`인
+    이유: uv run은 uv.lock에 없는 패키지를 지우지 않는다. 그런 패키지가 더 있어도 리뷰어의 uv run은 돈다.
+    """
+    if not shutil.which("uv"):
+        return "uv가 없다"
+    r = call(["uv", "sync", "--frozen", "--inexact", "--check", "--offline"], check=False,
+             capture=True, cwd=ROOT)
+    if r.returncode == 0:
+        return None
+    last = next((line.strip() for line in reversed(r.stderr.splitlines()) if line.strip()), "")
+    return f"uv sync --check exit {r.returncode}: {last}"
 
 
 def gh_json(cmd):
@@ -682,23 +970,65 @@ def cmd_review(a):
     records, summary = review_records()
     if records is None:
         print(f"[주의] PR·이슈 기록을 리뷰어에게 넘기지 않는다: {summary}", flush=True)
+        # 그래도 빈 입력을 넘긴다(#322). input=None이면 리뷰어가 ship.py의 표준 입력을 물려받는다. 그 입력이
+        # 터미널이 아니고 닫히지 않으면(예: 에이전트의 셸 도구) codex exec가 입력의 끝을 기다리며 멈춘다.
+        # 빈 입력은 바로 닫힌다. codex exec는 빈 입력을 요청 문장에 붙이지 않는다.
+        records = ""
     else:
         print(f"리뷰어에게 표준 입력으로 넘기는 기록: {summary}", flush=True)
     # 리뷰 요청에는 범위만 넣는다(AGENTS.md §작업 순서 6). 힌트나 체크리스트를 넣지 않는다.
-    env = None
-    if author != "openai" and logged_in(["codex", "login", "status"]):
+    env, cleanup, opencode = None, None, False
+    use_codex = author != "openai" and logged_in(["codex", "login", "status"])
+    conflict = codex_conflicting_config() if use_codex else None
+    if conflict is not None:
+        # 권한 프로필이 빠지거나 바뀔 수 있으면 #283 이전처럼 --sandbox read-only로 리뷰한다. 리뷰어
+        # 권한이 사용자의 설정으로 넓어지지 않게 하려는 것이다. 대신 임시 폴더가 없다.
+        print(f"[주의] {conflict}에서 sandbox_mode나 permissions.{CODEX_PROFILE}를 찾았거나, "
+              "이 파이썬으로 확인하지 못했다(tomllib 없음 또는 TOML 오류).\n"
+              "       이 설정은 리뷰어의 권한 프로필을 바꾼다.\n"
+              "       그래서 --sandbox read-only로 리뷰한다. 리뷰어는 uv run과 임시 파일이 필요한"
+              " 스크립트(PyTorch 등)를 돌리지 못한다.\n"
+              "       임시 폴더를 쓰려면 그 파일에서 그 설정을 지우거나 주석으로 바꾼다.", flush=True)
         reviewer, cmd = "codex", ["codex", "exec", "--sandbox", "read-only", prompt]
+    elif use_codex:
+        problem = venv_problem()
+        if problem is not None:
+            # 리뷰는 멈추지 않는다. sim과 상관없는 PR은 uv run 없이도 리뷰할 수 있다(#321).
+            print(f"[주의] .venv가 uv.lock과 맞지 않거나 확인하지 못했다 ({problem}).\n"
+                  "       리뷰어는 샌드박스에서 .venv를 고치지 못해서 uv run을 돌리지 못한다.\n"
+                  "       맞추는 명령: python tasks.py setup  (맞춘 뒤 리뷰를 다시 돌린다)", flush=True)
+        # 리뷰어가 쓸 수 있는 유일한 폴더다(#283). 리뷰가 끝나면 지운다. TMPDIR은 파이썬 tempfile이
+        # 모든 OS에서 가장 먼저 보는 변수다. 폴더를 만드는 방법은 codex_review_tmp()에 있다(#315).
+        # uv 캐시도 이 폴더 안에 둔다(#314). uv run은 .venv가 uv.lock과 맞아도 캐시 폴더에 잠금 파일을
+        # 만든다. 기본 캐시(~/.cache/uv 등)는 샌드박스에서 읽기 전용이라 uv run이 exit 2로 멈췄다.
+        # 환경 변수는 uv 설정 파일의 cache-dir보다 앞선다. 공유 캐시 쓰기를 열지 않는 이유: 리뷰어가 다른
+        # 작업이 같이 쓰는 캐시를 바꿀 수 있다. 빈 캐시라서 .venv에 없는 패키지는 받지 못한다(네트워크 막힘).
+        tmp_path, cleanup = codex_review_tmp()
+        env = dict(os.environ, TMPDIR=str(tmp_path), UV_CACHE_DIR=str(tmp_path / "uv-cache"))
+        reviewer, cmd = "codex", codex_review_cmd(prompt, tmp_path)
+        print(f"리뷰어가 쓸 수 있는 폴더(TMPDIR, uv 캐시 포함, 리뷰 뒤에 지운다): {tmp_path}", flush=True)
     elif author != "claude" and logged_in(["claude", "auth", "status"]):
         reviewer, cmd = "claude", ["claude", "-p", "--permission-mode", "plan", prompt]
     else:
         env = opencode_env()
-        model = opencode_model(author, env=env)
-        reviewer, cmd = model, ["opencode", "run", "--agent", "plan", "-m", model, prompt]
+        flags = opencode_flags(env)  # 2.x는 백그라운드 서비스를 쓰지 않게 한다(#341).
+        model = opencode_model(author, env=env, flags=flags)
+        reviewer, cmd = model, ["opencode", "run", *flags, "--agent", "plan", "-m", model, prompt]
+        opencode = True
+        print(f"OpenCode 리뷰어가 사용 한도 오류를 받거나 {OPENCODE_REVIEW_LIMIT // 60}분 안에 끝나지 않으면"
+              " 멈춘다(#327).", flush=True)
     print(f"작성자 계열: {author} / 리뷰어: {reviewer}\n", flush=True)
-    r = call(cmd, check=False, input=records, env=env)
+    try:
+        if opencode:
+            code = run_opencode_review(cmd, records, env)
+        else:
+            code = call(cmd, check=False, input=records, env=env).returncode
+    finally:
+        if cleanup is not None:
+            cleanup()
     print(f"\nPR 템플릿 \"교차 리뷰\"에 적는다: `{reviewer}: 지적 N건, 고침 <커밋> / "
           "받아들이지 않음 <이유>`")
-    sys.exit(r.returncode)
+    sys.exit(code)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

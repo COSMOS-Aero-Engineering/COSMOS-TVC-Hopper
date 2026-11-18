@@ -146,6 +146,8 @@ F1, F2, F3, F4 = self.CLalpha * Ft * alpha
 → **코드 대응 확인 완료**: `hopper_aviary.py`의 `tau_x/tau_y/tau_z`, `wx_dot/wy_dot/wz_dot`,
 `phi_dot/theta_dot/psi_dot` 모두 위 식과 **정확히 일치**(부호 포함). 여기는 논문 그대로 잘 옮겨졌다.
 
+ψ는 적분값을 [-π, π)로 감지 않는다. 관측 범위(±π)와 어긋날 수 있다. 11/16 데이터 동결 전에는 그대로 두고, 11/22 발표 뒤 관측을 sin·cos(ψ)로, 보상을 감은 ψ로 바꾼다(#346, #347). 근거와 측정값은 [`docs/decisions.md`](../decisions.md#요각-psi는-1116-데이터-동결-전까지-감지-않는다-2026-11-09)에 있다.
+
 무게중심-추력축 오프셋(`cg_offset_x/y`, `params.yaml`의 `domain_rand.cg_offset_mm`)은 **논문엔 없는
 우리 자체 추가**— 조립 오차로 인한 잔류 토크를 근사하려고 넣은 것(τx += cg_offset_y·Ft 등). 타당한
 확장이지만 "논문에 없는 부분"이라는 것만 기록.

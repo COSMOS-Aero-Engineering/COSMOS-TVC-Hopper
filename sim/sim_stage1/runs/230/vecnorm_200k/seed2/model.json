@@ -1,0 +1,12 @@
+{
+  "condition": "vecnorm",
+  "base": "fixed",
+  "changed": "관측 VecNormalize",
+  "action": "vanes4",
+  "vecnormalize": true,
+  "crash_cost": false,
+  "train_seed": 10002,
+  "timesteps": 200000,
+  "gamma": 0.99,
+  "hyperparameters": "SB3 PPO 기본값"
+}

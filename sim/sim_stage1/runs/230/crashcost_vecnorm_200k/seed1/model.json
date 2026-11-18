@@ -1,0 +1,12 @@
+{
+  "condition": "crashcost_vecnorm",
+  "base": "crashcost",
+  "changed": "관측 VecNormalize",
+  "action": "vanes4",
+  "vecnormalize": true,
+  "crash_cost": true,
+  "train_seed": 10001,
+  "timesteps": 200000,
+  "gamma": 0.99,
+  "hyperparameters": "SB3 PPO 기본값"
+}
