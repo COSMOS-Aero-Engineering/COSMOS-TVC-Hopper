@@ -17,6 +17,7 @@ STAGE1 = HERE.parent / "sim_stage1"
 sys.path.insert(0, str(STAGE1))
 from hopper_aviary import HopperAttitudeEnv, OBS_NAMES
 from pd_gate import EVAL_SEEDS
+from policy_io import to_env_action
 
 BENCH_HEADER = HERE.parents[1] / "firmware/cosmos/policy_bench/include/actor_data.h"
 ATOL = 1e-5
@@ -36,7 +37,7 @@ def compile_host(directory, compiler):
     return exe
 
 
-def evaluation_rows(env, model, norm, seeds):
+def evaluation_rows(env, model, norm, seeds, kind):
     observations, predictions, lengths = [], [], []
     for seed in seeds:
         obs, _ = env.reset(seed=seed)
@@ -46,7 +47,7 @@ def evaluation_rows(env, model, norm, seeds):
             action, _ = model.predict(inputs, deterministic=True)
             observations.append(obs.copy())
             predictions.append(action.copy())
-            obs, _, terminated, truncated, _ = env.step(action)
+            obs, _, terminated, truncated, _ = env.step(to_env_action(kind, action))
             if terminated or truncated:
                 break
         lengths.append(len(observations) - start)
@@ -80,7 +81,7 @@ def compare(directory, exe, obs, expected, lengths, seeds):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", type=Path, default=STAGE1 / "hopper_attitude_ppo.zip")
+    parser.add_argument("--model", type=Path, default=STAGE1 / "hopper_attitude_ppo_230.zip")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--raw-obs", action="store_true", help="model was trained on raw Stage 1 observations")
     group.add_argument("--vecnormalize", type=Path, help="matching trusted VecNormalize.save file")
@@ -94,14 +95,14 @@ def main():
     with closing(HopperAttitudeEnv()) as env, tempfile.TemporaryDirectory() as tmp:
         if OBS_NAMES != ("phi", "theta", "psi", "wx", "wy", "wz", "throttle") or not env.dr["enabled"]:
             raise ValueError("Expected Stage 1 observation order and randomized evaluation")
-        model, digest = load_actor(args.model, env)
+        model, digest, kind = load_actor(args.model, env)
         norm, normalization_id = load_normalization(args.vecnormalize, args.raw_obs, digest, env.observation_space)
-        header = render_header(model, digest, norm, normalization_id)
-        print(f"model_sha256={digest} normalization={normalization_id}", flush=True)
+        header = render_header(model, digest, norm, normalization_id, kind)
+        print(f"model_sha256={digest} normalization={normalization_id} action_layout={kind}", flush=True)
         directory = Path(tmp)
         (directory / "actor_data.h").write_text(header, encoding="ascii")
         exe = compile_host(directory, args.cxx)
-        obs, actions, lengths = evaluation_rows(env, model, norm, seeds)
+        obs, actions, lengths = evaluation_rows(env, model, norm, seeds, kind)
         compare(directory, exe, obs, actions, lengths, seeds)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=args.output.parent, delete=False) as staged:

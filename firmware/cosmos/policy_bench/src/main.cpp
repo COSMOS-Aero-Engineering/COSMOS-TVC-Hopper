@@ -28,9 +28,9 @@ void loop() {
         if (duration > max_us) max_us = duration;
         for (float value : action) checksum += value;
     }
-    Serial.printf("model=%s normalization=%s n=%u mean_us=%.2f max_us=%lu "
+    Serial.printf("model=%s normalization=%s action_layout=%s n=%u mean_us=%.2f max_us=%lu "
                   "parameter_bytes=%u workspace_bytes=%u checksum=%.6f\n",
-                  actor::kModelHash, actor::kNormalization, kSamples,
+                  actor::kModelHash, actor::kNormalization, actor::kActionLayout, kSamples,
                   static_cast<double>(total_us) / kSamples, static_cast<unsigned long>(max_us),
                   static_cast<unsigned>(actor::kParameterBytes),
                   static_cast<unsigned>(sizeof(workspace)), static_cast<double>(checksum));
