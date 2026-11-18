@@ -55,7 +55,7 @@ EDF 추력 T를 원주 방향으로 4등분한다. 한 베인의 측력은 `T ×
 [ppo_budget.py](ppo_budget.py)는 PPO를 학습 예산별로 저장하고, PD와 같은 평가 seed로 종료 원인을 센다. **2026-11-18 결과: 세 조건 모두 1M 스텝까지 착륙 0/100이다. PD는 100/100이다.**
 
 ```powershell
-python ship.py capped 6G -- uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_budget train --condition vecnorm --reward env --envs 4 --threads 1 --budgets 250000 500000 1000000 --out runs/stage2/296
+python ship.py capped 6G -- uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_budget train --condition vecnorm --reward env --envs 4 --threads 1 --budgets 250000 500000 1000000 --out sim/runs/stage2/296
 uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_budget evaluate sim/stage2/checkpoints/ppo-vecnorm-s41-1000000.zip
 ```
 
@@ -74,6 +74,7 @@ uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_bud
 | `vecnorm` + `timeout10` | 시간 초과 100 | 시간 초과 100 | 시간 초과 100 | 높이 0.40-0.69 m, 수평 0.00-0.10 m에서 떠 있다 |
 
 - 확인한 사실: 세 조건 모두 강한 접촉, 기울기 초과, 하우징 접촉이 0이다. 정책은 넘어지지 않고 떠 있다. 바닥에 내려가지 않는다.
+- 확인한 사실: 착륙 판정은 EDF 속도 비율 0.10 이하를 요구한다. 바닥에 닿은 채 스로틀을 0.10보다 높게 유지하면 `time_limit`가 된다. 이번 1M 정책들은 패드가 바닥에 닿지 않은 채 끝나서(종료 높이 0.29-0.96 m) 이 조건과 관계없다.
 - 추론: 착륙 판정은 패드 3개 접촉, EDF 속도 비율 0.10 이하, 정지 상태를 0.15 s 유지해야 한다. 무작위 탐색으로 이 상태에 닿기 어려워서, 정책이 떠 있는 국소해에 머문 것으로 보인다. 시간 초과 벌점을 키워도 1M 안에서는 바뀌지 않았다.
 - 한계: 학습 seed는 41 하나다. 1M보다 큰 예산, 보상 모양 바꾸기(접지 접근 보상), 커리큘럼(낮은 높이에서 시작), PD 잔차 학습은 시험하지 않았다. 후속 이슈 #413에서 다룬다.
 
