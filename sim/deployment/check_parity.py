@@ -95,8 +95,9 @@ def main():
     with closing(HopperAttitudeEnv()) as env, tempfile.TemporaryDirectory() as tmp:
         if OBS_NAMES != ("phi", "theta", "psi", "wx", "wy", "wz", "throttle") or not env.dr["enabled"]:
             raise ValueError("Expected Stage 1 observation order and randomized evaluation")
-        model, digest, kind = load_actor(args.model, env)
-        norm, normalization_id = load_normalization(args.vecnormalize, args.raw_obs, digest, env.observation_space)
+        model, digest, kind, declared = load_actor(args.model, env)
+        norm, normalization_id = load_normalization(args.vecnormalize, args.raw_obs, digest,
+                                                    env.observation_space, declared)
         header = render_header(model, digest, norm, normalization_id, kind)
         print(f"model_sha256={digest} normalization={normalization_id} action_layout={kind}", flush=True)
         directory = Path(tmp)

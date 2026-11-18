@@ -15,7 +15,7 @@ from stable_baselines3.common.vec_env import VecNormalize
 from torch import float32, nn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sim_stage1"))
-from policy_io import ActionAdapter, read_meta  # noqa: E402
+from policy_io import FIXED_THROTTLE_NORM, ActionAdapter, read_meta, sidecar  # noqa: E402
 
 # Tracked zips trained on the raw HopperAttitudeEnv: the pre-#230 model (5 actions)
 # and the #230 presentation model (4 vanes, throttle fixed at 1.0; see its .json).
@@ -29,8 +29,13 @@ SUPPORTED_ACTIONS = ("learned", "vanes4")
 
 
 def load_actor(path, env):
-    """Return (model, sha256, action kind). The kind comes from the model's .json (policy_io)."""
+    """Return (model, sha256, action kind, declared VecNormalize).
+
+    The kind and VecNormalize flag come from the model's .json (policy_io). The flag is
+    None when there is no .json, so the caller must declare the observation contract.
+    """
     meta = read_meta(path)
+    declared = bool(meta.get("vecnormalize")) if sidecar(path, ".json").exists() else None
     kind = meta["action"]
     if kind not in SUPPORTED_ACTIONS:
         raise ValueError(f"Unsupported action layout {kind!r}; supported: {SUPPORTED_ACTIONS}")
@@ -51,12 +56,17 @@ def load_actor(path, env):
         raise ValueError(f"Expected the Stage 1 float32 observation Box and {outputs} actions "
                          f"in [-1,1] for action layout {kind!r}")
     model_hash = sha256(data).hexdigest()
-    if meta.get("vecnormalize") and model_hash in RAW_FIXTURES:
+    if declared and model_hash in RAW_FIXTURES:
         raise ValueError("Model json says VecNormalize, but this tracked zip was trained on raw observations")
-    return model, model_hash, kind
+    return model, model_hash, kind, declared
 
 
-def load_normalization(path, raw, model_hash, observation_space):
+def load_normalization(path, raw, model_hash, observation_space, declared=None):
+    """declared: the .json vecnormalize flag from load_actor, or None without a .json."""
+    if declared is True and path is None:
+        raise ValueError("Model json says VecNormalize: supply its --vecnormalize FILE")
+    if declared is False and path is not None:
+        raise ValueError("Model json says raw observations: drop --vecnormalize")
     if path is None:
         if not raw and model_hash not in RAW_FIXTURES:
             raise ValueError("Unknown model: declare --raw-obs or supply its --vecnormalize FILE")
@@ -80,10 +90,13 @@ def load_normalization(path, raw, model_hash, observation_space):
     return norm, sha256(data).hexdigest()
 
 
+def cpp_float(value):
+    """Nine significant digits round-trip a binary32 value."""
+    return f"{value:.8e}f"
+
+
 def cpp_array(name, values):
-    """Nine significant digits round-trip each binary32 parameter."""
-    def literal(value):
-        return f"{value:.8e}f"
+    literal = cpp_float
 
     if values.ndim == 1:
         body = ", ".join(map(literal, values))
@@ -130,7 +143,7 @@ def render_header(model, model_hash, norm, normalization_id, kind):
              f'constexpr char kActionLayout[] = "{kind}";']
     if kind == "vanes4":
         # policy_io.to_env_action: env action = [vane1..4, kFixedThrottleNorm].
-        lines.append("constexpr float kFixedThrottleNorm = 1.0f;")
+        lines.append(f"constexpr float kFixedThrottleNorm = {cpp_float(FIXED_THROTTLE_NORM)};")
     for name, width in zip(["Inputs", "Hidden1", "Hidden2", "Outputs"], widths):
         lines.append(f"constexpr std::size_t k{name} = {width};")
     lines.append(normalizer_cpp(norm))

@@ -38,7 +38,7 @@ class NormalizedActorTest(unittest.TestCase):
             finally:
                 wrapper.close()
             with HopperAttitudeEnv() as env:
-                model, digest, kind = load_actor(directory / "model.zip", env)
+                model, digest, kind, _ = load_actor(directory / "model.zip", env)
                 with self.assertRaisesRegex(ValueError, "declare --raw-obs"):
                     load_normalization(None, False, digest, env.observation_space)
             norm, norm_id = load_normalization(directory / "stats.pkl", False, digest, space)
@@ -66,12 +66,27 @@ class ActionLayoutTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, HopperAttitudeEnv() as env:
             directory = Path(tmp)
             self.save_vanes4(directory, "vanes4")
-            model, digest, kind = load_actor(directory / "model.zip", env)
-            self.assertEqual(kind, "vanes4")
+            model, digest, kind, declared = load_actor(directory / "model.zip", env)
+            self.assertEqual((kind, declared), ("vanes4", False))
             header = render_header(model, digest, None, "raw", kind)
             self.assertIn("constexpr std::size_t kOutputs = 4;", header)
             self.assertIn('constexpr char kActionLayout[] = "vanes4";', header)
-            self.assertIn("constexpr float kFixedThrottleNorm = 1.0f;", header)
+            self.assertIn("constexpr float kFixedThrottleNorm = 1.00000000e+00f;", header)
+
+    def test_json_normalization_must_match_arguments(self):
+        with tempfile.TemporaryDirectory() as tmp, HopperAttitudeEnv() as env:
+            directory = Path(tmp)
+            self.save_vanes4(directory, "vanes4")
+            meta = json.loads((directory / "model.json").read_text())
+            meta["vecnormalize"] = True
+            (directory / "model.json").write_text(json.dumps(meta))
+            _, digest, _, declared = load_actor(directory / "model.zip", env)
+            self.assertIs(declared, True)
+            # --raw-obs on a VecNormalize model would make both sides skip normalization and pass.
+            with self.assertRaisesRegex(ValueError, "supply its --vecnormalize"):
+                load_normalization(None, True, digest, env.observation_space, declared)
+            with self.assertRaisesRegex(ValueError, "drop --vecnormalize"):
+                load_normalization(directory / "stats.pkl", False, digest, env.observation_space, False)
 
     def test_rejects_unsupported_or_mismatched_layout(self):
         with tempfile.TemporaryDirectory() as tmp, HopperAttitudeEnv() as env:
