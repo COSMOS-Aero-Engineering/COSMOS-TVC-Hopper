@@ -10,12 +10,14 @@ pio run -d firmware/cosmos/policy_bench
 
 PlatformIO가 Teensy 4.0용 ELF와 HEX를 만든다. 링크 단계의 FLASH, RAM1, RAM2 행은 스케치 전체의 정적 메모리 사용량이다. 이 작업은 빌드까지만 수행하며 실물 업로드는 금지한다.
 
-`platformio/teensy@6.0.0`으로 빌드한 ELF의 크기다(`arm-none-eabi-nm -S`).
+`platformio/teensy@6.0.0`으로 빌드한 ELF의 크기다. 가중치·편향과 중간 버퍼는 `arm-none-eabi-nm -S`로, 나머지는 `teensy_size` 출력으로 쟀다.
 
-| 모델 | 가중치·편향 | 중간 버퍼 | FLASH 코드·데이터·헤더 | RAM1 변수 | RAM2 변수 |
+| 모델 | 가중치·편향 | 중간 버퍼 | FLASH 코드·데이터·부트 헤더 | RAM1 변수 | RAM2 변수 |
 | --- | --- | --- | --- | --- | --- |
 | `hopper_attitude_ppo_230.zip` (출력 4) | 19,728 B | 540 B | 37,836·25,544·8,296 B | 26,944 B | 12,416 B |
 | `hopper_attitude_ppo.zip` (출력 5) | 19,988 B | 540 B | 37,836·25,544·8,296 B | 26,944 B | 12,416 B |
+
+두 모델의 FLASH와 RAM1 값이 같은 이유: 가중치는 `.data`(RAM1)에 있다. `.data` 마지막의 `_VectorsRam`이 4 KB 경계(`0x20006000`)에 놓여서 가중치 크기 차이(260 B)가 그 앞 정렬 여백에 들어간다. `.data` 안 기호 합계는 #230 모델 24,183 B, #230 전 모델 24,444 B다. 가중치가 커져 이 경계를 넘으면 값이 4 KB 단위로 바뀐다. 표의 "부트 헤더"는 시작 벡터와 CSF이고 생성 헤더 `actor_data.h`가 아니다.
 
 별도로 승인된 보드 단독 시험에서는 USB 시리얼(115200)에 다음 필드가 나온다. 각 표본에서 합성 자세 관측을 바꾸고, `micros()`로 Actor 호출 전후를 잰다. 입력 설정, 체크섬과 시리얼 출력은 이 구간 밖에 있다.
 
@@ -23,6 +25,7 @@ PlatformIO가 Teensy 4.0용 ELF와 HEX를 만든다. 링크 단계의 FLASH, RAM
 | --- | --- |
 | `model`, `normalization` | 체크포인트 SHA-256과 원시 관측 표시(`raw`) 또는 정규화 파일 SHA-256 |
 | `action_layout` | 정책 출력 구조(`learned` 또는 `vanes4`). `vanes4`이면 스로틀은 출력에 없다 |
+| `parity_episodes`, `parity_max_abs` | 이 헤더가 PC 비교에서 통과한 평가 seed 수와 최대 절대 오차. `--episodes 2`로 만든 헤더는 2로 나온다 |
 | `n`, `mean_us`, `max_us` | 256회 호출의 평균과 최대 경과 시간(µs). 타이머 읽기 비용과 인터럽트 지연이 포함될 수 있다. |
 | `parameter_bytes`, `workspace_bytes` | Actor 가중치·편향 바이트 수와 정적으로 할당한 중간 계산 버퍼 크기. 전체 RAM·스택 사용량은 별도다. |
 | `checksum` | 정책 출력값의 합을 모든 표본에 걸쳐 누적한 값 |

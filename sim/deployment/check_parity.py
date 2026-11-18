@@ -24,8 +24,13 @@ ATOL = 1e-5
 
 
 def compile_host(directory, compiler):
-    compiler = shutil.which(compiler) if compiler else next(
-        (path for name in ("c++", "g++", "clang++", "cl") if (path := shutil.which(name))), None)
+    if compiler:
+        found = shutil.which(compiler)
+        if not found:
+            raise ValueError(f"--cxx {compiler!r} is not an executable compiler on PATH or a valid path.")
+        compiler = found
+    else:
+        compiler = next((path for name in ("c++", "g++", "clang++", "cl") if (path := shutil.which(name))), None)
     if not compiler:
         raise ValueError("No host C++ compiler. Use a VS Developer Prompt or pass --cxx PATH.")
     exe = directory / ("parity.exe" if os.name == "nt" else "parity")
@@ -77,6 +82,7 @@ def compare(directory, exe, obs, expected, lengths, seeds):
           f"action_index={channel} atol={ATOL:g}")
     if error[row, channel] > ATOL:
         raise ValueError("C++ prediction exceeded absolute tolerance")
+    return float(error[row, channel])
 
 
 def main():
@@ -93,7 +99,7 @@ def main():
         parser.error(f"--episodes must be in [1,{len(EVAL_SEEDS)}]")
     seeds = EVAL_SEEDS[:args.episodes]
     with closing(HopperAttitudeEnv()) as env, tempfile.TemporaryDirectory() as tmp:
-        if OBS_NAMES != ("phi", "theta", "psi", "wx", "wy", "wz", "throttle") or not env.dr["enabled"]:
+        if OBS_NAMES != ("phi", "theta", "psi", "wx", "wy", "wz", "throttle") or not env.dr.get("enabled", False):
             raise ValueError("Expected Stage 1 observation order and randomized evaluation")
         model, digest, kind, declared = load_actor(args.model, env)
         norm, normalization_id = load_normalization(args.vecnormalize, args.raw_obs, digest,
@@ -104,7 +110,12 @@ def main():
         (directory / "actor_data.h").write_text(header, encoding="ascii")
         exe = compile_host(directory, args.cxx)
         obs, actions, lengths = evaluation_rows(env, model, norm, seeds, kind)
-        compare(directory, exe, obs, actions, lengths, seeds)
+        max_abs = compare(directory, exe, obs, actions, lengths, seeds)
+    # Record what this header passed, so a quick --episodes 2 export is visible on the bench.
+    header = header.replace("}  // namespace actor", "\n".join([
+        f"constexpr unsigned kParityEpisodes = {len(seeds)};",
+        f"constexpr float kParityMaxAbs = {max_abs:.8e}f;",
+        "}  // namespace actor"]))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=args.output.parent, delete=False) as staged:
         staged.write(header.encode("ascii"))

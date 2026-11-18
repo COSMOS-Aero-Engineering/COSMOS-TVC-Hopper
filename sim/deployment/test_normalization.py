@@ -30,7 +30,9 @@ class NormalizedActorTest(unittest.TestCase):
                     wrapper.step(np.zeros((1, 5), dtype=np.float32))
                 model = PPO("MlpPolicy", wrapper, seed=42, device="cpu")
                 # Force both action bounds and keep three outputs sensitive to observations.
+                # Zero rows 0-1 so the clipped outputs do not depend on the random init.
                 with torch.no_grad():
+                    model.policy.action_net.weight[:2].zero_()
                     model.policy.action_net.bias[:2].copy_(torch.tensor([-2., 2.]))
                 model.save(directory / "model.zip")
                 wrapper.save(directory / "stats.pkl")
