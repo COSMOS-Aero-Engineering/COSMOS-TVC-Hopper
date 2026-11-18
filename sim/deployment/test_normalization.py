@@ -5,6 +5,7 @@ refuses layouts the C++ actor does not reproduce.
 """
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 
@@ -15,7 +16,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from check_parity import HopperAttitudeEnv, compare, compile_host
 from export_actor import load_actor, load_normalization, render_header
-from policy_io import ActionAdapter
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sim_stage1"))  # export_actor also adds it
+from policy_io import ActionAdapter  # noqa: E402
 
 
 class NormalizedActorTest(unittest.TestCase):
@@ -74,6 +76,20 @@ class ActionLayoutTest(unittest.TestCase):
             self.assertIn("constexpr std::size_t kOutputs = 4;", header)
             self.assertIn('constexpr char kActionLayout[] = "vanes4";', header)
             self.assertIn("constexpr float kFixedThrottleNorm = 1.00000000e+00f;", header)
+
+    def test_json_false_declares_raw(self):
+        with tempfile.TemporaryDirectory() as tmp, HopperAttitudeEnv() as env:
+            directory = Path(tmp)
+            self.save_vanes4(directory, "vanes4")
+            _, digest, _, declared = load_actor(directory / "model.zip", env)
+            self.assertEqual(load_normalization(None, False, digest, env.observation_space, declared),
+                             (None, "raw"))
+            (directory / "model.json").write_text(json.dumps({"action": "vanes4", "vecnormalize": "false"}))
+            with self.assertRaisesRegex(ValueError, "must be true or false"):
+                load_actor(directory / "model.zip", env)
+            (directory / "model.json").write_text(json.dumps({"vecnormalize": False}))
+            with self.assertRaisesRegex(ValueError, "no 'action'"):
+                load_actor(directory / "model.zip", env)
 
     def test_json_normalization_must_match_arguments(self):
         with tempfile.TemporaryDirectory() as tmp, HopperAttitudeEnv() as env:

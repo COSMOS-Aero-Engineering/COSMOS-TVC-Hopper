@@ -66,6 +66,8 @@ def compare(directory, exe, obs, expected, lengths, seeds):
         raise ValueError("Non-finite observation or Python prediction")
     obs.astype(np.float32).tofile(raw)
     subprocess.run([exe, raw, result], check=True)
+    if not result.exists():
+        raise ValueError("C++ host produced no output file")
     if result.stat().st_size != expected.size * 4:
         raise ValueError("C++ returned the wrong number of actions")
     actual = np.fromfile(result, np.float32).reshape(expected.shape)

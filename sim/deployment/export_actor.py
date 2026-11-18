@@ -32,10 +32,17 @@ def load_actor(path, env):
     """Return (model, sha256, action kind, declared VecNormalize).
 
     The kind and VecNormalize flag come from the model's .json (policy_io). The flag is
-    None when there is no .json, so the caller must declare the observation contract.
+    None when there is no .json; then the caller must declare the observation contract.
+    A .json with "vecnormalize": false declares raw observations, as in policy_io.load_policy.
     """
     meta = read_meta(path)
-    declared = bool(meta.get("vecnormalize")) if sidecar(path, ".json").exists() else None
+    declared = None
+    if sidecar(path, ".json").exists():
+        declared = meta.get("vecnormalize", False)
+        if not isinstance(declared, bool):
+            raise ValueError(f"Model json 'vecnormalize' must be true or false, got {declared!r}")
+    if "action" not in meta:
+        raise ValueError("Model json has no 'action' layout")
     kind = meta["action"]
     if kind not in SUPPORTED_ACTIONS:
         raise ValueError(f"Unsupported action layout {kind!r}; supported: {SUPPORTED_ACTIONS}")
@@ -68,7 +75,7 @@ def load_normalization(path, raw, model_hash, observation_space, declared=None):
     if declared is False and path is not None:
         raise ValueError("Model json says raw observations: drop --vecnormalize")
     if path is None:
-        if not raw and model_hash not in RAW_FIXTURES:
+        if not raw and declared is not False and model_hash not in RAW_FIXTURES:
             raise ValueError("Unknown model: declare --raw-obs or supply its --vecnormalize FILE")
         return None, "raw"
     if model_hash in RAW_FIXTURES:

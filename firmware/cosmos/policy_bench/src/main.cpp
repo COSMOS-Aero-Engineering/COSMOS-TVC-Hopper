@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include "actor.hpp"
 
+static_assert(actor::kInputs == 7, "obs initializer below assumes the 7 Stage 1 observations");
+
 namespace {
 actor::Workspace workspace;
 float obs[actor::kInputs] = {0.1f, -0.2f, 0.05f, 0, 0, 0, 1};

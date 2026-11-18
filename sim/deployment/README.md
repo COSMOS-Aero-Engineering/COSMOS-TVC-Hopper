@@ -10,7 +10,7 @@
 python ship.py capped 8G -- uv run --frozen --project . python sim/deployment/check_parity.py
 ```
 
-이 명령은 [평가 코드](../sim_stage1/pd_gate.py)의 seed 0-199로 도메인 랜덤화를 켠 에피소드를 실행한다. 매 스텝에서 SB3의 `model.predict(obs, deterministic=True)`가 고른 행동으로 환경을 진행한다. 별도로 컴파일한 PC 실행 파일에 같은 원시 관측을 float32로 전달한다. 출력에는 채널별 최대 절대 오차와 최대 오차가 발생한 seed, 스텝, 행동 번호(0부터)가 나온다. 관측·행동에 NaN이나 무한대가 있거나 C++ 출력 길이·행동 범위·오차 검사가 실패하면 오류로 종료한다.
+이 명령은 [평가 코드](../sim_stage1/pd_gate.py)의 seed 0-199로 도메인 랜덤화를 켠 에피소드를 실행한다. 매 스텝에서 SB3의 `model.predict(..., deterministic=True)`가 고른 행동으로 환경을 진행한다. 정규화 모델이면 저장한 통계로 정규화한 관측을 넣는다. 별도로 컴파일한 PC 실행 파일에 같은 원시 관측을 float32로 전달한다. 출력에는 채널별 최대 절대 오차와 최대 오차가 발생한 seed, 스텝, 행동 번호(0부터)가 나온다. 관측·행동에 NaN이나 무한대가 있거나 C++ 출력 길이·행동 범위·오차 검사가 실패하면 오류로 종료한다.
 
 | 모델 | 컴파일러 | 관측 | 출력값 | 최대 절대 오차 |
 | --- | --- | --- | --- | --- |
