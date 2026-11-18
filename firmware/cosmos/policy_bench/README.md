@@ -14,8 +14,8 @@ PlatformIO가 Teensy 4.0용 ELF와 HEX를 만든다. 링크 단계의 FLASH, RAM
 
 | 모델 | 가중치·편향 | 중간 버퍼 | FLASH 코드·데이터·부트 헤더 | RAM1 변수 | RAM2 변수 |
 | --- | --- | --- | --- | --- | --- |
-| `hopper_attitude_ppo_230.zip` (출력 4) | 19,728 B | 540 B | 37,836·25,544·8,296 B | 26,944 B | 12,416 B |
-| `hopper_attitude_ppo.zip` (출력 5) | 19,988 B | 540 B | 37,836·25,544·8,296 B | 26,944 B | 12,416 B |
+| `hopper_attitude_ppo_230.zip` (출력 4) | 19,728 B | 540 B | 37,900·25,544·8,232 B | 26,944 B | 12,416 B |
+| `hopper_attitude_ppo.zip` (출력 5) | 19,988 B | 540 B | 37,900·25,544·8,232 B | 26,944 B | 12,416 B |
 
 두 모델의 FLASH와 RAM1 값이 같은 이유: 가중치는 `.data`(RAM1)에 있다. `.data` 마지막의 `_VectorsRam`이 4 KB 경계(`0x20006000`)에 놓여서 두 모델의 크기 차이가 그 앞 정렬 여백에 들어간다. `.data` 안 기호 합계는 #230 모델 24,183 B, #230 전 모델 24,444 B다. 차이 261 B는 `w3` 256 B, `b3` 4 B, `kActionLayout` 문자열 1 B다. 가중치가 커져 이 경계를 넘으면 값이 4 KB 단위로 바뀐다. 표의 "부트 헤더"는 시작 벡터와 CSF이고 생성 헤더 `actor_data.h`가 아니다.
 
@@ -29,5 +29,6 @@ PlatformIO가 Teensy 4.0용 ELF와 HEX를 만든다. 링크 단계의 FLASH, RAM
 | `n`, `mean_us`, `max_us` | 256회 호출의 평균과 최대 경과 시간(µs). 타이머 읽기 비용과 인터럽트 지연이 포함될 수 있다. |
 | `parameter_bytes`, `workspace_bytes` | Actor 가중치·편향 바이트 수와 정적으로 할당한 중간 계산 버퍼 크기. 전체 RAM·스택 사용량은 별도다. |
 | `checksum` | 정책 출력값의 합을 모든 표본에 걸쳐 누적한 값 |
+| `checksum_pc` | 같은 입력을 PC 빌드로 계산한 `checksum`(`kBenchChecksumPc`). 보드 값과 다르면 Teensy 부동소수점 계산 차이다. 허용 범위는 #292에서 정한다 |
 
 실제 보드에서 걸리는 시간은 빌드로 측정할 수 없다. 후속 측정은 [#292](https://github.com/COSMOS-Aero-Engineering/COSMOS-TVC-Hopper/issues/292)에 기록한다.

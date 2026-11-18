@@ -32,11 +32,12 @@ void loop() {
     }
     Serial.printf("model=%s normalization=%s action_layout=%s parity_episodes=%u parity_max_abs=%.3g "
                   "n=%u mean_us=%.2f max_us=%lu "
-                  "parameter_bytes=%u workspace_bytes=%u checksum=%.6f\n",
+                  "parameter_bytes=%u workspace_bytes=%u checksum=%.6f checksum_pc=%.6f\n",
                   actor::kModelHash, actor::kNormalization, actor::kActionLayout, actor::kParityEpisodes,
                   static_cast<double>(actor::kParityMaxAbs), kSamples,
                   static_cast<double>(total_us) / kSamples, static_cast<unsigned long>(max_us),
                   static_cast<unsigned>(actor::kParameterBytes),
-                  static_cast<unsigned>(sizeof(workspace)), static_cast<double>(checksum));
+                  static_cast<unsigned>(sizeof(workspace)), static_cast<double>(checksum),
+                  static_cast<double>(actor::kBenchChecksumPc));
     delay(1000);
 }

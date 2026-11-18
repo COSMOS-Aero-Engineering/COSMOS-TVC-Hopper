@@ -87,6 +87,30 @@ def compare(directory, exe, obs, expected, lengths, seeds):
     return float(error[row, channel])
 
 
+BENCH_SAMPLES = 256   # firmware/cosmos/policy_bench/src/main.cpp kSamples
+
+
+def bench_checksum(directory, exe, outputs):
+    """The bench's synthetic inputs through the host build; returns its float32 checksum.
+
+    Mirrors main.cpp: obs = {0.1, -0.2, 0.05, 0, 0, 0, 1}, obs[0] = (i - 128) * 0.002f,
+    checksum += every output value in order. The Teensy build may fuse multiply-adds and
+    uses another tanhf, so the board value can differ slightly (#292 compares them).
+    """
+    obs = np.tile(np.array([0.1, -0.2, 0.05, 0, 0, 0, 1], dtype=np.float32), (BENCH_SAMPLES, 1))
+    obs[:, 0] = (np.arange(BENCH_SAMPLES, dtype=np.float32) - np.float32(128)) * np.float32(0.002)
+    raw, result = directory / "bench_obs.f32", directory / "bench_actions.f32"
+    obs.tofile(raw)
+    subprocess.run([exe, raw, result], check=True)
+    actions = np.fromfile(result, np.float32)
+    if actions.size != BENCH_SAMPLES * outputs:
+        raise ValueError("C++ returned the wrong number of bench actions")
+    checksum = np.float32(0)
+    for value in actions:
+        checksum = np.float32(checksum + value)
+    return float(checksum)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, default=STAGE1 / "hopper_attitude_ppo_230.zip")
@@ -105,7 +129,7 @@ def main():
             raise ValueError("Expected Stage 1 observation order and randomized evaluation")
         model, digest, kind, declared = load_actor(args.model, env)
         norm, normalization_id = load_normalization(args.vecnormalize, args.raw_obs, digest,
-                                                    env.observation_space, declared)
+                                                    env.observation_space, declared, args.model)
         header = render_header(model, digest, norm, normalization_id, kind)
         print(f"model_sha256={digest} normalization={normalization_id} action_layout={kind}", flush=True)
         directory = Path(tmp)
@@ -113,6 +137,7 @@ def main():
         exe = compile_host(directory, args.cxx)
         obs, actions, lengths = evaluation_rows(env, model, norm, seeds, kind)
         max_abs = compare(directory, exe, obs, actions, lengths, seeds)
+        expected_checksum = bench_checksum(directory, exe, actions.shape[1])
     # Record what this header passed, so a quick --episodes 2 export is visible on the bench.
     footer = "}  // namespace actor"
     if header.count(footer) != 1:
@@ -120,16 +145,18 @@ def main():
     header = header.replace(footer, "\n".join([
         f"constexpr unsigned kParityEpisodes = {len(seeds)};",
         f"constexpr float kParityMaxAbs = {max_abs:.8e}f;",
+        f"constexpr float kBenchChecksumPc = {expected_checksum:.8e}f;",
         "}  // namespace actor"]))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=args.output.parent, delete=False) as staged:
         staged.write(header.encode("ascii"))
-    # NamedTemporaryFile creates 0600; os.replace would keep it. Use a normal source-file mode.
-    os.chmod(staged.name, 0o644)
     try:
+        # NamedTemporaryFile creates 0600; os.replace would keep it. Use a normal source-file mode.
+        os.chmod(staged.name, 0o644)
         os.replace(staged.name, args.output)
     finally:
         Path(staged.name).unlink(missing_ok=True)
+    print(f"bench_checksum_pc={expected_checksum:.8e}")
     print(f"PASS: exported {args.output}")
 
 

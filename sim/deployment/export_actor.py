@@ -68,8 +68,18 @@ def load_actor(path, env):
     return model, model_hash, kind, declared
 
 
-def load_normalization(path, raw, model_hash, observation_space, declared=None):
-    """declared: the .json vecnormalize flag from load_actor, or None without a .json."""
+def load_normalization(path, raw, model_hash, observation_space, declared=None, model_path=None):
+    """declared: the .json vecnormalize flag from load_actor, or None without a .json.
+
+    When the .json declares VecNormalize, the statistics are <model>.vecnormalize.pkl next to
+    the model (policy_io.load_policy reads the same file). --vecnormalize may only name it.
+    """
+    if declared is True and model_path is not None:
+        own = sidecar(model_path, ".vecnormalize.pkl")
+        if path is None:
+            path = own
+        elif Path(path).resolve() != own.resolve():
+            raise ValueError(f"Model json says VecNormalize; its statistics are {own.name}, not {Path(path).name}")
     if declared is True and path is None:
         raise ValueError("Model json says VecNormalize: supply its --vecnormalize FILE")
     if declared is False and path is not None:

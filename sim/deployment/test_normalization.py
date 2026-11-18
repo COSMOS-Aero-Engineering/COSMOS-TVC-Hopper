@@ -91,6 +91,16 @@ class ActionLayoutTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "no 'action'"):
                 load_actor(directory / "model.zip", env)
 
+    def test_json_vecnormalize_uses_the_model_statistics(self):
+        with tempfile.TemporaryDirectory() as tmp, HopperAttitudeEnv() as env:
+            directory = Path(tmp)
+            self.save_vanes4(directory, "vanes4")
+            (directory / "model.json").write_text(json.dumps({"action": "vanes4", "vecnormalize": True}))
+            _, digest, _, declared = load_actor(directory / "model.zip", env)
+            with self.assertRaisesRegex(ValueError, "model.vecnormalize.pkl, not other.pkl"):
+                load_normalization(directory / "other.pkl", False, digest, env.observation_space,
+                                   declared, directory / "model.zip")
+
     def test_json_normalization_must_match_arguments(self):
         with tempfile.TemporaryDirectory() as tmp, HopperAttitudeEnv() as env:
             directory = Path(tmp)

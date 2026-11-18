@@ -18,7 +18,9 @@ python ship.py capped 8G -- uv run --frozen --project . python sim/deployment/ch
 | `hopper_attitude_ppo.zip` (`learned`) | Linux x64 GCC | 99,873 | 499,365 | `4.17232513e-7` (seed 49, 스텝 202, 스로틀) |
 | `hopper_attitude_ppo.zip` (`learned`) | Windows x64 MSVC | 99,873 | 499,365 | `4.17232513e-7` (seed 51, 스텝 186, 스로틀) |
 
-빠른 점검에는 `--episodes 2`를 붙인다. 컴파일러를 지정하려면 `--cxx` 뒤에 실행 파일 이름이나 경로를 넣는다. 통과하면 [Teensy 벤치](../../firmware/cosmos/policy_bench/README.md)의 `include/actor_data.h`를 갱신한다. 헤더에는 통과한 seed 수 `kParityEpisodes`와 최대 오차 `kParityMaxAbs`가 들어간다. `--episodes 2`로 만든 헤더도 덮어쓰므로 벤치에 쓰기 전에 전체 seed로 다시 실행한다. `--output PATH`로 다른 위치를 지정할 수 있다. 실패하면 기존 헤더가 남으므로 해당 실행의 종료 코드와 모델 해시를 확인한다.
+빠른 점검에는 `--episodes 2`를 붙인다. 컴파일러를 지정하려면 `--cxx` 뒤에 실행 파일 이름이나 경로를 넣는다. 통과하면 [Teensy 벤치](../../firmware/cosmos/policy_bench/README.md)의 `include/actor_data.h`를 갱신한다. 헤더에는 통과한 seed 수 `kParityEpisodes`와 최대 오차 `kParityMaxAbs`가 들어간다. 벤치의 합성 입력 256개를 PC 빌드로 계산한 체크섬 `kBenchChecksumPc`도 들어간다.
+
+이 비교는 PC 빌드만 확인한다. Teensy 빌드(`-std=gnu++17 -O2`)는 곱셈·덧셈을 합칠 수 있고(`vfma`) 다른 `tanhf`를 쓴다. 그래서 보드 출력이 PC와 조금 다를 수 있다. 보드에서는 벤치의 `checksum`과 `checksum_pc`를 비교한다(#292). `--episodes 2`로 만든 헤더도 덮어쓰므로 벤치에 쓰기 전에 전체 seed로 다시 실행한다. `--output PATH`로 다른 위치를 지정할 수 있다. 실패하면 기존 헤더가 남으므로 해당 실행의 종료 코드와 모델 해시를 확인한다.
 
 ## 추론 계약
 
