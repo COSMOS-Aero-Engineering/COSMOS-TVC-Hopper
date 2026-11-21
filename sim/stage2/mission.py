@@ -188,7 +188,8 @@ class Estimator:
 
 
 class TrackingPD(LandingPD):
-    """LandingPD's attitude and allocation loop with a position/velocity reference."""
+    """LandingPD's attitude and allocation loop with a position/velocity reference.
+    The horizontal position loop has a clamped, conditional integral term."""
 
     KP_XY, KD_XY = 2.0, 2.4
     KP_Z, KD_Z = 6.0, 4.5

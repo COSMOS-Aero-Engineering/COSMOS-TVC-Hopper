@@ -243,6 +243,26 @@ class MissionTest(unittest.TestCase):
             mean = np.mean([r["obs"][:2] - r["ref_pos"][:2] for r in rows], axis=0)
             self.assertLess(np.linalg.norm(mean), 0.010)
 
+    def test_integral_is_conditional_and_clamped(self):
+        from sim.stage2.mission import State, TrackingPD
+        body = self.env.airframe
+        controller = TrackingPD(body)
+        quat = np.array([1., 0., 0., 0.])
+        ref = (np.zeros(3), np.zeros(3), np.zeros(3))
+
+        def step(height, offset, cut=False):
+            state = State(np.array([offset, 0., body.rest_height + height]), np.zeros(3), quat, np.zeros(3))
+            controller.command(state, *ref, cut)
+            return controller.integral[0]
+
+        self.assertEqual(step(0.0, 0.05), 0.)       # on the ground: no wind-up
+        self.assertEqual(step(0.2, 0.05, cut=True), 0.)    # cut: no integration
+        self.assertLess(step(0.2, 0.05), 0.)        # airborne with error: integrates
+        for _ in range(2000):
+            step(0.2, 0.05)
+        self.assertAlmostEqual(controller.integral[0], -TrackingPD.I_MAX_XY)    # clamped
+        self.assertEqual(controller.integral[1], 0.)
+
     def test_throttle_cut_latches(self):
         for records, _ in self.truth + self.estimated:
             throttle = [r["action"][4] for r in records]
