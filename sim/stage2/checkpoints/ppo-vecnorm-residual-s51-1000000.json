@@ -1,0 +1,1 @@
+{"condition": "vecnorm", "reward": "env", "methods": ["residual"], "seed": 51, "envs": 4, "vecnormalize": true, "budget": 1000000, "timesteps": 1000000}
