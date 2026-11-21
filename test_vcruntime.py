@@ -222,9 +222,9 @@ class Wiring(unittest.TestCase):
     """확인이 setup과 torch를 쓰는 작업 앞에서 도는지 본다."""
 
     def test_torch_tasks_are_marked(self):
-        # torch를 불러오는 작업: smoke와 train은 stable_baselines3, conncheck는 torch를 직접 불러온다.
+        # torch를 불러오는 작업: smoke, train, parity(#408)는 stable_baselines3, conncheck는 torch를 직접 불러온다.
         marked = {name for name, task in tasks.TASKS.items() if task.needs_torch}
-        self.assertEqual(marked, {"smoke", "conncheck", "train"})
+        self.assertEqual(marked, {"smoke", "conncheck", "train", "parity"})
 
     def ensure_env(self, name):
         order = mock.Mock()

@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [imu_test, imu_test_i2c, throttle_serial, servo_bench, rc_bench]
+        project: [imu_test, imu_test_i2c, throttle_serial, servo_bench, rc_bench, policy_bench]
     steps:
       - uses: actions/checkout@v4
 
@@ -124,6 +124,22 @@ jobs:
 
       - name: PlatformIO 설치
         run: pip install platformio
+
+      # policy_bench는 Git에서 뺀 include/actor_data.h가 있어야 빌드된다. 그 헤더는
+      # check_parity.py가 C++ 비교를 통과한 뒤에만 만든다(#408). 그래서 이 프로젝트만 먼저 만든다.
+      - name: uv 설치 (policy_bench 헤더 생성용)
+        if: matrix.project == 'policy_bench'
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: actor_data.h 생성 — check_parity.py
+        if: matrix.project == 'policy_bench'
+        working-directory: sim/deployment
+        run: |
+          uv sync --locked
+          uv run python check_parity.py
 
       - name: pio run — ${{ matrix.project }}
         working-directory: firmware/cosmos/${{ matrix.project }}

@@ -1097,6 +1097,28 @@ def task_agentsref():
     print(f"AGENTS.md 절 참조 {count}건 확인 - 없는 절 없음")
 
 
+DEPLOY = SIM / "deployment"
+CXX_NAMES = ("c++", "g++", "clang++", "cl")
+
+
+def task_parity():
+    """PPO Actor의 C++ 출력이 파이썬 예측과 같은지 본다(#291, #408).
+
+    sim/deployment의 단위 검사(test_normalization.py)와 check_parity.py(평가 seed 전체)를 돌린다.
+    check_parity.py는 통과하면 firmware/cosmos/policy_bench/include/actor_data.h를 만든다.
+    호스트 C++ 컴파일러가 없는 PC에서는 이유를 출력하고 건너뛴다. CI(환경변수 CI가 있음)에서는
+    건너뛰지 않고 실패한다. ubuntu 러너에는 g++가 있다.
+    """
+    if not any(shutil.which(n) for n in CXX_NAMES):
+        if os.environ.get("CI"):
+            die("CI에서 C++ 컴파일러(c++, g++, clang++, cl)를 찾지 못했다.")
+        print("[건너뜀] parity - C++ 컴파일러(c++, g++, clang++, cl)를 찾지 못했다. CI는 이 검사를 돌린다.\n"
+              "     Windows는 VS Developer Prompt에서 실행하거나 MinGW g++를 설치한다.")
+        return SKIPPED
+    uv_run(["python", "-m", "unittest", "-q", "test_normalization"], cwd=DEPLOY)
+    uv_run(["python", "check_parity.py"], cwd=DEPLOY)
+
+
 def task_check():
     print("\n전부 통과. PR 올려도 된다.")
 
@@ -1207,11 +1229,15 @@ TASKS = {t.name: t for t in [
                  "test_kicad_version.py", "test_netlist.py", "kicad/reports/2026-10-19/netlist.xml"]),
     Task("agentsref", "다른 문서가 쓴 AGENTS.md 절 이름이 AGENTS.md 제목에 있는지 확인 (#183)",
          task_agentsref, inputs=AGENTS_REF_SCAN),
+    Task("parity", "PPO Actor C++ 출력과 파이썬 예측 비교 + policy_bench 헤더 생성, 컴파일러 없으면 건너뜀 (#408)",
+         task_parity, inputs=["sim/deployment/*.py", "sim/deployment/*.cpp", "sim/deployment/*.hpp",
+                              "sim/sim_stage1/hopper_attitude_ppo_230.zip", *SIM_IN],
+         outputs=["firmware/cosmos/policy_bench/include/actor_data.h"], uses_env=True, needs_torch=True),
     Task("check", "CI sim job의 check 단계와 같은 검사 (학습 자료 검사·펌웨어 빌드는 빠짐,"
          " 단계 목록은 graph)", task_check,
          deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "agentsref", "cad",
                "vcruntime", "compile", "ledger", "sanity", "gate", "yaw", "smoke", "conncheck",
-               "trainargs", "stage2"]),
+               "trainargs", "stage2", "parity"]),
     Task("trainargs", "train 작업의 인자를 ppo_ablation.py가 받는지 확인 (학습 안 함, #351)", task_trainargs,
          inputs=SIM_IN, uses_env=True),
     Task("train", "PPO 본 학습 (#230 crashcost 조건 1M 스텝, 오래 걸림. PD 합격 기준 gate를 먼저 본다)",
