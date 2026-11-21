@@ -59,19 +59,23 @@ def read_scad(name):
     return float(m.group(1))
 
 
-def read_yaml_number(key):
-    """params.yaml의 'key: 숫자' 줄(들여쓰기 무관, 첫 번째)을 읽는다. yaml 패키지 없이 표준 라이브러리만 쓴다."""
-    m = re.search(rf"^\s*{re.escape(key)}:\s*([-0-9.eE+]+)", PARAMS.read_text(encoding="utf-8"), re.M)
-    if not m:
+def read_yaml_number(key, nested=False):
+    """params.yaml의 숫자 줄을 읽는다. nested=False는 들여쓰기 없는 최상위 키만, True는 들여쓴 키(vane_geometry 안)만 본다.
+    같은 이름이 둘 이상이면 조용히 첫 번째를 쓰지 않고 멈춘다. yaml 패키지 없이 표준 라이브러리만 쓴다."""
+    indent = r"[ \t]+" if nested else ""
+    ms = re.findall(rf"^{indent}{re.escape(key)}:\s*([-0-9.eE+]+)", PARAMS.read_text(encoding="utf-8"), re.M)
+    if len(ms) > 1:
+        sys.exit(f"{PARAMS}에 {key}가 {len(ms)}번 나온다. 어느 값인지 정할 수 없다")
+    if not ms:
         sys.exit(f"{PARAMS}에서 {key}를 찾지 못했다")
-    return float(m.group(1))
+    return float(ms[0])
 
 
 def load_inputs():
     d = {
-        "inner_r": read_yaml_number("inner_r_mm") / 1000.0,
-        "outer_r": read_yaml_number("outer_r_mm") / 1000.0,
-        "chord": read_yaml_number("chord_mm") / 1000.0,
+        "inner_r": read_yaml_number("inner_r_mm", nested=True) / 1000.0,
+        "outer_r": read_yaml_number("outer_r_mm", nested=True) / 1000.0,
+        "chord": read_yaml_number("chord_mm", nested=True) / 1000.0,
         "CLalpha": read_yaml_number("CLalpha"),
         "mass": read_yaml_number("mass"),
         "Kf": read_yaml_number("Kf"),
@@ -111,8 +115,9 @@ def main():
     Ft_hover = g["mass"] * G
     d_nom, d_max = c / 4, c / 2
 
-    # 자체 검사: 읽은 입력으로 다른 식(v = sqrt(Ft/ρA), q = ½ρv², ρ 1.2 kg/m³, 이슈 #382 예비 계산과 같은 경로)을 따로 계산해 맞춘다.
-    # 입력 값(outer_r_mm 등)이 바뀌어도 통과한다. 식 구현이 어긋날 때만 걸린다.
+    # 자체 검사: 읽은 입력으로 속도 경로(v = sqrt(Ft/ρA), q = ½ρv², ρ 1.2 kg/m³, 이슈 #382 예비 계산과 같은 경로)를 따로 계산해 맞춘다.
+    # 대수적으로 같은 식이라 모델링 오류는 못 잡는다. 구현 오타와 단위 실수만 잡는 회귀 검사다.
+    # 입력 값(outer_r_mm 등)이 바뀌어도 통과한다.
     Ft0, rho = THRUST_SPEC[0], 1.2
     A0 = math.pi * g["outer_r"] ** 2
     v0 = math.sqrt(Ft0 / (rho * A0))
