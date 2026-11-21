@@ -33,7 +33,7 @@ OUTCOMES = ("landed", "hard_contact", "body_contact", "tipped", "out_of_bounds",
 CONDITIONS = ("raw", "vecnorm")
 # Training-only reward variants. LandingEnv itself is unchanged; evaluation counts outcomes only.
 REWARDS = ("env", "timeout10")
-# Learning aids (#413). The first three need the policy interface at evaluation too.
+# Learning aids (#413). residual and timeobs change the policy interface, so evaluation wraps them too.
 METHODS = ("shaped", "curriculum", "residual", "timeobs", "timeterm")
 INTERFACE_METHODS = ("residual", "timeobs")
 GAMMA = 0.99
@@ -103,7 +103,9 @@ class HeightCurriculum(gym.Wrapper):
 
     def reset(self, **kwargs):
         env = self.env.unwrapped
-        _, info = self.env.reset(**kwargs)
+        obs, info = self.env.reset(**kwargs)
+        if (kwargs.get("options") or {}).get("start", "air") == "ground":
+            return obs, info
         progress = min(1., self.seen * self.n_envs / self.ramp_steps)
         low = CURRICULUM_START[0] + progress * (CURRICULUM_END[0] - CURRICULUM_START[0])
         high = CURRICULUM_START[1] + progress * (CURRICULUM_END[1] - CURRICULUM_START[1])
@@ -172,6 +174,10 @@ class ElapsedTime(gym.Wrapper):
 def make_env(reward="env", methods=(), n_envs=1, ramp_steps=400_000):
     """Training env. Wrapper order, inner to outer: curriculum, timeout10, residual, shaped,
     timeterm, timeobs. timeout10 sits inside timeterm so it still sees the truncation."""
+    if "shaped" in methods and "timeterm" in methods:
+        # timeterm would turn the truncated step into a terminal one while shaped keeps phi(s'),
+        # which breaks the invariance argument of shaped.
+        raise ValueError("shaped and timeterm cannot be combined.")
     env = LandingEnv()
     if "curriculum" in methods:
         env = HeightCurriculum(env, n_envs, ramp_steps)

@@ -85,7 +85,7 @@ uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_bud
 
 ## 착륙 학습 방법 비교 (#413)
 
-**2026-11-21 결과: PD 출력에 더하는 잔차 정책(`residual`)만 착륙한다. 학습 seed 41, 51, 61 모두 1M에서 평가 seed 1000-1099의 100/100이다. PD 없이 학습한 다섯 방법은 4M까지 착륙 0/100이다.** 결정은 `residual`이다. 이것은 PPO 단독이 착륙을 배웠다는 뜻이 아니다(아래 한계).
+**2026-11-21 결과: PD 출력에 더하는 잔차 정책(`residual`)만 착륙한다. 학습 seed 41, 51, 61 모두 1M에서 평가 seed 1000-1099의 100/100이다. PD 없이 학습한 후보는 (a)(b)(e)(f)가 1M까지, (d)가 4M까지 착륙 0/100이다.** 결정은 `residual`이다. 단, 이것은 PPO 단독이 착륙을 배웠다는 뜻이 아니다. 학습한 `residual`의 착지 하강 속도 최댓값은 0.407-0.431 m/s로 강한 접촉 문턱 0.45 m/s에 가깝다(아래 한계).
 
 `ppo_budget.py train --method`가 후보를 학습용 래퍼로 더한다. `LandingEnv`와 평가 판정은 그대로다. `residual`·`timeobs`만 평가 env에도 같은 래퍼를 씌운다.
 
@@ -125,9 +125,9 @@ python ship.py capped 6G -- uv run --locked --package cosmos-sim --extra stage2 
 uv run --locked --package cosmos-sim --extra stage2 python -m sim.stage2.ppo_budget evaluate sim/stage2/checkpoints/ppo-vecnorm-residual-s41-1000000.zip sim/stage2/checkpoints/ppo-vecnorm-residual-s51-1000000.zip sim/stage2/checkpoints/ppo-vecnorm-residual-s61-1000000.zip
 ```
 
-`--seed 51`, `--seed 61`로 나머지 두 개를 학습한다. `residual`의 1M 체크포인트 3개만 [checkpoints/](checkpoints/)에 있다. 다른 방법의 체크포인트는 커밋하지 않았으니 표의 해당 행은 학습 명령을 다시 돌려야 확인할 수 있다(방법마다 약 35분).
+`--seed 51`, `--seed 61`로 나머지 두 개를 학습한다. 4M 행은 `--method`를 빼고 `--budgets 2000000 4000000`으로 학습한다. 다른 방법은 `--method shaped`처럼 이름만 바꾼다. `shaped`와 `timeterm`은 함께 쓸 수 없다(`make_env`가 거부한다). `residual`의 1M 체크포인트 3개만 [checkpoints/](checkpoints/)에 있다. 다른 방법의 체크포인트는 커밋하지 않았으니 표의 해당 행은 학습 명령을 다시 돌려야 확인할 수 있다(방법마다 약 35분).
 
-- 확인한 사실: PD 없이 학습한 다섯 방법은 학습 seed 41에서 250k-4M 어느 예산에서도 착륙 0/100이다.
+- 확인한 사실: PD 없이 학습한 `shaped`, `curriculum`, `timeobs`, `timeterm`은 학습 seed 41에서 250k, 500k, 1M 어느 예산에서도 착륙 0/100이다. 기본 PPO는 4M까지도 0/100이다.
 - 확인한 사실: `residual`의 평균 착륙 시각이 PD의 약 절반이다(1.12-1.13 s 대 2.27 s). 정책이 PD보다 빨리 내려온다.
 - 추론: 정책은 매 스텝의 시간 비용을 줄이는 쪽으로 하강을 빠르게 했다. 근거는 착륙 시각 변화뿐이고, 보상 항목별 기여는 재지 않았다.
 - 한계: `residual`이 착륙하는 것은 PD가 이미 착륙하기 때문이다. 착지 직전 스로틀 차단도 PD가 한다. 학습한 몫은 PD 위에 더하는 보정이다.

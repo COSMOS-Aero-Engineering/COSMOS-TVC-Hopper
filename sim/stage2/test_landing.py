@@ -391,6 +391,11 @@ class PpoBudgetTest(unittest.TestCase):
             o, _, terminated, truncated, info = timed.step(np.zeros(5))
         self.assertEqual((terminated, truncated, info["outcome"], o[-1]), (True, False, "time_limit", 1.))
         self.assertEqual(GAMMA, 0.99)
+        with self.assertRaisesRegex(ValueError, "cannot be combined"):
+            make_env("env", ("shaped", "timeterm"))
+        ground = make_env("env", ("curriculum",))
+        o, _ = ground.reset(seed=0, options={"start": "ground"})
+        self.assertAlmostEqual(o[2], ground.unwrapped.airframe.rest_height, places=6)
 
     def test_interface_methods_round_trip(self):
         import subprocess
