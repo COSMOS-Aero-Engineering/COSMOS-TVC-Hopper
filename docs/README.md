@@ -13,6 +13,7 @@
 | `docs/design/02-web-dashboard-design.md` | 웹 대시보드·3D 뷰어 설계, **CSV 데이터 계약(§4)**, 개발 단계 W-A부터 W-F, 기술 스택 | 현행 |
 | `docs/design/03-control-pipeline-design.md` | PID/RL 구조, 3D 물리엔진 전환(Stage 2), State/Action, 도메인 랜덤화, 온보드 배포. **PID vs RL의 단일 정본** | 현행 |
 | `docs/design/modelling-notes-ch3.md` | 논문 3장 수식과 `hopper_aviary.py` 대응표, 코드와 다른 지점 | 현행. CL 결정은 PR #35 |
+| `docs/design/sg90-hinge-moment.md`, `cad/tools/servo_hinge_moment.py` | SG90 스톨 토크(제조사 데이터시트)와 베인 힌지모멘트 비교, 결론 "그대로 간다"(책상 계산, TC-2 전 예상, #382) | 11/21 |
 | `docs/design/rl-open-source-survey.md` | 오픈소스 RL 환경 조사(PyFlyt 등), 가져올 물리 모델 | 10/15 |
 | `docs/design/research-open-source-references.md` | rev C 근거 리서치 | 완료 |
 | `docs/design/connectome-control.md` | 확장 트랙 A(커넥톰) 설계와 한계 | 9/18 |
