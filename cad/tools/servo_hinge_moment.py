@@ -122,9 +122,12 @@ def main():
     A0 = math.pi * g["outer_r"] ** 2
     v0 = math.sqrt(Ft0 / (rho * A0))
     M0, p = hinge_moment(Ft0, 15, "plate", d_nom, 1.0, 0.0, g)
-    assert abs(p["q"] - 0.5 * rho * v0 ** 2) < 1e-6 * p["q"], (p["q"], v0)
-    assert abs(p["S"] - (g["outer_r"] - g["inner_r"]) * g["chord"]) < 1e-12
-    assert abs(M0 - p["q"] * p["S"] * (2 * math.pi * math.radians(15)) * d_nom) < 1e-12
+    ok = (abs(p["q"] - 0.5 * rho * v0 ** 2) < 1e-6 * p["q"]
+          and abs(p["S"] - (g["outer_r"] - g["inner_r"]) * g["chord"]) < 1e-12
+          and abs(M0 - p["q"] * p["S"] * (2 * math.pi * math.radians(15)) * d_nom) < 1e-12
+          and abs(KGFCM_TO_NM - 0.0980665) < 1e-9)
+    if not ok:  # assert는 python -O에서 사라지므로 쓰지 않는다
+        sys.exit("자체 검사 실패: hinge_moment()가 손계산 경로와 다르다")
 
     print("## 입력 (읽은 위치)")
     print(f"- 베인 안쪽 r {g['inner_r']*1e3:.1f} mm, 제트 바깥 R {g['outer_r']*1e3:.1f} mm(추정), 시위 {c*1e3:.1f} mm "
@@ -169,16 +172,25 @@ def main():
         print(f"| {name} | {kgfcm(M):.3f} | {SG90_STALL_DATASHEET/kgfcm(M):.1f} |")
 
     # break-even: 공칭·보수·겹침 각각에서 스톨(여유 1) 또는 여유 2에 닿으려면 모멘트가 몇 배가 돼야 하는가.
-    print("\n## 모르는 부하가 얼마나 더 붙어도 되나 (서보 스톨 1.8 kgf·cm 기준)")
-    print(f"여유 {SAFETY_FACTOR_REQUIRED:.0f}배(가정)를 지키려면 공력 외 부하(부싱 마찰·스파 비틀림·백래시 등 합)가 아래 값 이하여야 한다.")
-    print("| 경우 | 공력 M kgf·cm | 여유 2배 허용 한도 kgf·cm | 공력 외 부하 허용치 kgf·cm | 모멘트를 몇 배 키워도 여유 2배 |")
-    print("|---|---:|---:|---:|---:|")
+    sf = SAFETY_FACTOR_REQUIRED
+    print(f"\n## 모르는 부하가 얼마나 더 붙어도 되나 (여유 {sf:g}배는 가정)")
+    print(f"여유 {sf:g}배를 지키려면 공력 외 부하(부싱 마찰·스파 비틀림·백래시 등 합)가 아래 값 이하여야 한다. 음수는 공력만으로 기준 미달이다.")
+    print(f"| 경우 | 공력 M kgf·cm | 한도({SG90_STALL_DATASHEET:g}/{sf:g}) | 허용 몫({SG90_STALL_DATASHEET:g}) | 한도({SG90_STALL_CLONE_LOW:g}/{sf:g}) | 허용 몫({SG90_STALL_CLONE_LOW:g}) |")
+    print("|---|---:|---:|---:|---:|---:|")
     for name, mk in rows:
-        lim = SG90_STALL_DATASHEET / SAFETY_FACTOR_REQUIRED
-        print(f"| {name} | {mk:.3f} | {lim:.2f} | {max(lim-mk,0):.2f} | {lim/mk:.1f} |")
+        l1, l2 = SG90_STALL_DATASHEET / sf, SG90_STALL_CLONE_LOW / sf
+        print(f"| {name} | {mk:.3f} | {l1:.2f} | {l1-mk:.2f} | {l2:.2f} | {l2-mk:.2f} |")
     worst = max(mk for _, mk in rows)
-    print(f"\n최악 가정(겹침) 경우 M = {worst:.3f} kgf·cm. 데이터시트 1.8 대비 여유 {SG90_STALL_DATASHEET/worst:.1f}배, "
-          f"호환 서보 하한 1.3 대비 {SG90_STALL_CLONE_LOW/worst:.1f}배.")
+    print(f"\n표의 가정을 겹친 경우 M = {worst:.3f} kgf·cm. 데이터시트 {SG90_STALL_DATASHEET:g} 대비 여유 {SG90_STALL_DATASHEET/worst:.1f}배, "
+          f"호환 서보 하한 {SG90_STALL_CLONE_LOW:g} 대비 {SG90_STALL_CLONE_LOW/worst:.1f}배.")
+    # 제트 반지름 R 민감도(겹침 경우). R은 실측 전이라(#118) 작은 쪽도 본다.
+    print(f"\n## 제트 반지름 R 민감도 (겹침 경우, 베인 면적은 R − r_in)")
+    print(f"| R mm | M kgf·cm | 여유({SG90_STALL_DATASHEET:g}) | 여유({SG90_STALL_CLONE_LOW:g}) |")
+    print("|---:|---:|---:|---:|")
+    for r_mm in (26, 28, 30, g["outer_r"] * 1e3, 34, 36):
+        g2 = {**g, "outer_r": r_mm / 1000.0}
+        M, _ = hinge_moment(THRUST_SPEC[1], stop, "plate", d_max, 1.3, 0.015, g2)
+        print(f"| {r_mm:g} | {kgfcm(M):.3f} | {SG90_STALL_DATASHEET/kgfcm(M):.2f} | {SG90_STALL_CLONE_LOW/kgfcm(M):.2f} |")
     # 모멘트를 스톨과 같게 만드는 법선력 계수(공칭 형상, d 한계) — CN이 얼마나 커야 SG90이 멈추는가.
     Ft, kp, rh = THRUST_SPEC[1], 1.3, 0.015
     A = math.pi * (g["outer_r"] ** 2 - rh ** 2)
