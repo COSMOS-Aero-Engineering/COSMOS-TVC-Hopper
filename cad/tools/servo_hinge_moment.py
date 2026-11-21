@@ -103,6 +103,8 @@ def hinge_moment(Ft, alpha_deg, cn_model, d_arm, k_peak, r_hub, g):
     A_eff = math.pi * (R ** 2 - r_hub ** 2)
     q = (k_peak ** 2) * Ft / (2.0 * A_eff)
     S = (R - rin) * c
+    if cn_model not in ("repo", "plate"):
+        sys.exit(f"cn_model은 'repo' 또는 'plate'다: {cn_model!r}")
     CN = (g["CLalpha"] if cn_model == "repo" else 2 * math.pi) * a
     F = q * S * CN
     return F * d_arm, dict(q=q, S=S, CN=CN, F=F, A_eff=A_eff)
@@ -197,7 +199,7 @@ def main():
     print(f"\n## 제트 반지름 R 민감도 (겹침 경우, 베인 면적은 R-r_in)")
     print(f"| R mm | M kgf·cm | 여유({SG90_STALL_DATASHEET:g}) | 여유({SG90_STALL_CLONE_LOW:g}) |")
     print("|---:|---:|---:|---:|")
-    for r_mm in (26, 28, 30, g["outer_r"] * 1e3, 34, 36):
+    for r_mm in sorted({26, 28, 30, round(g["outer_r"] * 1e3, 3), 34, 36}):
         g2 = {**g, "outer_r": r_mm / 1000.0}
         M, _ = hinge_moment(THRUST_SPEC[1], stop, "plate", d_max, K_PEAK, R_HUB, g2)
         print(f"| {r_mm:g} | {kgfcm(M):.3f} | {SG90_STALL_DATASHEET/kgfcm(M):.2f} | {SG90_STALL_CLONE_LOW/kgfcm(M):.2f} |")
