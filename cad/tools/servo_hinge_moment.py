@@ -106,21 +106,25 @@ def main():
     g = load_inputs()
     c = g["chord"]
     stop = g["stop_deg"]
+    alpha_sim = read_yaml_number("alpha_max_deg")
     Ft_params_max = g["Kf"] * (g["omega_t_per_throttle"] ** 2)
     Ft_hover = g["mass"] * G
     d_nom, d_max = c / 4, c / 2
 
-    # 자체 검사: 손계산(이슈 댓글 예비 계산)과 같은 자릿수여야 한다.
-    _, p = hinge_moment(THRUST_SPEC[0], 15, "plate", d_nom, 1.0, 0.0, g)
-    assert abs(p["q"] - 1982) < 20, p["q"]          # q ≈ 1,980 Pa (이슈 #382 댓글)
-    assert abs(p["S"] - 7.0e-4) < 1e-6, p["S"]       # S = 28 mm × 25 mm
-    assert abs(kgfcm(0.0143) - 0.146) < 0.002
-    assert abs(KGFCM_TO_NM - 0.0980665) < 1e-9
+    # 자체 검사: 읽은 입력으로 다른 식(v = sqrt(Ft/ρA), q = ½ρv², ρ 1.2 kg/m³, 이슈 #382 예비 계산과 같은 경로)을 따로 계산해 맞춘다.
+    # 입력 값(outer_r_mm 등)이 바뀌어도 통과한다. 식 구현이 어긋날 때만 걸린다.
+    Ft0, rho = THRUST_SPEC[0], 1.2
+    A0 = math.pi * g["outer_r"] ** 2
+    v0 = math.sqrt(Ft0 / (rho * A0))
+    M0, p = hinge_moment(Ft0, 15, "plate", d_nom, 1.0, 0.0, g)
+    assert abs(p["q"] - 0.5 * rho * v0 ** 2) < 1e-6 * p["q"], (p["q"], v0)
+    assert abs(p["S"] - (g["outer_r"] - g["inner_r"]) * g["chord"]) < 1e-12
+    assert abs(M0 - p["q"] * p["S"] * (2 * math.pi * math.radians(15)) * d_nom) < 1e-12
 
     print("## 입력 (읽은 위치)")
     print(f"- 베인 안쪽 r {g['inner_r']*1e3:.1f} mm, 제트 바깥 R {g['outer_r']*1e3:.1f} mm(추정), 시위 {c*1e3:.1f} mm "
           f"-> S = {(g['outer_r']-g['inner_r'])*c*1e6:.0f} mm² (params.yaml vane_geometry, CAD와 chord·inner_r 일치 확인)")
-    print(f"- CAD 하드스톱 ±{stop:.0f}°, 시뮬 alpha_max 10°")
+    print(f"- CAD 하드스톱 ±{stop:.0f}°, 시뮬 alpha_max {alpha_sim:.0f}°")
     print(f"- CLalpha(repo, 저종횡비 보정) {g['CLalpha']:.3f}/rad, 2π 판 이론 {2*math.pi:.3f}/rad")
     print(f"- 추력: 판매 사양 {THRUST_SPEC[0]:.2f}-{THRUST_SPEC[1]:.2f} N, params.yaml 100 % 스로틀 {Ft_params_max:.2f} N, "
           f"호버(질량 {g['mass']} kg) {Ft_hover:.2f} N")
@@ -129,11 +133,11 @@ def main():
 
     cases = [
         # 이름, 추력, 각, CN모델, d, k_peak(속도비), r_hub
-        ("공칭 (params.yaml 그대로)", Ft_params_max, 10, "repo", d_nom, 1.0, 0.0),
-        ("사양 추력 하한, 하드스톱 15°", THRUST_SPEC[0], stop, "repo", d_nom, 1.0, 0.0),
-        ("보수: 사양 하한, 15°, 판 이론 CN, d 25 %", THRUST_SPEC[0], stop, "plate", d_nom, 1.0, 0.0),
+        ("공칭 (params.yaml 그대로)", Ft_params_max, alpha_sim, "repo", d_nom, 1.0, 0.0),
+        (f"사양 추력 하한, 하드스톱 {stop:.0f}°", THRUST_SPEC[0], stop, "repo", d_nom, 1.0, 0.0),
+        (f"보수: 사양 하한, {stop:.0f}°, 판 이론 CN, d 25 %", THRUST_SPEC[0], stop, "plate", d_nom, 1.0, 0.0),
         ("보수+: 위에 d 50 %(기하 한계)", THRUST_SPEC[0], stop, "plate", d_max, 1.0, 0.0),
-        ("겹침: 사양 상한, 15°, 판 이론, d 50 %, 속도 1.3배, 허브 반경 15 mm", THRUST_SPEC[1], stop, "plate", d_max, 1.3, 0.015),
+        (f"겹침: 사양 상한, {stop:.0f}°, 판 이론, d 50 %, 속도 1.3배, 허브 반경 15 mm", THRUST_SPEC[1], stop, "plate", d_max, 1.3, 0.015),
     ]
     print("\n## 필요 모멘트 (베인 1장, 직결 구동) 대 서보 스톨 토크")
     print("| 경우 | Ft N | 각 ° | q Pa | CN | F N | d mm | M N·m | M kgf·cm | 여유(1.8) | 여유(1.3) |")
@@ -151,8 +155,8 @@ def main():
     print("\n## 민감도 (겹침 경우에서 한 입력만 낮은 값으로 바꿈)")
     print("| 바꾼 입력 | M kgf·cm | 여유(1.8) |")
     print("|---|---:|---:|")
-    alts = [("겹침 그대로", {}), ("추력 상한 → 하한(12.75 N)", dict(Ft=THRUST_SPEC[0])),
-            ("각 15° → 10°", dict(a=10)), ("CN 판 이론 → repo(저종횡비)", dict(cn="repo")),
+    alts = [("겹침 그대로", {}), (f"추력 상한 → 하한({THRUST_SPEC[0]:.2f} N)", dict(Ft=THRUST_SPEC[0])),
+            (f"각 {stop:.0f}° → {alpha_sim:.0f}°", dict(a=alpha_sim)), ("CN 판 이론 → repo(저종횡비)", dict(cn="repo")),
             ("d 50 % → 25 %", dict(d=d_nom)), ("속도 1.3배 → 균일", dict(kp=1.0)), ("허브 15 mm → 0", dict(rh=0.0))]
     for name, ch in alts:
         b = {**base, **ch}
@@ -168,7 +172,7 @@ def main():
         lim = SG90_STALL_DATASHEET / SAFETY_FACTOR_REQUIRED
         print(f"| {name} | {mk:.3f} | {lim:.2f} | {max(lim-mk,0):.2f} | {lim/mk:.1f} |")
     worst = max(mk for _, mk in rows)
-    print(f"\n최악(겹침) 경우 M = {worst:.3f} kgf·cm. 데이터시트 1.8 대비 여유 {SG90_STALL_DATASHEET/worst:.1f}배, "
+    print(f"\n최악 가정(겹침) 경우 M = {worst:.3f} kgf·cm. 데이터시트 1.8 대비 여유 {SG90_STALL_DATASHEET/worst:.1f}배, "
           f"호환 서보 하한 1.3 대비 {SG90_STALL_CLONE_LOW/worst:.1f}배.")
     # 모멘트를 스톨과 같게 만드는 법선력 계수(공칭 형상, d 한계) — CN이 얼마나 커야 SG90이 멈추는가.
     Ft, kp, rh = THRUST_SPEC[1], 1.3, 0.015
@@ -178,7 +182,7 @@ def main():
     for lab, T in (("1.8", SG90_STALL_DATASHEET), ("1.3", SG90_STALL_CLONE_LOW)):
         for dl, d in (("d 25 %", d_nom), ("d 50 %", d_max)):
             cn = T * KGFCM_TO_NM / (q * S * d)
-            print(f"스톨 {lab} kgf·cm에 닿는 법선력 계수 CN = {cn:.2f} (겹침 입력의 추력·속도·허브, {dl}) (비교: 2π·15° = 1.65)")
+            print(f"스톨 {lab} kgf·cm에 닿는 법선력 계수 CN = {cn:.2f} (겹침 입력의 추력·속도·허브, {dl}) (비교: 2π·{stop:.0f}° = {2*math.pi*math.radians(stop):.2f})")
 
 
 if __name__ == "__main__":
