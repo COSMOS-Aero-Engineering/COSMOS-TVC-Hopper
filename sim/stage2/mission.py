@@ -19,6 +19,7 @@ from .model import GRAVITY, MAX_THRUST, euler
 HOVER_HEIGHT = 0.50     # m
 PAD_XY = (0.50, 0.0)    # m, world landing pad center. The start is near the origin.
 TOUCHDOWN_CUT = 0.003   # m, same 3 mm throttle cut as LandingPD
+CUT_CONFIRM_STEPS = 5   # consecutive control steps (0.1 s) below TOUCHDOWN_CUT before the cut (#409)
 LAND_OVERSHOOT = 0.03   # m, the landing reference ends this far below rest height
 PHASES = (              # name, duration (s)
     ("takeoff", 3.0),
@@ -187,13 +188,21 @@ class Estimator:
 
 
 class TrackingPD(LandingPD):
-    """LandingPD's attitude and allocation loop with a position/velocity reference."""
+    """LandingPD's attitude and allocation loop with a position/velocity reference.
+    The horizontal position loop has a clamped, conditional integral term."""
 
     KP_XY, KD_XY = 2.0, 2.4
     KP_Z, KD_Z = 6.0, 4.5
     MAX_ACCEL_XY = 1.0
+    KI_XY = 0.5             # (m/s^2)/(m s), horizontal position integral gain (#409)
+    I_MAX_XY = 0.15         # m/s^2, wind-up limit (0.5 deg of tilt is 0.086 m/s^2)
+    I_MIN_HEIGHT = 0.05     # m, integrate only this far above the resting CG height
 
-    def command(self, state, ref_pos, ref_vel, ref_acc, cut):
+    def __init__(self, airframe):
+        super().__init__(airframe)
+        self.integral = np.zeros(2)     # m/s^2
+
+    def command(self, state, ref_pos, ref_vel, ref_acc, cut, dt=CONTROL_DT):
         body = self.body
         if cut:
             return np.array([0, 0, 0, 0, -1], dtype=np.float32), {"thrust_sat": False, "vane_sat": False}
@@ -203,8 +212,13 @@ class TrackingPD(LandingPD):
         accel_z = ref_acc[2] + self.KP_Z * error[2] + self.KD_Z * rate_error[2]
         raw_thrust = body.mass * (GRAVITY + accel_z) / max(0.5, np.cos(roll) * np.cos(pitch))
         thrust = np.clip(raw_thrust, 0.1, MAX_THRUST)
-        accel_xy = np.clip(ref_acc[:2] + self.KP_XY * error[:2] + self.KD_XY * rate_error[:2],
-                           -self.MAX_ACCEL_XY, self.MAX_ACCEL_XY)
+        demand = ref_acc[:2] + self.KP_XY * error[:2] + self.KD_XY * rate_error[:2]
+        accel_xy = np.clip(demand + self.integral, -self.MAX_ACCEL_XY, self.MAX_ACCEL_XY)
+        # Conditional integration: no wind-up on the ground or while the command is clipped.
+        if (self.KI_XY and state.position[2] - body.rest_height > self.I_MIN_HEIGHT
+                and np.all(np.abs(demand + self.integral) < self.MAX_ACCEL_XY)):
+            self.integral = np.clip(self.integral + self.KI_XY * error[:2] * dt,
+                                    -self.I_MAX_XY, self.I_MAX_XY)
         c, s = np.cos(yaw), np.sin(yaw)
         target_roll = (s * accel_xy[0] - c * accel_xy[1]) / GRAVITY
         target_pitch = (c * accel_xy[0] + s * accel_xy[1]) / GRAVITY
@@ -230,18 +244,20 @@ def run(env, seed, feedback="truth"):
     controller = TrackingPD(env.airframe)
     records = []
     landing_started = cut = False
+    low_steps = 0
     while True:
         t = env.data.time
         ref_pos, ref_vel, ref_acc = trajectory(t)
         phase = trajectory.phase(t)
         state = truth_state(obs) if feedback == "truth" else estimator(obs)
         landing_started |= phase in ("land", "settle")
-        # Cut at the 3 mm height, or once the landing reference has ended below the floor.
+        # Cut after CUT_CONFIRM_STEPS steps in a row below 3 mm height, or once the landing
+        # reference has ended below the floor.
         # The env lands only with the EDF ratio <= 0.10, and the PD thrust floor (0.1 N) is
         # a ratio of 0.1005, so a missed height cut (range noise) must not hold thrust forever.
         # The cut latches: range noise must not switch the EDF back on after touchdown.
-        cut = cut or (landing_started and (state.position[2] - env.airframe.rest_height < TOUCHDOWN_CUT
-                                           or phase == "settle"))
+        low_steps = low_steps + 1 if state.position[2] - env.airframe.rest_height < TOUCHDOWN_CUT else 0
+        cut = cut or (landing_started and (low_steps >= CUT_CONFIRM_STEPS or phase == "settle"))
         action, limits = controller.command(state, ref_pos, ref_vel, ref_acc, cut)
         next_obs, reward, terminated, truncated, info = env.step(action)
         records.append({

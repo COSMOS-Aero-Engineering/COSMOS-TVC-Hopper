@@ -13,6 +13,7 @@
 | `docs/design/02-web-dashboard-design.md` | 웹 대시보드·3D 뷰어 설계, **CSV 데이터 계약(§4)**, 개발 단계 W-A부터 W-F, 기술 스택 | 현행 |
 | `docs/design/03-control-pipeline-design.md` | PID/RL 구조, 3D 물리엔진 전환(Stage 2), State/Action, 도메인 랜덤화, 온보드 배포. **PID vs RL의 단일 정본** | 현행 |
 | `docs/design/modelling-notes-ch3.md` | 논문 3장 수식과 `hopper_aviary.py` 대응표, 코드와 다른 지점 | 현행. CL 결정은 PR #35 |
+| `docs/design/sg90-hinge-moment.md`, `cad/tools/servo_hinge_moment.py` | SG90 스톨 토크(제조사 데이터시트)와 베인 힌지모멘트 비교, 토크만 보면 SG90도 모자라지 않다는 책상 계산(실측 없는 예상). 구매·교체 결정이 아니고 기어 내구성은 못 본다(#382) | 11/21 |
 | `docs/design/rl-open-source-survey.md` | 오픈소스 RL 환경 조사(PyFlyt 등), 가져올 물리 모델 | 10/15 |
 | `docs/design/research-open-source-references.md` | rev C 근거 리서치 | 완료 |
 | `docs/design/connectome-control.md` | 확장 트랙 A(커넥톰) 설계와 한계 | 9/18 |
@@ -20,7 +21,7 @@
 | `docs/design/*.svg`, `docs/design/tools/` | 배치도·배선도와 그 생성 스크립트 | |
 | `docs/design/references/Jacobsen2021_*.pdf` | SolidGeek/Jacobsen 논문 전문(제작·제어의 1차 자료) | |
 | `docs/execution/TIMELINE.md` | 한 장 타임라인, 현재 병목 | 10/16 갱신 |
-| `docs/execution/countdown-1122.md` | 11/22 발표까지 주별 역산 일정과 축소 경로 판정(#258) | 초안, 10/31 |
+| `docs/execution/countdown-1122.md` | 11/22 발표까지 주별 역산 일정과 축소 경로 판정(#258) | 초안, 10/31(11/21에 판정 근거 §3.1 추가) |
 | `docs/execution/semester-roadmap.md`, `week-01-kickoff.md`, `member-weekly-tasks.md` | 9월 기준 원래 계획. 실제보다 약 3주 앞서 있음 | 기록 |
 | `docs/execution/procurement-review.md`, `bench-wiring.svg` | 구매 시트 검토 / 구버전 배선도(01 문서 §4로 대체) | 기록 |
 | `cad/hopper_params.scad` | **CAD 정본** | 현행 |
@@ -30,6 +31,7 @@
 | `firmware/cosmos/imu_test_i2c/` | BNO085 4선 I2C 브링업 | 10/15 실물 확인 |
 | `firmware/cosmos/imu_test/` | BNO085 SPI(최종 핀맵) | 빌드만 확인 |
 | `firmware/cosmos/throttle_serial/` | DShot 벤치 펌웨어 | ESC 없이 확인 |
+| `firmware/cosmos/servo_bench/` | 시리얼로 서보 번호(1-2)와 펄스폭(1000-2000 µs)을 받아 서보 하나를 움직인다. EDF·ESC 미연결 | 빌드만 확인. 실물 서보 시험은 #279 |
 | `firmware/cosmos/rc_bench/` | RC 수신기 PWM 5채널 읽기와 킬 채널 스로틀 0 보고(브링업 P3). 모터 출력 없음 | 빌드만 확인 |
 | `firmware/cosmos/policy_bench/` | PPO Actor 추론 시간·메모리 벤치(USB 출력만, 구동 코드 없음). 헤더는 `sim/deployment/check_parity.py`가 만든다 (#291) | 빌드만 확인 |
 | `firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 원본(MIT). 통합 펌웨어의 출발점 | 손대지 않음 |
