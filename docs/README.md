@@ -30,6 +30,7 @@
 | `firmware/cosmos/imu_test_i2c/` | BNO085 4선 I2C 브링업 | 10/15 실물 확인 |
 | `firmware/cosmos/imu_test/` | BNO085 SPI(최종 핀맵) | 빌드만 확인 |
 | `firmware/cosmos/throttle_serial/` | DShot 벤치 펌웨어 | ESC 없이 확인 |
+| `firmware/cosmos/servo_bench/` | 시리얼 명령으로 서보 하나에 펄스폭(1000-2000 µs)을 낸다. EDF·ESC 미연결 | 서보 1개 실물 확인(#279) |
 | `firmware/cosmos/rc_bench/` | RC 수신기 PWM 5채널 읽기와 킬 채널 스로틀 0 보고(브링업 P3). 모터 출력 없음 | 빌드만 확인 |
 | `firmware/cosmos/policy_bench/` | PPO Actor 추론 시간·메모리 벤치(USB 출력만, 구동 코드 없음). 헤더는 `sim/deployment/check_parity.py`가 만든다 (#291) | 빌드만 확인 |
 | `firmware/reference/SingleRotorUAV/` | SolidGeek 펌웨어 원본(MIT). 통합 펌웨어의 출발점 | 손대지 않음 |
