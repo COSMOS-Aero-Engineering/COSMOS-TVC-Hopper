@@ -34,10 +34,11 @@ KGFCM_TO_NM = G / 100.0      # 1 kgf·cm = 0.0980665 N·m
 #   Rapid Online 37-1330 PDF(2013-10판)도 1.8 kg/cm(4.8 V)다. SG90 페이지에 6 V 토크는 없다(전압 4.8 V만 적혀 있다).
 # 단위 "kg/cm"는 kgf·cm로 읽는다(제조사 표기 관행).
 SG90_STALL_DATASHEET = 1.8
-# 낮은 쪽 비교값. 우리 서보가 TowerPro 정품인지 모른다(후속 #425). 호환 서보 Feetech FS90은 1.3 kgf·cm(4.8 V)로 적는다
-#   (Pololu FS90 사양 https://www.pololu.com/product/2818/specs). 이 값을 "SG90의 사양"으로 쓰지 않는다. 정품이 아닐 때의 하한 비교다.
+# 낮은 쪽 비교 예시값. 우리 서보가 TowerPro 정품인지 모른다(후속 #425). 호환 서보 Feetech FS90은 1.3 kgf·cm(4.8 V)로 적는다
+#   (Pololu FS90 사양 https://www.pololu.com/product/2818/specs). 이 값은 한 제품의 사양이다. 하한이 아니고 "SG90의 사양"도 아니다.
+#   더 낮은 서보가 올 수 있어서 아래 "스톨이 몇 이하면" 문턱값도 출력한다.
 SG90_STALL_CLONE_LOW = 1.3
-# 이슈 #382 예비 계산 댓글은 "일부 자료가 1.2"라고 적었지만 출처를 찾지 못했다. 쓰지 않는다. 1.3 이하는 아래 break-even 표로 덮는다.
+# 이슈 #382 예비 계산 댓글은 "일부 자료가 1.2"라고 적었지만 출처를 찾지 못했다. 쓰지 않는다. 1.3 미만은 아래 문턱값 출력으로 본다.
 
 # --- 추력 (N) ---------------------------------------------------------------------------------
 # 마스터 설계 L1: 정적 추력 1.3~1.45 kgf (판매 사양, 실측 아님. 실험 A 전). docs/design/00-hopper-master-design.md
@@ -53,10 +54,12 @@ SAFETY_FACTOR_REQUIRED = 2.0  # 가정: 스톨 토크의 절반 이하로 쓴다
 
 
 def read_scad(name):
-    m = re.search(rf"^\s*{re.escape(name)}\s*=\s*([-0-9.]+)\s*;", SCAD.read_text(encoding="utf-8"), re.M)
-    if not m:
+    ms = re.findall(rf"^\s*{re.escape(name)}\s*=\s*([-0-9.]+)\s*;", SCAD.read_text(encoding="utf-8"), re.M)
+    if len(ms) > 1:
+        sys.exit(f"{SCAD}에 {name}이 {len(ms)}번 정의돼 있다. 어느 값인지 정할 수 없다")
+    if not ms:
         sys.exit(f"{SCAD}에서 {name}을 찾지 못했다")
-    return float(m.group(1))
+    return float(ms[0])
 
 
 def read_yaml_number(key, nested=False):
@@ -171,7 +174,7 @@ def main():
         M, _ = hinge_moment(b["Ft"], b["a"], b["cn"], b["d"], b["kp"], b["rh"], g)
         print(f"| {name} | {kgfcm(M):.3f} | {SG90_STALL_DATASHEET/kgfcm(M):.1f} |")
 
-    # break-even: 공칭·보수·겹침 각각에서 스톨(여유 1) 또는 여유 2에 닿으려면 모멘트가 몇 배가 돼야 하는가.
+    # 공력 외 부하에 쓸 수 있는 몫과, 스톨 토크가 얼마 미만이면 기준을 못 넘는지(문턱값)를 낸다.
     sf = SAFETY_FACTOR_REQUIRED
     print(f"\n## 모르는 부하가 얼마나 더 붙어도 되나 (여유 {sf:g}배는 가정)")
     print(f"여유 {sf:g}배를 지키려면 공력 외 부하(부싱 마찰·스파 비틀림·백래시 등 합)가 아래 값 이하여야 한다. 음수는 공력만으로 기준 미달이다.")
@@ -182,9 +185,10 @@ def main():
         print(f"| {name} | {mk:.3f} | {l1:.2f} | {l1-mk:.2f} | {l2:.2f} | {l2-mk:.2f} |")
     worst = max(mk for _, mk in rows)
     print(f"\n표의 가정을 겹친 경우 M = {worst:.3f} kgf·cm. 데이터시트 {SG90_STALL_DATASHEET:g} 대비 여유 {SG90_STALL_DATASHEET/worst:.1f}배, "
-          f"호환 서보 하한 {SG90_STALL_CLONE_LOW:g} 대비 {SG90_STALL_CLONE_LOW/worst:.1f}배.")
+          f"호환 서보 예시값 {SG90_STALL_CLONE_LOW:g} 대비 {SG90_STALL_CLONE_LOW/worst:.1f}배.")
+    print(f"겹침 경우 기준 문턱값: 스톨이 {worst*sf:.2f} kgf·cm 미만이면 여유 {sf:g}배 기준 미달, {worst:.2f} kgf·cm 미만이면 스톨을 넘는다.")
     # 제트 반지름 R 민감도(겹침 경우). R은 실측 전이라(#118) 작은 쪽도 본다.
-    print(f"\n## 제트 반지름 R 민감도 (겹침 경우, 베인 면적은 R − r_in)")
+    print(f"\n## 제트 반지름 R 민감도 (겹침 경우, 베인 면적은 R-r_in)")
     print(f"| R mm | M kgf·cm | 여유({SG90_STALL_DATASHEET:g}) | 여유({SG90_STALL_CLONE_LOW:g}) |")
     print("|---:|---:|---:|---:|")
     for r_mm in (26, 28, 30, g["outer_r"] * 1e3, 34, 36):
