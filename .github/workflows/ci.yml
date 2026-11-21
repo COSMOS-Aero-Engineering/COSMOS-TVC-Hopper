@@ -8,6 +8,7 @@
 #     check의 cad 작업을 위해 OpenSCAD를 먼저 설치한다(#61).
 #   - web: lockfile대로 의존성을 설치하고 축·CSV 검사와 Vite 생산 빌드를 실행한다(#40).
 #   - firmware: PlatformIO 빌드. 빌드할 프로젝트 목록은 아래 matrix.project가 정본이다.
+#     policy_bench는 빌드 전에 `python3 tasks.py parity`로 actor_data.h를 만든다(#408).
 #   - firmware-all: firmware matrix의 결과를 체크 하나("firmware — 전체")로 모은다(#103).
 # sim job 이름("환경 로딩 + PPO 스모크")은 실제 검사 범위보다 좁다. 이 이름은 required
 # status check와 묶여 있어서 바꾸지 않는다. 바꾸는 순서는 sim job의 name 위 주석에 있다.
@@ -18,6 +19,8 @@
 # 버텼는데, 그건 언젠가 어긋난다. 이제 sim 검사의 정본은 tasks.py 하나다.
 # 학습 자료 검사, 웹 검사·빌드, 펌웨어 빌드는 tasks.py에 없고 이 파일이 직접 돌린다. 로컬에서
 # `python tasks.py check`를 통과해도 이 셋은 따로 확인해야 한다. 명령은 아래 각 단계에 있다.
+# PPO Actor의 C++ 비교 검사(parity)는 tasks.py check에 있고, policy_bench 빌드 전에도 같은 작업을
+# 돌려 헤더를 만든다(firmware job 주석).
 name: CI
 
 on:
@@ -114,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [imu_test, imu_test_i2c, throttle_serial, servo_bench, rc_bench]
+        project: [imu_test, imu_test_i2c, throttle_serial, servo_bench, rc_bench, policy_bench]
     steps:
       - uses: actions/checkout@v4
 
@@ -124,6 +127,21 @@ jobs:
 
       - name: PlatformIO 설치
         run: pip install platformio
+
+      # policy_bench는 git에서 뺀 include/actor_data.h가 있어야 빌드된다(#408). 이 헤더는 C++ 비교
+      # 검사(check_parity.py)가 통과해야 만들어진다. 그래서 pio run 전에 parity 작업을 돌린다.
+      # 같은 작업이 sim job의 `tasks.py check`에도 들어 있다. job마다 러너가 따로라서 헤더를
+      # 넘길 수 없어 여기서 한 번 더 돈다(약 1분). 아래 두 단계는 policy_bench에서만 돈다.
+      - name: uv 설치 (policy_bench 헤더 생성용)
+        if: matrix.project == 'policy_bench'
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: 헤더 생성 — python tasks.py parity (policy_bench만)
+        if: matrix.project == 'policy_bench'
+        run: python3 tasks.py parity
 
       - name: pio run — ${{ matrix.project }}
         working-directory: firmware/cosmos/${{ matrix.project }}

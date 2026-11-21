@@ -14,6 +14,8 @@ CI는 그 밖에 학습 자료 목록·내부 링크 검사와 펌웨어 Platfor
 이 둘은 check에 없다. 로컬에서 check를 통과해도 이 둘은 따로 확인한다(명령은 ci.yml).
 check가 돌리는 단계는 `python tasks.py graph`의 check 줄을 본다.
 check의 cad 작업은 OpenSCAD가 필요하다. 없는 PC에서는 건너뛰고, CI는 OpenSCAD를 설치해서 돌린다(#61).
+check의 parity 작업은 호스트 C++ 컴파일러가 필요하다. 없는 PC에서는 건너뛰고, CI(Linux)는 g++로 돌린다(#408).
+parity는 policy_bench 빌드에 필요한 firmware/cosmos/policy_bench/include/actor_data.h도 만든다.
 
 왜 Makefile이 아니라 이 파일인가: 팀 개발 환경이 Windows 위주인데 Windows엔 `make`가 기본으로
 없다. 반면 파이썬은 소프트웨어팀이 어차피 설치해야 한다. 표준 라이브러리만 쓰므로 추가 설치도
@@ -844,6 +846,71 @@ def task_cad():
     print("발주 STL·31개 패키지 검사 통과")
 
 
+# C++ 비교 검사(parity, #408). sim/deployment/check_parity.py가 컴파일러를 찾는 이름과 같게 둔다.
+# 그 스크립트는 SB3 같은 무거운 import 뒤에 컴파일러를 찾는다. 여기서는 그 전에 있는지만 본다.
+HOST_CXX_NAMES = ("c++", "g++", "clang++", "cl")
+DEPLOY = SIM / "deployment"
+PARITY_HEADER = ROOT / "firmware" / "cosmos" / "policy_bench" / "include" / "actor_data.h"
+CXX_HOW = (
+    "Windows: Visual Studio Build Tools의 'x64 Native Tools Command Prompt'에서 실행한다(cl이 PATH에 잡힌다).\n"
+    "           Ubuntu:  sudo apt-get install g++\n"
+    "           macOS:   xcode-select --install"
+)
+
+
+def find_host_cxx():
+    """PATH에서 쓸 수 있는 호스트 C++ 컴파일러 경로를 돌려준다. 없으면 None.
+
+    check_parity.py의 compile_host()가 같은 이름 순서로 찾는다. cl은 `--version`을 받지 않아서
+    PATH에 있는지만 본다. 나머지는 `--version`이 성공해야 한다. Windows의 가짜 실행 파일을 거른다.
+    """
+    for name in HOST_CXX_NAMES:
+        path = shutil.which(name)
+        if not path:
+            continue
+        if Path(path).stem.lower() == "cl":
+            return path
+        try:
+            r = subprocess.run([path, "--version"], capture_output=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if r.returncode == 0:
+            return path
+    return None
+
+
+def host_cxx_fingerprint():
+    """parity 작업의 캐시 키에 넣는 컴파일러 경로. 없으면 "no-cxx"다(cad의 openscad_fingerprint와 같은 이유)."""
+    return find_host_cxx() or "no-cxx"
+
+
+def task_parity():
+    """PPO Actor의 C++ 출력이 SB3 predict와 같은지 본다(#408). Teensy 벤치 헤더도 이때 만든다.
+
+    호스트 C++ 컴파일러가 없는 PC에서는 이유와 설치 방법을 출력하고 건너뛴다. 건너뛴 결과는
+    캐시하지 않는다. CI(환경변수 CI가 있음)에서는 건너뛰지 않고 실패한다. CI가 컴파일러를 잃으면
+    이 검사가 조용히 빠지기 때문이다. ubuntu-latest는 g++를 갖고 있다.
+
+    정규화 단위 검사(test_normalization.py)와 seed 0-199 비교(check_parity.py)를 돌린다. 비교는
+    firmware/cosmos/policy_bench/include/actor_data.h를 덮어쓴다. 이 헤더는 git에서 뺀 파일이고,
+    ci.yml의 firmware job이 policy_bench를 빌드하기 전에 이 작업으로 만든다.
+
+    컴파일러 찾기의 단위 검사(test_hostcxx.py)를 먼저 돌린다. 이 검사는 컴파일러가 필요 없다.
+    """
+    run([sys.executable, "-m", "unittest", "-q", "test_hostcxx"], cwd=ROOT)
+    cxx = find_host_cxx()
+    if not cxx:
+        if os.environ.get("CI"):
+            die("CI에서 호스트 C++ 컴파일러를 찾지 못했다. ci.yml 러너 이미지나 설치 단계를 확인할 것.\n"
+                f"     설치: {CXX_HOW}")
+        print("[건너뜀] parity - 호스트 C++ 컴파일러를 찾지 못했다. CI는 이 검사를 돌린다.\n"
+              f"     설치: {CXX_HOW}")
+        return SKIPPED
+    print(f"호스트 C++ 컴파일러: {cxx}")
+    uv_run(["python", "test_normalization.py"], cwd=DEPLOY)
+    uv_run(["python", "check_parity.py", "--cxx", cxx], cwd=DEPLOY)
+
+
 # 한국어 Windows에서 출력을 파일이나 파이프로 돌리면 파이썬은 cp949로 쓴다. 출력 문자열에
 # em dash(U+2014)처럼 cp949에 없는 글자가 있으면 UnicodeEncodeError로 멈춘다(#137, #147, #170, #169).
 # CI는 Linux(UTF-8)에서 돌아서 이 결함을 보지 못한다. cp949 작업이 이것을 막는다(#171).
@@ -1194,6 +1261,14 @@ TASKS = {t.name: t for t in [
          task_cad, inputs=["cad/hopper_params.scad", "cad/tools/*.py", "cad/print-orders/20261021-R2/*.zip",
                            "cad/reports/2026-10-21/*", "test_cadcheck.py", "test_interference.py"],
          tool=openscad_fingerprint),
+    Task("parity", "PPO Actor의 C++ 출력과 SB3 predict 비교(seed 0-199) + 정규화 단위 검사, C++ 컴파일러 없으면 건너뜀."
+         " policy_bench 헤더도 만든다 (#408)", task_parity,
+         inputs=["sim/deployment/*.py", "sim/deployment/*.cpp", "sim/deployment/*.hpp",
+                 "sim/sim_stage1/*.py", "sim/sim_stage1/*.yaml", "sim/sim_stage1/*.json",
+                 "sim/sim_stage1/*.zip", "firmware/cosmos/policy_bench/src/main.cpp",
+                 "test_hostcxx.py", *DEPS_IN],
+         outputs=["firmware/cosmos/policy_bench/include/actor_data.h"],
+         uses_env=True, needs_torch=True, tool=host_cxx_fingerprint),
     Task("cp949", "print·raise 등 출력 문자열에 cp949에 없는 글자가 없는지 확인 (#171)."
          f" 범위: {', '.join(CP949_SCAN)}", task_cp949,
          inputs=[*CP949_SCAN, "test_cp949.py",
@@ -1211,7 +1286,7 @@ TASKS = {t.name: t for t in [
          " 단계 목록은 graph)", task_check,
          deps=["skills", "shiptest", "userpath", "kicadver", "cp949", "agentsref", "cad",
                "vcruntime", "compile", "ledger", "sanity", "gate", "yaw", "smoke", "conncheck",
-               "trainargs", "stage2"]),
+               "trainargs", "stage2", "parity"]),
     Task("trainargs", "train 작업의 인자를 ppo_ablation.py가 받는지 확인 (학습 안 함, #351)", task_trainargs,
          inputs=SIM_IN, uses_env=True),
     Task("train", "PPO 본 학습 (#230 crashcost 조건 1M 스텝, 오래 걸림. PD 합격 기준 gate를 먼저 본다)",
