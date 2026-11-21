@@ -221,13 +221,12 @@ class MissionTest(unittest.TestCase):
                 self.assertEqual(phase["est_pos_rms_m"], 0.)
 
     def test_estimated_feedback_mission(self):
-        (_, seed0), (_, seed1) = self.estimated
-        self.assertEqual(seed0["outcome"], "landed", seed0)
-        self.assertLess(seed0["touchdown_xy_error_m"], 0.20)
-        # Known failure (README, #409): range noise (sigma 5 mm) cuts the EDF at 2.2 mm
-        # estimated height while the true height is 12.9 mm, and the drop is a hard contact.
-        self.assertEqual(seed1["outcome"], "hard_contact", seed1)
-        self.assertIsNone(seed1["touchdown_xy_error_m"])
+        for _, result in self.estimated:
+            # Seed 1 used to be a hard contact (0.499 m/s): one noisy height sample cut the
+            # EDF at 12.9 mm. The cut now needs CUT_CONFIRM_STEPS samples in a row (#409).
+            self.assertEqual(result["outcome"], "landed", result)
+            self.assertLess(result["touchdown_xy_error_m"], 0.20)
+            self.assertLessEqual(result["impact_m_s"], 0.30)
         for _, result in self.estimated:
             # The flow-integrated position drifts away from the truth.
             self.assertGreater(result["phases"]["hover2"]["est_pos_rms_m"], 0.)
@@ -236,6 +235,13 @@ class MissionTest(unittest.TestCase):
             self.assertEqual(result["range_valid_fraction"], 1.)
             self.assertEqual(result["flow_valid_fraction"], 1.)
             json.dumps(result)
+
+    def test_position_integral_removes_hover_offset(self):
+        # Without the integral the CG offset leaves about (0.007, -0.016) m in `hover1` (#409).
+        for records, _ in self.truth:
+            rows = [r for r in records if r["phase"] == "hover1"][-25:]
+            mean = np.mean([r["obs"][:2] - r["ref_pos"][:2] for r in rows], axis=0)
+            self.assertLess(np.linalg.norm(mean), 0.010)
 
     def test_throttle_cut_latches(self):
         for records, _ in self.truth + self.estimated:
