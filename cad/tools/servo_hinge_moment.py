@@ -1,5 +1,5 @@
 """
-베인 힌지모멘트 대 SG90 스톨 토크 비교 (이슈 #382). 책상 계산이다. 실측은 TC-2(#263)가 한다.
+베인 힌지모멘트 대 SG90 스톨 토크 비교 (이슈 #382). 책상 계산이다. 힌지모멘트 실측은 없다(#263은 2026-11-20에 닫혔다).
 
 입력은 두 파일에서 읽는다(바뀌면 결과도 따라 바뀐다).
   - sim/sim_stage1/params.yaml : vane_geometry(inner_r_mm, outer_r_mm, chord_mm), CLalpha, mass, Kf, omega_t_per_throttle
@@ -34,7 +34,7 @@ KGFCM_TO_NM = G / 100.0      # 1 kgf·cm = 0.0980665 N·m
 #   Rapid Online 37-1330 PDF(2013-10판)도 1.8 kg/cm(4.8 V)다. SG90 페이지에 6 V 토크는 없다(전압 4.8 V만 적혀 있다).
 # 단위 "kg/cm"는 kgf·cm로 읽는다(제조사 표기 관행).
 SG90_STALL_DATASHEET = 1.8
-# 낮은 쪽 비교값. 우리 서보가 TowerPro 정품인지 모른다(#243). 호환 서보 Feetech FS90은 1.3 kgf·cm(4.8 V)로 적는다
+# 낮은 쪽 비교값. 우리 서보가 TowerPro 정품인지 모른다(후속 #425). 호환 서보 Feetech FS90은 1.3 kgf·cm(4.8 V)로 적는다
 #   (Pololu FS90 사양 https://www.pololu.com/product/2818/specs). 이 값을 "SG90의 사양"으로 쓰지 않는다. 정품이 아닐 때의 하한 비교다.
 SG90_STALL_CLONE_LOW = 1.3
 # 이슈 #382 예비 계산 댓글은 "일부 자료가 1.2"라고 적었지만 출처를 찾지 못했다. 쓰지 않는다. 1.3 이하는 아래 break-even 표로 덮는다.
@@ -145,7 +145,7 @@ def main():
         (f"겹침: 사양 상한, {stop:.0f}°, 판 이론, d 50 %, 속도 1.3배, 허브 반경 15 mm", THRUST_SPEC[1], stop, "plate", d_max, 1.3, 0.015),
     ]
     print("\n## 필요 모멘트 (베인 1장, 직결 구동) 대 서보 스톨 토크")
-    print("| 경우 | Ft N | 각 ° | q Pa | CN | F N | d mm | M N·m | M kgf·cm | 여유(1.8) | 여유(1.3) |")
+    print(f"| 경우 | Ft N | 각 ° | q Pa | CN | F N | d mm | M N·m | M kgf·cm | 여유({SG90_STALL_DATASHEET:g}) | 여유({SG90_STALL_CLONE_LOW:g}) |")
     print("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     rows = []
     for name, Ft, a, cn, d, kp, rh in cases:
@@ -158,7 +158,7 @@ def main():
     # 민감도: 겹침 경우에서 입력 하나씩만 공칭으로 되돌렸을 때 모멘트가 얼마나 줄어드는가.
     base = dict(Ft=THRUST_SPEC[1], a=stop, cn="plate", d=d_max, kp=1.3, rh=0.015)
     print("\n## 민감도 (겹침 경우에서 한 입력만 낮은 값으로 바꿈)")
-    print("| 바꾼 입력 | M kgf·cm | 여유(1.8) |")
+    print(f"| 바꾼 입력 | M kgf·cm | 여유({SG90_STALL_DATASHEET:g}) |")
     print("|---|---:|---:|")
     alts = [("겹침 그대로", {}), (f"추력 상한 → 하한({THRUST_SPEC[0]:.2f} N)", dict(Ft=THRUST_SPEC[0])),
             (f"각 {stop:.0f}° → {alpha_sim:.0f}°", dict(a=alpha_sim)), ("CN 판 이론 → repo(저종횡비)", dict(cn="repo")),
