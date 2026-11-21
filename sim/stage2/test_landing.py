@@ -316,6 +316,74 @@ class PpoBudgetTest(unittest.TestCase):
         self.assertEqual(row["landed"], 2)
         self.assertEqual(sum(row[k] for k in OUTCOMES), row["episodes"])
 
+    def test_learning_aids(self):
+        from .ppo_budget import (
+            CURRICULUM_END, CURRICULUM_START, GAMMA, make_env, make_eval_env,
+        )
+        pd = LandingPD(LandingEnv().airframe)
+        # residual with a zero correction is PD itself, including the touchdown throttle cut.
+        plain, wrapped = LandingEnv(), make_eval_env(("residual",))
+        a, _ = plain.reset(seed=1000)
+        b, _ = wrapped.reset(seed=1000)
+        while True:
+            a, ra, ta, ua, ia = plain.step(pd(a))
+            b, rb, tb, ub, ib = wrapped.step(np.zeros(5))
+            np.testing.assert_allclose(a, b, rtol=1e-4, atol=1e-5)  # float32 PD vs float64 sum
+            if ta or ua:
+                break
+        self.assertEqual((ia["outcome"], ib["outcome"]), ("landed", "landed"))
+        # shaping adds gamma*phi(s') - phi(s), phi = 0 in a terminal state.
+        shaped, base = make_env("env", ("shaped",)), LandingEnv()
+        o, _ = shaped.reset(seed=1000)
+        base.reset(seed=1000)
+        phi, extra = shaped.phi, 0.
+        self.assertLess(phi, 0.)
+        while True:
+            action = pd(o)
+            o, r, terminated, truncated, _ = shaped.step(action)
+            _, rb, *_ = base.step(action)
+            extra += r - rb
+            if terminated or truncated:
+                break
+        self.assertTrue(terminated)
+        self.assertAlmostEqual(shaped.phi, 0.)
+        self.assertGreater(extra, 0.)
+        # curriculum starts low and ends at the LandingEnv range.
+        low = make_env("env", ("curriculum",), n_envs=2, ramp_steps=100)
+        rest = low.unwrapped.airframe.rest_height
+        o, _ = low.reset(seed=0)
+        self.assertTrue(CURRICULUM_START[0] <= o[2] - rest <= CURRICULUM_START[1])
+        low.seen = 1000
+        o, _ = low.reset(seed=0)
+        self.assertTrue(CURRICULUM_END[0] <= o[2] - rest <= CURRICULUM_END[1])
+        # timeterm reports a time-limit stop as terminated; timeobs adds elapsed / max_steps.
+        timed = make_env("env", ("timeterm", "timeobs"))
+        timed.unwrapped.max_steps = 4
+        o, _ = timed.reset(seed=3)
+        self.assertEqual((o.shape, o[-1]), ((19,), 0.))
+        for _ in range(4):
+            o, _, terminated, truncated, info = timed.step(np.zeros(5))
+        self.assertEqual((terminated, truncated, info["outcome"], o[-1]), (True, False, "time_limit", 1.))
+        self.assertEqual(GAMMA, 0.99)
+
+    def test_interface_methods_round_trip(self):
+        import subprocess
+        import sys
+        import tempfile
+        from .ppo_budget import evaluate_policy, load_ppo
+        with tempfile.TemporaryDirectory() as tmp:
+            cmd = [sys.executable, "-m", "sim.stage2.ppo_budget", "train", "--condition", "vecnorm",
+                   "--method", "residual", "timeobs", "shaped", "--envs", "2", "--threads", "1",
+                   "--n-steps", "64", "--batch", "64", "--budgets", "128", "--out", tmp]
+            subprocess.run(cmd, check=True, cwd=Path(__file__).resolve().parents[2], capture_output=True)
+            stem = Path(tmp) / "ppo-vecnorm-residual-timeobs-shaped-s41-128"
+            meta = json.loads(Path(str(stem) + ".json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["methods"], ["residual", "timeobs", "shaped"])
+            policy = load_ppo(stem)
+            self.assertEqual(policy.methods, ("residual", "timeobs"))
+            row = evaluate_policy(policy, [1000])
+            self.assertEqual(row["episodes"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
