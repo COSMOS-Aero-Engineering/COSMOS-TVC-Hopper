@@ -64,7 +64,7 @@ import sys
 import numpy as np
 import yaml
 
-from hopper_aviary import HopperAttitudeEnv, hover_throttle
+from hopper_aviary import HopperAttitudeEnv, hover_throttle, state_from_obs
 from pd_gate import EVAL_SEEDS, MAX_CRASH, MAX_MEDIAN_TILT_DEG, gate_passes, pd
 
 PARAMS = os.path.join(os.path.dirname(__file__), "params.yaml")
@@ -135,7 +135,7 @@ def env_delta_omega(env, action):
     env.reset(seed=0)
     env.state = np.zeros(6, dtype=np.float32)
     obs, *_ = env.step(np.asarray(action, dtype=np.float32))
-    return obs[3:6].astype(float)
+    return state_from_obs(obs)[3:6].astype(float)
 
 
 def check_torque(p):
@@ -233,15 +233,15 @@ def check_rotor_reaction(p, spin):
     env = rotor_env(spin)
     env.state = np.zeros(6, dtype=np.float32)
     obs, *_ = env.step(throttle_action(1.0))   # 첫 스텝: 회전자가 이미 omega_max로 돌고 있었다고 둔다
-    momentum0 = p["Jzz"] * float(obs[5]) + spin * r["inertia"] * env.rotor_omega
+    momentum0 = p["Jzz"] * float(state_from_obs(obs)[5]) + spin * r["inertia"] * env.rotor_omega
     # 시상수의 20배(최소 1 s) 동안 계단 뒤 스로틀을 유지한다. 남는 지연은 e^-20 ≈ 2e-9배라 무시한다
     steps = int(np.ceil(max(1.0, 20.0 * r["tau"]) / env.dt))
     drift = 0.0
     for _ in range(steps):
         obs, *_ = env.step(throttle_action(u_h))
-        momentum = p["Jzz"] * float(obs[5]) + spin * r["inertia"] * env.rotor_omega
+        momentum = p["Jzz"] * float(state_from_obs(obs)[5]) + spin * r["inertia"] * env.rotor_omega
         drift = max(drift, abs(momentum - momentum0))
-    got = float(obs[5])
+    got = float(state_from_obs(obs)[5])
     want = -spin * r["inertia"] * r["omega_max"] * (u_h - 1.0) / p["Jzz"]
     where = f"반작용 spin_dir {spin:+d}"
     print(f"   가. {where}: {steps * env.dt:.1f} s 뒤 ωz = {got:.5f} rad/s, 손계산 {want:.5f} rad/s, "
@@ -251,8 +251,8 @@ def check_rotor_reaction(p, spin):
         failures.append(f"{where}: z축 각운동량 Jzz·ωz + s·I_r·Ω가 {drift:.3g} N·m·s 변했다 (보존되지 않음)")
     if np.sign(got) != np.sign(want) or abs(got - want) > REL_TOL * abs(want):
         failures.append(f"{where}: ωz = {got:.5g}, 손계산 {want:.5g} (부호나 크기가 다름)")
-    if max(abs(obs[3]), abs(obs[4])) > LEAK_TOL:
-        failures.append(f"{where}: ωx = {obs[3]:.3g}, ωy = {obs[4]:.3g}, 손계산은 0 (누설)")
+    if max(abs(state_from_obs(obs)[3]), abs(state_from_obs(obs)[4])) > LEAK_TOL:
+        failures.append(f"{where}: ωx = {state_from_obs(obs)[3]:.3g}, ωy = {state_from_obs(obs)[4]:.3g}, 손계산은 0 (누설)")
     return failures
 
 
@@ -267,7 +267,7 @@ def check_rotor_gyro(p, spin):
     rate = spin * r["inertia"] * r["omega_max"] / p["Jxx"]   # rad/s, +Z축 둘레 세차 각속도
     t = GYRO_STEPS * env.dt
     want = GYRO_W0 * np.array([np.cos(rate * t), np.sin(rate * t)])
-    got = obs[3:5].astype(float)
+    got = state_from_obs(obs)[3:5].astype(float)
     norm_err = abs(np.hypot(*got) - GYRO_W0) / GYRO_W0
     phase_tol = GYRO_STEPS * abs(rate * env.dt) ** 3 / 12.0   # 사다리꼴 규칙의 위상 오차(rad)
     vec_tol = GYRO_W0 * (2.0 * phase_tol + NORM_TOL)
@@ -279,8 +279,8 @@ def check_rotor_gyro(p, spin):
         failures.append(f"{where}: |ω| 상대오차 {norm_err:.3g} > {NORM_TOL:g} (회전 에너지가 보존되지 않음)")
     if not np.linalg.norm(got - want) <= vec_tol:
         failures.append(f"{where}: (ωx, ωy) = {got}, 해석해 {want} (차이 {np.linalg.norm(got - want):.3g} > {vec_tol:.3g})")
-    if abs(obs[5]) > LEAK_TOL:
-        failures.append(f"{where}: ωz = {obs[5]:.3g}, 해석해는 0 (누설)")
+    if abs(state_from_obs(obs)[5]) > LEAK_TOL:
+        failures.append(f"{where}: ωz = {state_from_obs(obs)[5]:.3g}, 해석해는 0 (누설)")
     return failures
 
 
@@ -301,7 +301,7 @@ def check_thrust_lag(p, spin):
     before = env.state.astype(float)
     action = throttle_action(u_h, vanes=COMMANDS["롤 [1,0,1,0]"][:4])
     obs, *_ = env.step(action)
-    got = obs[3:6].astype(float) - before[3:6]
+    got = state_from_obs(obs)[3:6].astype(float) - before[3:6]
 
     decay = np.exp(-env.dt / r["tau"]) if r["tau"] > 0 else 0.0
     u0, u1 = (u_h + (1.0 - u_h) * decay**k for k in (THRUST_PROBE_STEPS - 1, THRUST_PROBE_STEPS))
@@ -391,8 +391,8 @@ def check_servo(p):
             obs, *_ = env.step(vane_action(1.0))
             want = alpha_max * (1.0 - np.exp(-k * env.dt / tau))
             worst = max(worst, abs(env.vane_alpha[0] - want) / want)
-            got_dw = float(obs[3]) - before[3]
-            before = obs.astype(float)
+            got_dw = float(state_from_obs(obs)[3]) - before[3]
+            before = state_from_obs(obs)
         # 마지막 스텝의 Δωx: 그 스텝 끝 베인각으로 손계산한 토크. 회전자 항이 꺼져 있고 ωy = ωz = 0이라 교차항은 0이다
         frac = float(env.vane_alpha[0] / alpha_max)
         want_dw = hand_torque(p, vane_action(frac))[0] / p["Jxx"] * env.dt
@@ -472,7 +472,7 @@ def check_rotor(p):
 def pd_with_yaw(obs, kp=8.0, kd=2.0):
     """pd_gate.pd()에 요 PD를 섞는다. 요 명령 [1,-1,-1,1] 방향이 +τz다."""
     a = pd(obs)
-    uz = np.clip(-kp * obs[2] - kd * obs[5], -1, 1)
+    uz = np.clip(-kp * state_from_obs(obs)[2] - kd * state_from_obs(obs)[5], -1, 1)
     a[:4] = np.clip(a[:4] + uz * np.array([1, -1, -1, 1]), -1, 1)
     return a
 
@@ -488,20 +488,20 @@ def run_yaw_pd(rotor=False, spin=1, step_throttle=None):
     initial, final, peak, crashes, tilts = [], [], [], [], []
     for s in EVAL_SEEDS:
         obs, _ = env.reset(seed=s)
-        initial.append(abs(obs[2]))
-        k, top, done = 0, abs(obs[2]), False
+        initial.append(abs(state_from_obs(obs)[2]))
+        k, top, done = 0, abs(state_from_obs(obs)[2]), False
         while not done:
             a = pd_with_yaw(obs)
             if step_throttle is not None and k >= step_k:
                 a[4] = 2.0 * step_throttle - 1.0
             obs, _, term, trunc, _ = env.step(a)
             k += 1
-            top = max(top, abs(obs[2]))
+            top = max(top, abs(state_from_obs(obs)[2]))
             done = term or trunc
-        final.append(abs(obs[2]))
+        final.append(abs(state_from_obs(obs)[2]))
         peak.append(top)
         crashes.append(term)
-        tilts.append(np.degrees(np.hypot(obs[0], obs[1])))
+        tilts.append(np.degrees(np.hypot(state_from_obs(obs)[0], state_from_obs(obs)[1])))
     final_deg = np.degrees(final)
     return {
         "initial_max_deg": float(np.degrees(np.max(initial))),
@@ -522,10 +522,10 @@ def roll_step_pitch_peak(rotor, spin=1):
     env.rotor_spin_dir = spin
     env.reset(seed=0)
     env.state = np.array([ROLL_STEP_RAD, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
-    obs, peak, done = env.state.copy(), 0.0, False
+    obs, peak, done = env._obs(), 0.0, False
     while not done:
         obs, _, term, trunc, _ = env.step(pd_with_yaw(obs))
-        peak = max(peak, abs(float(obs[1])))
+        peak = max(peak, abs(float(state_from_obs(obs)[1])))
         done = term or trunc
     return float(np.degrees(peak))
 

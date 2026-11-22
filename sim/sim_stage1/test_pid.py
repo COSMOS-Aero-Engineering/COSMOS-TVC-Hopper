@@ -23,12 +23,12 @@ class PIDTest(unittest.TestCase):
         rng = np.random.default_rng(0)
         ctrl = PID(kp=8.0, kd=2.0, ki=0.0, dt=DT)
         for _ in range(200):
-            obs = rng.uniform(-0.5, 0.5, size=7).astype(np.float32)
+            obs = rng.uniform(-0.5, 0.5, size=8).astype(np.float32)
             np.testing.assert_array_equal(ctrl(obs), pd(obs))
 
     def test_reset_clears_integral(self):
         ctrl = PID(kp=8.0, kd=2.0, ki=5.0, dt=DT)
-        obs = np.array([0.05, -0.05, 0, 0, 0, 0, 1], dtype=np.float32)
+        obs = np.array([0.05, -0.05, 0, 1, 0, 0, 0, 1], dtype=np.float32)   # sin_psi 0, cos_psi 1 (#347)
         first = ctrl(obs)
         for _ in range(50):
             ctrl(obs)

@@ -1,11 +1,11 @@
 #include <Arduino.h>
 #include "actor.hpp"
 
-static_assert(actor::kInputs == 7, "obs initializer below assumes the 7 Stage 1 observations");
+static_assert(actor::kInputs == 8, "obs initializer below assumes the 8 Stage 1 observations (#347)");
 
 namespace {
 actor::Workspace workspace;
-float obs[actor::kInputs] = {0.1f, -0.2f, 0.05f, 0, 0, 0, 1};
+float obs[actor::kInputs] = {0.1f, -0.2f, 0.05f, 1.0f, 0, 0, 0, 1};  // phi, theta, sin_psi, cos_psi, wx, wy, wz, throttle
 float action[actor::kOutputs];
 constexpr unsigned kSamples = 256;
 }

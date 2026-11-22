@@ -93,11 +93,11 @@ BENCH_SAMPLES = 256   # firmware/cosmos/policy_bench/src/main.cpp kSamples
 def bench_checksum(directory, exe, outputs):
     """The bench's synthetic inputs through the host build; returns its float32 checksum.
 
-    Mirrors main.cpp: obs = {0.1, -0.2, 0.05, 0, 0, 0, 1}, obs[0] = (i - 128) * 0.002f,
+    Mirrors main.cpp: obs = {0.1, -0.2, 0.05, 1, 0, 0, 0, 1}, obs[0] = (i - 128) * 0.002f,
     checksum += every output value in order. The Teensy build may fuse multiply-adds and
     uses another tanhf, so the board value can differ slightly (#292 compares them).
     """
-    obs = np.tile(np.array([0.1, -0.2, 0.05, 0, 0, 0, 1], dtype=np.float32), (BENCH_SAMPLES, 1))
+    obs = np.tile(np.array([0.1, -0.2, 0.05, 1, 0, 0, 0, 1], dtype=np.float32), (BENCH_SAMPLES, 1))
     obs[:, 0] = (np.arange(BENCH_SAMPLES, dtype=np.float32) - np.float32(128)) * np.float32(0.002)
     raw, result = directory / "bench_obs.f32", directory / "bench_actions.f32"
     obs.tofile(raw)
@@ -125,7 +125,7 @@ def main():
         parser.error(f"--episodes must be in [1,{len(EVAL_SEEDS)}]")
     seeds = EVAL_SEEDS[:args.episodes]
     with closing(HopperAttitudeEnv()) as env, tempfile.TemporaryDirectory() as tmp:
-        if OBS_NAMES != ("phi", "theta", "psi", "wx", "wy", "wz", "throttle") or not env.dr.get("enabled", False):
+        if OBS_NAMES != ("phi", "theta", "sin_psi", "cos_psi", "wx", "wy", "wz", "throttle") or not env.dr.get("enabled", False):
             raise ValueError("Expected Stage 1 observation order and randomized evaluation")
         model, digest, kind, declared = load_actor(args.model, env)
         norm, normalization_id = load_normalization(args.vecnormalize, args.raw_obs, digest,

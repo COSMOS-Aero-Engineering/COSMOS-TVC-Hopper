@@ -31,11 +31,11 @@ python ship.py capped 8G -- uv run --frozen --project . python sim/deployment/ch
   - `vanes4`(N=4): 베인 1-4만 낸다. 호출하는 쪽이 스로틀 `kFixedThrottleNorm`(1.0)을 다섯 번째 값으로 붙인다. `policy_io.to_env_action()`과 같다.
   - `mixer3`는 신경망 뒤에 믹서 계산이 필요하다. `actor.hpp`에 이 계산이 없어서 내보내기를 중단한다.
 - 정책 출력은 모두 `[-1, 1]`이다. 환경의 `step()`이 베인각 환산, 스로틀의 `(a+1)/2` 변환과 변화율 제한을 맡는다.
-- 저장소의 두 zip은 관측 정규화를 쓰지 않았다. 도구는 SHA-256으로 두 zip을 알아본다: `hopper_attitude_ppo_230.zip` `0c0f2162ac12e5d60c52d2cf8b2273a6df0591502d3608593b8feae7f827daea`, `hopper_attitude_ppo.zip` `9fa28231e3a9995d693fd9241397044f0b846c4e005b9c6bd9d8f6324b7a78b2`. 다른 체크포인트에는 관측 순서와 학습 래퍼를 먼저 확인한다. 같은 단위·순서의 Stage 1 관측과 같은 행동 계약을 사용하는 모델만 비교한다.
+- `hopper_attitude_ppo_230.zip`은 관측 정규화를 쓰지 않았다. 도구는 SHA-256 `0a40036028c119f0f12b4ec580f1956244599d9790e6bf877ee9d319da92f1b2`으로 이 zip을 알아본다. 이 zip은 #347에서 8차원 관측(sin·cos psi)으로 같은 조건(crashcost, train seed 10001, 1M)을 다시 학습한 모델이다. #230 전 모델 `hopper_attitude_ppo.zip`은 7차원 관측이라 지금 환경에서 쓸 수 없다. 다른 체크포인트에는 관측 순서와 학습 래퍼를 먼저 확인한다. 같은 단위·순서의 Stage 1 관측과 같은 행동 계약을 사용하는 모델만 비교한다.
 
 다른 모델은 `--model FILE`에 학습 조건을 함께 지정한다. 원시 관측으로 학습했으면 `--raw-obs`, VecNormalize로 학습했으면 `--vecnormalize FILE`에 그 모델과 함께 저장한 통계를 준다. Python은 저장한 `normalize_obs`를 사용한다. C++은 같은 평균·분산·epsilon으로 표준화하고 `±clip_obs`에서 자른 뒤 float32로 변환한다. 보상 정규화는 행동 추론에 쓰지 않는다. 통계 파일은 pickle이므로 출처를 확인한 모델과 파일만 읽는다. 모델 zip만으로 학습 당시 래퍼나 통계 파일의 짝을 복원할 수 없다.
 
-지원 범위는 7차원 Stage 1 Box, 행동 구조 `learned`·`vanes4`, FlattenExtractor, 두 개의 Linear/Tanh 은닉층, 선형 행동 헤드, squash를 쓰지 않는 대각 가우시안이다. 구조나 차원이 다르면 내보내기를 중단한다. 내보낸 배열은 PyTorch Linear의 `[출력][입력]` 순서다. 호스트와 MCU는 같은 [actor.hpp](actor.hpp)를 빌드한다.
+지원 범위는 8차원 Stage 1 Box(#347 전에는 7차원), 행동 구조 `learned`·`vanes4`, FlattenExtractor, 두 개의 Linear/Tanh 은닉층, 선형 행동 헤드, squash를 쓰지 않는 대각 가우시안이다. 구조나 차원이 다르면 내보내기를 중단한다. 내보낸 배열은 PyTorch Linear의 `[출력][입력]` 순서다. 호스트와 MCU는 같은 [actor.hpp](actor.hpp)를 빌드한다.
 
 정규화 회귀 검사는 위와 같은 컴파일러 환경에서 실행한다. 별도로 만든 소형 시험 모델로 관측 정규화, 양쪽 행동 상한·하한, 통계 누락 시 비교 실패를 확인한다. `vanes4` 헤더 내용과, `mixer3`·출력 차원이 다른 `.json`을 거부하는지도 확인한다.
 

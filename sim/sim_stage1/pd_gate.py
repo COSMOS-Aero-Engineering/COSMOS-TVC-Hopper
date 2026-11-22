@@ -16,7 +16,7 @@ import sys
 
 import numpy as np
 
-from hopper_aviary import N_STATE, HopperAttitudeEnv
+from hopper_aviary import N_STATE, HopperAttitudeEnv, state_from_obs
 
 EVAL_SEEDS = range(200)
 MAX_CRASH = 0.05
@@ -24,7 +24,7 @@ MAX_MEDIAN_TILT_DEG = 5.0
 
 
 def pd(obs, kp=8.0, kd=2.0):
-    phi, theta, psi, wx, wy, wz = obs[:N_STATE]   # obs[6]은 제한 뒤 스로틀(#186). PD는 쓰지 않는다
+    phi, theta, psi, wx, wy, wz = state_from_obs(obs)[:N_STATE]   # obs[6]은 제한 뒤 스로틀(#186). PD는 쓰지 않는다
     ux = np.clip(-kp * phi - kd * wx, -1, 1)   # tau_x = (F1+F3)*l
     uy = np.clip(kp * theta + kd * wy, -1, 1)  # tau_y = -(F2+F4)*l
     return np.array([ux, uy, ux, uy, 1.0], dtype=np.float32)
@@ -47,7 +47,7 @@ def evaluate(policy, seeds=EVAL_SEEDS):
         returns.append(ret)
         lengths.append(t)
         crashes.append(term)
-        tilts.append(np.degrees(np.hypot(obs[0], obs[1])))
+        tilts.append(np.degrees(np.hypot(state_from_obs(obs)[0], state_from_obs(obs)[1])))
     return {
         "return": float(np.mean(returns)),
         "length": float(np.mean(lengths)),

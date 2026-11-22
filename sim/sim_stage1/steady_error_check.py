@@ -26,7 +26,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from hopper_aviary import HopperAttitudeEnv  # noqa: E402
+from hopper_aviary import HopperAttitudeEnv, state_from_obs  # noqa: E402
 from pd_gate import pd  # noqa: E402
 
 MODEL = HERE / "hopper_attitude_ppo_230.zip"
@@ -53,7 +53,7 @@ def run(act, n_seeds, options=None, cg_zero=False, dr_off=False):
             acts.append(a)
             if terminated or truncated:
                 break
-        x, a = np.asarray(xs, dtype=float), np.asarray(acts, dtype=float)
+        x, a = np.asarray([state_from_obs(o) for o in xs]), np.asarray(acts, dtype=float)
         t0 = max(1, int(len(x) * TAIL))
         tail, a_tail = x[t0:], a[t0 - 1:]   # x[k]는 행동 a[k-1] 뒤의 관측이다
         tilt = np.hypot(tail[:, 0], tail[:, 1])

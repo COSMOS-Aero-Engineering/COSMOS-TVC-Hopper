@@ -44,7 +44,7 @@ from pathlib import Path
 import gymnasium as gym
 import numpy as np
 
-from hopper_aviary import HopperAttitudeEnv
+from hopper_aviary import HopperAttitudeEnv, state_from_obs, wrap_angle
 from pd_gate import EVAL_SEEDS, pd
 from policy_io import MIXER, ActionAdapter, load_policy, read_meta, to_env_action
 
@@ -136,7 +136,7 @@ def rollout_stats(act, seeds=EVAL_SEEDS):
         returns.append(ret)
         lengths.append(t)
         crashes.append(term)
-        tilts.append(np.degrees(np.hypot(obs[0], obs[1])))
+        tilts.append(np.degrees(np.hypot(state_from_obs(obs)[0], state_from_obs(obs)[1])))
     throttle = np.asarray(throttle)
     return {"return": float(np.mean(returns)), "length": float(np.mean(lengths)),
             "crash": float(np.mean(crashes)), "median_tilt_deg": float(np.median(tilts)),
@@ -324,7 +324,7 @@ def breakdown_stats(model_path, seeds=CURVE_SEEDS):
             act = to_env_action(kind, a)
             obs, r, term, trunc, _ = env.step(act)
             phi, theta, psi, wx, wy, wz = env.state.astype(np.float64)
-            t = np.array([-(phi ** 2 + theta ** 2), -0.1 * psi ** 2, -0.01 * (wx ** 2 + wy ** 2 + wz ** 2),
+            t = np.array([-(phi ** 2 + theta ** 2), -0.1 * wrap_angle(psi) ** 2, -0.01 * (wx ** 2 + wy ** 2 + wz ** 2),
                           -0.001 * float(np.sum(np.square(act.astype(np.float64))))])
             if abs(t.sum() - r) > 1e-4:
                 raise AssertionError(f"보상 항 합 {t.sum()}이 환경 보상 {r}과 다르다. hopper_aviary.py 식이 바뀌었나?")

@@ -60,10 +60,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "connectome"))
 
 from evaluate import SETTLE_DEG, run_episodes  # noqa: E402
-from hopper_aviary import INITIAL_ATTITUDE_RAD, HopperAttitudeEnv  # noqa: E402
+from hopper_aviary import INITIAL_ATTITUDE_RAD, HopperAttitudeEnv, state_from_obs  # noqa: E402
 from pd_gate import EVAL_SEEDS, pd  # noqa: E402
 
-DEFAULT_MODEL = HERE / "hopper_attitude_ppo.zip"
+DEFAULT_MODEL = HERE / "hopper_attitude_ppo_230.zip"   # #347: 옛 hopper_attitude_ppo.zip은 7차원 관측이라 못 쓴다
 # pid_tune.py 결과(#349). 튜닝 seed 1000-1199, 학습 분포 조건에서 평균 리턴이 가장 큰 격자점이다.
 PID_GAINS = {"kp": 28.0, "kd": 8.0, "ki": 2.5}
 TC3_TILT_DEG = 10.0   # 마스터 설계 §11 TC-3의 초기 오프셋(°)
@@ -90,7 +90,7 @@ def outside_training_init(reset_options):
     count = 0
     for seed in EVAL_SEEDS:
         obs, _ = env.reset(seed=seed, options=reset_options)
-        count += bool(np.any(np.abs(obs[:3]) > INITIAL_ATTITUDE_RAD))
+        count += bool(np.any(np.abs(state_from_obs(obs)[:3]) > INITIAL_ATTITUDE_RAD))
     return count
 
 
@@ -112,7 +112,7 @@ class PID:
         self.iy = 0.0   # 피치 오차 theta의 적분(rad·s)
 
     def __call__(self, obs):
-        phi, theta, _, wx, wy, _ = obs[:6]
+        phi, theta, _, wx, wy, _ = state_from_obs(obs)
         vx = -self.kp * phi - self.kd * wx - self.ki * self.ix   # pd()의 ux에 적분 항을 더했다
         vy = self.kp * theta + self.kd * wy + self.ki * self.iy  # pd()의 uy에 적분 항을 더했다
         if self.ki:

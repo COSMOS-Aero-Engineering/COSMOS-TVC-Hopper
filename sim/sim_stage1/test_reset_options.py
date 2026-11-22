@@ -11,7 +11,7 @@ import unittest
 
 import numpy as np
 
-from hopper_aviary import CRASH_DEG, N_STATE, HopperAttitudeEnv
+from hopper_aviary import CRASH_DEG, N_STATE, HopperAttitudeEnv, state_from_obs
 
 TILT_DEG = 10.0
 SEEDS = range(200)   # compare_metrics.py의 평가 seed(pd_gate.EVAL_SEEDS)와 같다
@@ -31,15 +31,15 @@ class ResetOptionTest(unittest.TestCase):
         for seed in SEEDS:
             obs, _ = self.env.reset(seed=seed, options={"initial_tilt_deg": TILT_DEG})
             # obs는 float32다. 10° = 0.1745 rad에서 float32 반올림 오차는 1e-7 rad 수준이다
-            self.assertAlmostEqual(np.degrees(np.hypot(obs[0], obs[1])), TILT_DEG, places=4, msg=f"seed {seed}")
-            self.assertEqual(obs[2], 0.0, msg=f"seed {seed}: 요 오프셋이 남았다")
-            np.testing.assert_array_equal(obs[3:N_STATE], 0.0)
+            self.assertAlmostEqual(np.degrees(np.hypot(state_from_obs(obs)[0], state_from_obs(obs)[1])), TILT_DEG, places=4, msg=f"seed {seed}")
+            self.assertEqual(state_from_obs(obs)[2], 0.0, msg=f"seed {seed}: 요 오프셋이 남았다")
+            np.testing.assert_array_equal(state_from_obs(obs)[3:N_STATE], 0.0)
 
     def test_direction_covers_all_quadrants(self):
         quadrants = set()
         for seed in SEEDS:
             obs, _ = self.env.reset(seed=seed, options={"initial_tilt_deg": TILT_DEG})
-            quadrants.add((bool(obs[0] > 0), bool(obs[1] > 0)))
+            quadrants.add((bool(state_from_obs(obs)[0] > 0), bool(state_from_obs(obs)[1] > 0)))
         self.assertEqual(len(quadrants), 4, "기울기 방향이 seed에 따라 바뀌지 않는다")
 
     def test_same_seed_same_airframe_and_attitude(self):
