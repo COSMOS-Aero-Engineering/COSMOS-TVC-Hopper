@@ -16,6 +16,7 @@ from torch import float32, nn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sim_stage1"))
 from policy_io import FIXED_THROTTLE_NORM, ActionAdapter, read_meta, sidecar  # noqa: E402
+from hopper_aviary import OBS_NAMES  # noqa: E402
 
 # Tracked zips trained on the raw HopperAttitudeEnv: the pre-#230 model (5 actions)
 # and the #230 presentation model (4 vanes, throttle fixed at 1.0; see its .json).
@@ -56,7 +57,7 @@ def load_actor(path, env):
         raise ValueError("Expected SB3 MlpPolicy, FlattenExtractor and unsquashed diagonal Gaussian")
     outputs = ActionAdapter.SIZES[kind]
     if not (isinstance(model.observation_space, Box) and
-            model.observation_space == env.observation_space and model.observation_space.shape == (7,) and
+            model.observation_space == env.observation_space and model.observation_space.shape == (len(OBS_NAMES),) and
             model.observation_space.dtype == np.float32 and isinstance(model.action_space, Box) and
             model.action_space.shape == (outputs,) and model.action_space.dtype == np.float32 and
             np.all(model.action_space.low == -1) and np.all(model.action_space.high == 1)):
@@ -99,7 +100,7 @@ def load_normalization(path, raw, model_hash, observation_space, declared=None, 
     norm.training = False
     norm.norm_reward = False
     rms = norm.obs_rms
-    if (rms.mean.shape != (7,) or rms.var.shape != (7,) or
+    if (rms.mean.shape != (len(OBS_NAMES),) or rms.var.shape != (len(OBS_NAMES),) or
             not np.isfinite(rms.mean).all() or not np.isfinite(rms.var).all() or
             np.any(rms.var < 0) or not np.isfinite(norm.epsilon) or norm.epsilon <= 0 or
             not np.isfinite(norm.clip_obs) or norm.clip_obs <= 0):

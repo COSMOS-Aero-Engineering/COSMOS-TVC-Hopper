@@ -78,7 +78,7 @@ def read_meta(model_path):
 
 
 def load_policy(model_path):
-    """모델 파일 → 관측(환경 7차원) → 환경 행동 5개 함수. 결정적 행동(deterministic=True)을 쓴다."""
+    """모델 파일 → 관측(환경 8차원, #347) → 환경 행동 5개 함수. 결정적 행동(deterministic=True)을 쓴다."""
     from stable_baselines3 import PPO
 
     meta = read_meta(model_path)

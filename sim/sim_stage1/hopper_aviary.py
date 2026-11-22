@@ -12,7 +12,7 @@ Week 2 물리 실험의 "구속 스탠드"(M1, 만능조인트로 위치를 고�
    를 확인하는 것 — 절대적인 학습 성능 숫자 자체는 아직 의미 없음.
    Week 2에서 실측값이 나오는 대로 params.yaml만 교체하면 이 코드는 그대로 재사용됨.
 
-관측(observation)  = [phi, theta, psi, wx, wy, wz, throttle]   (OBS_NAMES)
+관측(observation)  = [phi, theta, sin(psi), cos(psi), wx, wy, wz, throttle]   (OBS_NAMES, #347)
                      자세각 rad, 바디 각속도 rad/s, 직전 스텝에 실제로 쓴 스로틀 0-1(#186)
 액션(action)       = [a1, a2, a3, a4, throttle]     (베인각 -1~1 정규화, 스로틀 0~1)
 과제               = 초기 교란에서 수평(phi=theta=0)으로 되돌아와 유지하기
@@ -26,8 +26,8 @@ EDF 회전자 항(#86): params.yaml의 rotor.enabled를 켜면 회전자 반작�
 
 스로틀 변화율 제한(#120): params.yaml의 throttle_slew_rate(1/s)로 스로틀 명령이 한 스텝에 바뀌는 양을
 ±throttle_slew_rate·dt로 자른다. 회전자 항 스위치와 상관없이 늘 쓴다. 펌웨어도 같은 제한을 쓴다(마스터 설계 §8.1).
-제한 뒤 실제로 쓴 스로틀은 step()의 info["throttle"]와 관측 obs[6]에 있다(#186). 제한이 있으면 다음 스텝에 쓸 수
-있는 스로틀이 이 값에 달려서, 관측에 없으면 정책이 못 보는 상태가 된다. reset() 직후 obs[6]은 RESET_THROTTLE_OBS(1.0)다.
+제한 뒤 실제로 쓴 스로틀은 step()의 info["throttle"]와 관측 obs[7]에 있다(#186). 제한이 있으면 다음 스텝에 쓸 수
+있는 스로틀이 이 값에 달려서, 관측에 없으면 정책이 못 보는 상태가 된다. reset() 직후 obs[7]은 RESET_THROTTLE_OBS(1.0)다.
 첫 스텝은 제한하지 않으므로 이 값은 첫 스텝을 제약하지 않는다. 회전자 회전수 Ω(rotor.enabled)는 관측에 넣지 않았다.
 실물에서 회전수를 받으려면 ESC 텔레메트리가 필요하고 지금 하드웨어에는 없다(#174, #186 결정).
 
@@ -91,11 +91,22 @@ INITIAL_ATTITUDE_RAD = 0.3
 #   OpenAI 2018(arXiv:1808.00177) 표 1도 감쇠·액추에이터 게인을 loguniform으로 뽑았다.
 ROTOR_RAND_LOG = {"rotor_inertia": True, "rotor_omega_max": False, "rotor_tau": True}
 
-# 관측 벡터의 이름과 순서(#186). 앞 6개는 물리 상태(self.state), 마지막은 직전 스텝에 실제로 쓴 스로틀(0-1)이다.
-# 순서를 바꾸면 학습한 모델과 pd_gate.pd() 같은 obs[:6] 사용처가 조용히 틀린다. 새 값은 끝에 더한다.
-OBS_NAMES = ("phi", "theta", "psi", "wx", "wy", "wz", "throttle")
-N_STATE = 6               # obs[:N_STATE]가 물리 상태다. PD처럼 스로틀을 보지 않는 제어기가 이 부분만 쓴다
-RESET_THROTTLE_OBS = 1.0  # reset() 직후 obs[6]. 첫 스텝은 제한하지 않으므로 값 자체는 동역학에 영향이 없다.
+# 관측 벡터의 이름과 순서(#186, #347). 요각 psi는 sin·cos로 넣어 ±π에서 끊기지 않게 한다(Gymnasium Pendulum-v1과 같은 방식).
+# 마지막은 직전 스텝에 실제로 쓴 스로틀(0-1)이다. 물리 상태 6개가 필요하면 obs를 직접 자르지 말고 state_from_obs()를 쓴다.
+OBS_NAMES = ("phi", "theta", "sin_psi", "cos_psi", "wx", "wy", "wz", "throttle")
+N_STATE = 6               # 물리 상태(self.state)의 개수. state_from_obs(obs)가 이 길이의 [phi, theta, psi, wx, wy, wz]를 돌려준다
+
+
+def wrap_angle(a):
+    """각도를 [-π, π)로 감는다(#347)."""
+    return (a + np.pi) % (2 * np.pi) - np.pi
+
+
+def state_from_obs(obs):
+    """관측(OBS_NAMES 순서)에서 물리 상태 [phi, theta, psi, wx, wy, wz]를 만든다. psi는 [-π, π]로 감긴 값이다(#347)."""
+    o = np.asarray(obs, dtype=np.float64)
+    return np.array([o[0], o[1], np.arctan2(o[2], o[3]), o[4], o[5], o[6]])
+RESET_THROTTLE_OBS = 1.0  # reset() 직후 obs[7]. 첫 스텝은 제한하지 않으므로 값 자체는 동역학에 영향이 없다.
                           # 1.0은 pd_gate.py·yaw_check.py 시나리오 A의 고정 스로틀이다
 
 
@@ -251,8 +262,8 @@ class HopperAttitudeEnv(gym.Env):
             dtype=np.float32,
         )
         # 관측: 자세각(rad) + 바디 각속도(rad/s, 대략적 상한) + 제한 뒤 스로틀(0-1, #186). 순서는 OBS_NAMES
-        high = np.array([np.pi, np.pi, np.pi, 50, 50, 50, 1], dtype=np.float32)
-        low = np.array([-np.pi, -np.pi, -np.pi, -50, -50, -50, 0], dtype=np.float32)
+        high = np.array([np.pi, np.pi, 1, 1, 50, 50, 50, 1], dtype=np.float32)
+        low = np.array([-np.pi, -np.pi, -1, -1, -50, -50, -50, 0], dtype=np.float32)
         self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
 
         self.state = np.zeros(6, dtype=np.float32)
@@ -307,7 +318,8 @@ class HopperAttitudeEnv(gym.Env):
     def _obs(self):
         """관측 벡터(OBS_NAMES 순서, float32). 물리 상태 self.state 뒤에 직전 스텝의 제한 뒤 스로틀을 붙인다(#186)."""
         throttle = RESET_THROTTLE_OBS if self.throttle_applied is None else self.throttle_applied
-        return np.append(self.state, np.float32(throttle)).astype(np.float32)
+        phi, theta, psi, wx, wy, wz = self.state
+        return np.array([phi, theta, np.sin(psi), np.cos(psi), wx, wy, wz, throttle], dtype=np.float32)
 
     def _rng(self, name):
         """이번 에피소드에서 name 값만 쓰는 난수 생성기(#98).
@@ -454,7 +466,7 @@ class HopperAttitudeEnv(gym.Env):
 
         # 보상: 수평 유지(주 목표) + 각속도 억제 + 액션 과다사용 페널티(부드러운 제어 유도)
         reward = (
-            -(phi**2 + theta**2 + 0.1 * psi**2)
+            -(phi**2 + theta**2 + 0.1 * wrap_angle(psi)**2)   # 감은 psi로 실제 방향 오차를 잰다(#347)
             - 0.01 * (wx**2 + wy**2 + wz**2)
             - 0.001 * float(np.sum(np.square(action)))
         )

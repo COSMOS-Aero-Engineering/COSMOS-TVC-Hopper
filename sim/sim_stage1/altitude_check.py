@@ -32,7 +32,7 @@ import sys
 
 import numpy as np
 
-from hopper_aviary import G, HopperAttitudeEnv, hover_throttle
+from hopper_aviary import G, HopperAttitudeEnv, hover_throttle, state_from_obs
 from pd_gate import EVAL_SEEDS, pd
 
 KP_POS = 1.0              # 1/s,  ArduPilot Copter PSC_D_POS_P 기본값
@@ -70,7 +70,7 @@ def run(env, seed, scenario):
             z_ref, v_ref = max(Z0 - LAND_SPEED * (t - LAND_START_S), 0.0), -LAND_SPEED
         else:
             z_ref, v_ref = Z0, 0.0
-        tilt_cos = max(np.cos(obs[0]) * np.cos(obs[1]), 0.5)
+        tilt_cos = max(np.cos(state_from_obs(obs)[0]) * np.cos(state_from_obs(obs)[1]), 0.5)
         v_cmd = KP_POS * (z_ref - z) + v_ref
         a_cmd = KP_VEL * (v_cmd - vz) + integ
         f_cmd = env.mass * (G + a_cmd) / tilt_cos
@@ -79,7 +79,7 @@ def run(env, seed, scenario):
             cmd_rates.append(abs(u_cmd - u_prev_cmd) / env.dt)
         u_prev_cmd = u_cmd
 
-        action = pd(obs[:6])
+        action = pd(obs)
         action[4] = 2.0 * u_cmd - 1.0
         obs, _, term, _, info = env.step(action)
         u_applied = info["throttle"]
@@ -87,7 +87,7 @@ def run(env, seed, scenario):
         if 0.0 < u_cmd < 1.0 and abs(u_applied - u_cmd) < 1e-9:
             integ += KI_VEL * (v_cmd - vz) * env.dt
 
-        az = thrust(env, effective_throttle(env, info)) * np.cos(obs[0]) * np.cos(obs[1]) / env.mass - G
+        az = thrust(env, effective_throttle(env, info)) * np.cos(state_from_obs(obs)[0]) * np.cos(state_from_obs(obs)[1]) / env.mass - G
         vz += az * env.dt
         z += vz * env.dt
         max_err = max(max_err, abs(z - z_ref))

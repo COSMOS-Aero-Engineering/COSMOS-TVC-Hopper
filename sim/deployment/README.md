@@ -35,7 +35,7 @@ python ship.py capped 8G -- uv run --frozen --project . python sim/deployment/ch
 
 다른 모델은 `--model FILE`에 학습 조건을 함께 지정한다. 원시 관측으로 학습했으면 `--raw-obs`, VecNormalize로 학습했으면 `--vecnormalize FILE`에 그 모델과 함께 저장한 통계를 준다. Python은 저장한 `normalize_obs`를 사용한다. C++은 같은 평균·분산·epsilon으로 표준화하고 `±clip_obs`에서 자른 뒤 float32로 변환한다. 보상 정규화는 행동 추론에 쓰지 않는다. 통계 파일은 pickle이므로 출처를 확인한 모델과 파일만 읽는다. 모델 zip만으로 학습 당시 래퍼나 통계 파일의 짝을 복원할 수 없다.
 
-지원 범위는 7차원 Stage 1 Box, 행동 구조 `learned`·`vanes4`, FlattenExtractor, 두 개의 Linear/Tanh 은닉층, 선형 행동 헤드, squash를 쓰지 않는 대각 가우시안이다. 구조나 차원이 다르면 내보내기를 중단한다. 내보낸 배열은 PyTorch Linear의 `[출력][입력]` 순서다. 호스트와 MCU는 같은 [actor.hpp](actor.hpp)를 빌드한다.
+지원 범위는 8차원 Stage 1 Box(#347 전에는 7차원), 행동 구조 `learned`·`vanes4`, FlattenExtractor, 두 개의 Linear/Tanh 은닉층, 선형 행동 헤드, squash를 쓰지 않는 대각 가우시안이다. 구조나 차원이 다르면 내보내기를 중단한다. 내보낸 배열은 PyTorch Linear의 `[출력][입력]` 순서다. 호스트와 MCU는 같은 [actor.hpp](actor.hpp)를 빌드한다.
 
 정규화 회귀 검사는 위와 같은 컴파일러 환경에서 실행한다. 별도로 만든 소형 시험 모델로 관측 정규화, 양쪽 행동 상한·하한, 통계 누락 시 비교 실패를 확인한다. `vanes4` 헤더 내용과, `mixer3`·출력 차원이 다른 `.json`을 거부하는지도 확인한다.
 
