@@ -17,7 +17,8 @@ def run(binary, output, seed):
     env.dr["enabled"] = False
     # The C++ controller owns slew, including unconditional zero on disarm.
     env.throttle_slew_rate = None
-    obs, _ = env.reset(seed=seed)
+    # Read the physical state, not the policy observation: #347 changes the observation layout.
+    env.reset(seed=seed)
     with subprocess.Popen([binary], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                           text=True, bufsize=1) as sil, output.open("x", encoding="utf-8") as log:
         try:
@@ -26,7 +27,7 @@ def run(binary, output, seed):
             reader = csv.DictReader(sil.stdout, fieldnames=header.strip().split(","))
             for step in range(env.max_steps):
                 now = round(step * env.dt * 1000)
-                request = snapshot(now, q=euler_zyx_to_quat(*obs[:3]), rates=obs[3:6],
+                request = snapshot(now, q=euler_zyx_to_quat(*env.state[:3]), rates=env.state[3:6],
                                    throttle=1000 if step == 0 else 2000,
                                    op="arm" if step == 0 else "-")
                 sil.stdin.write(request + "\n")
@@ -37,7 +38,7 @@ def run(binary, output, seed):
                 log.write(",".join(row.values()) + "\n")
                 action = [float(row[f"servo{i}"]) for i in range(1, 5)]
                 applied = float(row["throttle"])
-                obs, _, terminated, truncated, info = env.step([*action, 2 * applied - 1])
+                _, _, terminated, truncated, info = env.step([*action, 2 * applied - 1])
                 if abs(info["throttle"] - applied) > 1e-6:
                     raise ValueError("Stage 1 used a different throttle from SIL")
                 if terminated or truncated:
@@ -47,7 +48,7 @@ def run(binary, output, seed):
         if sil.wait() != 0:
             raise RuntimeError("SIL failed")
     print(f"Stage 1 SIL seed={seed}, ticks={step + 1}, terminated={terminated}, "
-          f"truncated={truncated}, final roll/pitch (rad)={obs[:2]}")
+          f"truncated={truncated}, final roll/pitch (rad)={env.state[:2]}")
 
 
 if __name__ == "__main__":
