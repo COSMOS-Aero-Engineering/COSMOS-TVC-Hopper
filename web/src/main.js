@@ -86,6 +86,7 @@ function show(i) {
   hopper.quaternion.copy(bodyToThreeQuat(r.qw, r.qx, r.qy, r.qz));
   poseVanes(vanes, vanesValid ? [r.servo1, r.servo2, r.servo3, r.servo4] : [null, null, null, null]);
   $('t').textContent = r.t_ms;
+  $('source').textContent = r.source ?? '미기록';
   $('mode').textContent = r.mode ?? '-';
   $('phi').textContent = deg(r.phi);
   $('theta').textContent = deg(r.theta);
