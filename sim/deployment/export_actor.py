@@ -18,11 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sim_stage1"))
 from policy_io import FIXED_THROTTLE_NORM, ActionAdapter, read_meta, sidecar  # noqa: E402
 from hopper_aviary import OBS_NAMES  # noqa: E402
 
-# Tracked zips trained on the raw HopperAttitudeEnv: the pre-#230 model (5 actions)
+# Tracked zip trained on the raw HopperAttitudeEnv.
 # and the #230 presentation model (4 vanes, throttle fixed at 1.0; see its .json).
 RAW_FIXTURES = {
-    "9fa28231e3a9995d693fd9241397044f0b846c4e005b9c6bd9d8f6324b7a78b2": "hopper_attitude_ppo.zip",
-    "0c0f2162ac12e5d60c52d2cf8b2273a6df0591502d3608593b8feae7f827daea": "hopper_attitude_ppo_230.zip",
+    "0a40036028c119f0f12b4ec580f1956244599d9790e6bf877ee9d319da92f1b2": "hopper_attitude_ppo_230.zip",
 }
 # Policy output layouts the C++ actor reproduces. mixer3 needs the policy_io.MIXER
 # step after the network, which actor.hpp does not implement.

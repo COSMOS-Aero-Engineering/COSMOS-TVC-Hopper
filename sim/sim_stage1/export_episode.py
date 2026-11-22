@@ -152,7 +152,7 @@ def main():
     here = os.path.dirname(os.path.abspath(__file__))
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--policy", choices=sorted(MODE_BY_POLICY), default="pd")
-    ap.add_argument("--model", default=os.path.join(here, "hopper_attitude_ppo.zip"))
+    ap.add_argument("--model", default=os.path.join(here, "hopper_attitude_ppo_230.zip"))
     ap.add_argument("--seed", type=int, default=0, help="첫 에피소드 시드 (이후 +1씩)")
     ap.add_argument("--episodes", type=int, default=1)
     ap.add_argument("--no-dr", action="store_true", help="도메인 랜덤화를 끄고 명목값으로 실행")

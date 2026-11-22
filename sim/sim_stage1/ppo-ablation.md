@@ -294,3 +294,19 @@ python ../../ship.py capped 8G -- python compare_metrics.py --model hopper_attit
 - Chou et al. 2017, "Improving Stochastic Policy Gradients in Continuous Control with Deep RL using the Beta Distribution"(ICML): 가우시안 정책을 경계에서 자르면 기울기 추정이 치우친다.
 - Pardo et al. 2018, "Time Limits in Reinforcement Learning"(arXiv:1712.00378): 종료와 시간 제한을 섞으면 가치 추정이 틀린다.
 - 원인 분석: `ppo-diagnosis.md`(#90). 고정 스로틀 20k가 모두 넘어진 결과와 이 표의 200k 결과가 같은 방향이다.
+
+## #347: 요각 관측을 sin·cos로 바꾼 뒤 재학습 (2026-11-22)
+
+관측의 psi를 sin(psi), cos(psi)로 바꾸고(7차원 → 8차원) 보상의 요 항을 [-π, π)로 감은 psi로 계산한 뒤, 같은 조건(`crashcost`, train seed 10001, 1M 스텝, SB3 PPO 기본값)으로 다시 학습했다. 저장소의 `hopper_attitude_ppo_230.zip`을 이 모델로 바꿨다. 학습 시간 2081 s(부장 Windows PC). 평가 seed 0-199, 도메인 랜덤화 켬, `compare_metrics.py`.
+
+| 초기 자세 | 정책 | 넘어짐 | 복원시간 평균(s) | 미복원 | 오버슈트 | 정상오차 |
+|---|---|---:|---:|---:|---:|---:|
+| 학습 분포(각 축 ±17°) | PPO 7차원(발표 모델) | 0.0 % | 0.38 | 0/200 | 3.3 % | 0.64° |
+| 학습 분포(각 축 ±17°) | PPO 8차원(#347) | 0.0 % | 0.40 | 0/200 | 4.1 % | 0.75° |
+| TC-3(10°) | PPO 7차원(발표 모델) | 0.0 % | 0.31 | 0/200 | 2.5 % | 0.64° |
+| TC-3(10°) | PPO 8차원(#347) | 0.0 % | 0.32 | 0/200 | 3.3 % | 0.75° |
+
+- PD(kp=8, kd=2)와 PID 행은 바뀌지 않았다(PD 정상오차 2.40°, PID 0.51-0.52°). 요 항 보상만 바뀌고 롤·피치 동역학은 같기 때문이다.
+- 8차원 모델은 정상오차가 0.11° 크고 오버슈트가 0.8 %p 크다. 학습 seed 하나의 결과라 차이가 관측 변경 때문인지 seed 편차인지는 확인하지 못했다. 참고로 이 문서의 `lrlinear` 조건은 학습 seed 3개에서 정상오차가 0.61-0.68°로 퍼졌다(조건이 달라 직접 비교는 아니다).
+- `pd_gate.py --model`: PD 합격(넘어짐 0.0 %, 중앙값 2.5°), PPO 넘어짐 0.0 %, 중앙값 0.7°.
+- 발표 문서(`countdown-1122.md`, `decisions.md`)의 표는 발표 당시 기록이라 바꾸지 않았다.

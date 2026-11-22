@@ -63,7 +63,7 @@ from evaluate import SETTLE_DEG, run_episodes  # noqa: E402
 from hopper_aviary import INITIAL_ATTITUDE_RAD, HopperAttitudeEnv, state_from_obs  # noqa: E402
 from pd_gate import EVAL_SEEDS, pd  # noqa: E402
 
-DEFAULT_MODEL = HERE / "hopper_attitude_ppo.zip"
+DEFAULT_MODEL = HERE / "hopper_attitude_ppo_230.zip"   # #347: 옛 hopper_attitude_ppo.zip은 7차원 관측이라 못 쓴다
 # pid_tune.py 결과(#349). 튜닝 seed 1000-1199, 학습 분포 조건에서 평균 리턴이 가장 큰 격자점이다.
 PID_GAINS = {"kp": 28.0, "kd": 8.0, "ki": 2.5}
 TC3_TILT_DEG = 10.0   # 마스터 설계 §11 TC-3의 초기 오프셋(°)
