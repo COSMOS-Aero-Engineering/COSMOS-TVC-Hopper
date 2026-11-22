@@ -223,8 +223,9 @@ class Wiring(unittest.TestCase):
 
     def test_torch_tasks_are_marked(self):
         # torch를 불러오는 작업: smoke와 train은 stable_baselines3, conncheck는 torch를 직접 불러온다.
+        # parity(#408)는 SB3로 모델을 읽고 export_actor.py가 torch를 쓴다.
         marked = {name for name, task in tasks.TASKS.items() if task.needs_torch}
-        self.assertEqual(marked, {"smoke", "conncheck", "train"})
+        self.assertEqual(marked, {"smoke", "conncheck", "train", "parity"})
 
     def ensure_env(self, name):
         order = mock.Mock()
