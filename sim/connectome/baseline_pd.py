@@ -27,7 +27,13 @@ PID vs RL 비교(docs/design/03-control-pipeline-design.md §3)에서 baseline �
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sim_stage1"))
+from hopper_aviary import state_from_obs  # noqa: E402
 
 
 class PDController:
@@ -41,7 +47,7 @@ class PDController:
         self.throttle_norm = float(np.clip(throttle, 0.0, 1.0) * 2.0 - 1.0)
 
     def predict(self, obs, deterministic: bool = True):
-        phi, theta, psi, wx, wy, wz = np.asarray(obs, dtype=np.float64)[:6]   # obs[6]은 제한 뒤 스로틀(#186)
+        phi, theta, psi, wx, wy, wz = state_from_obs(obs)   # 관측 순서는 hopper_aviary.OBS_NAMES(#347)
         u_roll = -(self.kp * phi + self.kd * wx)
         u_pitch = -(self.kp * theta + self.kd * wy)
         u_yaw = -(self.kp_yaw * psi + self.kd_yaw * wz)
